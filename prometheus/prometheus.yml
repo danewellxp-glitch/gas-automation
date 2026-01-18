@@ -1,0 +1,83 @@
+# Prometheus Configuration
+# Gas Automation System
+
+global:
+  scrape_interval: 15s      # Frequência de coleta
+  evaluation_interval: 15s  # Frequência de avaliação de regras
+  external_labels:
+    environment: 'development'
+    project: 'gas-automation'
+
+# Alertmanager (opcional)
+# alerting:
+#   alertmanagers:
+#     - static_configs:
+#         - targets:
+#           - alertmanager:9093
+
+# Regras de alerta (opcional)
+# rule_files:
+#   - "alerts/*.yml"
+
+# Configuração de scrape
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+        labels:
+          service: 'prometheus'
+
+  # Backend principal
+  - job_name: 'backend'
+    static_configs:
+      - targets: ['backend:8000']
+        labels:
+          service: 'backend'
+          type: 'core'
+    metrics_path: '/metrics'
+
+  # Notification Service
+  - job_name: 'notification-service'
+    static_configs:
+      - targets: ['notification-service:8001']
+        labels:
+          service: 'notification-service'
+          type: 'microservice'
+    metrics_path: '/metrics'
+
+  # Inventory Service
+  - job_name: 'inventory-service'
+    static_configs:
+      - targets: ['inventory-service:8002']
+        labels:
+          service: 'inventory-service'
+          type: 'microservice'
+    metrics_path: '/metrics'
+
+  # Redis
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis:6379']
+        labels:
+          service: 'redis'
+          type: 'database'
+
+  # PostgreSQL (via postgres_exporter se configurado)
+  # - job_name: 'postgres'
+  #   static_configs:
+  #     - targets: ['postgres-exporter:9187']
+
+  # Traefik
+  - job_name: 'traefik'
+    static_configs:
+      - targets: ['traefik:8080']
+        labels:
+          service: 'traefik'
+          type: 'gateway'
+    metrics_path: '/metrics'
+
+  # Node Exporter (métricas do host)
+  # - job_name: 'node'
+  #   static_configs:
+  #     - targets: ['node-exporter:9100']

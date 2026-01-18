@@ -1,0 +1,1 @@
+"""Models do Inventory Service."""
