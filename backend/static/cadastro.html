@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cadastro de Cliente - Gas Automation</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>📝 Cadastro de Cliente</h1>
+            <nav class="nav">
+                <a href="/static/dashboard.html" class="nav-link">← Voltar ao Dashboard</a>
+            </nav>
+        </header>
+
+        <main class="main-content">
+            <div class="form-container">
+                <form id="customer-form" class="customer-form">
+                    <div class="form-section">
+                        <h2>Informações Pessoais</h2>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="name">Nome Completo *</label>
+                                <input type="text" id="name" name="name" required>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="cpf">CPF</label>
+                                <input type="text" id="cpf" name="cpf" placeholder="000.000.000-00">
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="phone">Telefone (WhatsApp) *</label>
+                                <input type="tel" id="phone" name="phone" required>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="email">E-mail</label>
+                                <input type="email" id="email" name="email">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-section">
+                        <h2>Endereço</h2>
+
+                        <div class="form-group">
+                            <label for="address">Endereço Completo *</label>
+                            <input type="text" id="address" name="address" required>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="neighborhood">Bairro *</label>
+                                <select id="neighborhood" name="neighborhood" required>
+                                    <option value="">Selecione o bairro</option>
+                                    <option value="Alto Boqueirão">Alto Boqueirão</option>
+                                    <option value="Boqueirão">Boqueirão</option>
+                                    <option value="Ganchinho">Ganchinho</option>
+                                    <option value="Hauer">Hauer</option>
+                                    <option value="Sítio Cercado">Sítio Cercado</option>
+                                    <option value="Umbará">Umbará</option>
+                                    <option value="Xaxim">Xaxim</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="city">Cidade</label>
+                                <input type="text" id="city" name="city" value="Curitiba" readonly>
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="cep">CEP</label>
+                                <input type="text" id="cep" name="cep" placeholder="00000-000">
+                            </div>
+
+                            <div class="form-group">
+                                <label for="complement">Complemento</label>
+                                <input type="text" id="complement" name="complement" placeholder="Apto, bloco, etc.">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-section">
+                        <h2>Informações Adicionais</h2>
+
+                        <div class="form-group">
+                            <label for="notes">Observações</label>
+                            <textarea id="notes" name="notes" rows="3" placeholder="Informações adicionais sobre o cliente..."></textarea>
+                        </div>
+
+                        <div class="form-group checkbox-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="active" name="active" checked>
+                                Cliente Ativo
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="submit" class="btn-primary">Salvar Cliente</button>
+                        <button type="button" id="cancel-btn" class="btn-secondary">Cancelar</button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Success/Error Messages -->
+            <div id="message" class="message" style="display: none;"></div>
+        </main>
+    </div>
+
+    <script src="/static/app.js"></script>
+    <script>
+        // Form submission
+        document.getElementById('customer-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const formData = new FormData(e.target);
+            const customerData = {
+                name: formData.get('name'),
+                cpf: formData.get('cpf'),
+                phone: formData.get('phone'),
+                email: formData.get('email'),
+                address: formData.get('address'),
+                neighborhood: formData.get('neighborhood'),
+                city: formData.get('city'),
+                cep: formData.get('cep'),
+                complement: formData.get('complement'),
+                notes: formData.get('notes'),
+                active: formData.get('active') === 'on'
+            };
+
+            try {
+                const response = await fetch('/api/customers', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    },
+                    body: JSON.stringify(customerData),
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    showMessage('Cliente cadastrado com sucesso!', 'success');
+                    setTimeout(() => {
+                        window.location.href = '/static/dashboard.html';
+                    }, 2000);
+                } else {
+                    showMessage(result.detail || 'Erro ao cadastrar cliente', 'error');
+                }
+            } catch (error) {
+                showMessage('Erro de conexão. Tente novamente.', 'error');
+            }
+        });
+
+        // Cancel button
+        document.getElementById('cancel-btn').addEventListener('click', () => {
+            window.location.href = '/static/dashboard.html';
+        });
+
+        // CPF formatting
+        document.getElementById('cpf').addEventListener('input', (e) => {
+            let value = e.target.value.replace(/\D/g, '');
+            if (value.length <= 11) {
+                value = value.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+                e.target.value = value;
+            }
+        });
+
+        // Phone formatting
+        document.getElementById('phone').addEventListener('input', (e) => {
+            let value = e.target.value.replace(/\D/g, '');
+            if (value.length <= 11) {
+                if (value.length <= 10) {
+                    value = value.replace(/(\d{2})(\d{4})(\d{4})/, '($1) $2-$3');
+                } else {
+                    value = value.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
+                }
+                e.target.value = value;
+            }
+        });
+
+        // CEP formatting
+        document.getElementById('cep').addEventListener('input', (e) => {
+            let value = e.target.value.replace(/\D/g, '');
+            if (value.length <= 8) {
+                value = value.replace(/(\d{5})(\d{3})/, '$1-$2');
+                e.target.value = value;
+            }
+        });
+
+        function showMessage(text, type) {
+            const messageEl = document.getElementById('message');
+            messageEl.textContent = text;
+            messageEl.className = `message ${type}`;
+            messageEl.style.display = 'block';
+
+            setTimeout(() => {
+                messageEl.style.display = 'none';
+            }, 5000);
+        }
+    </script>
+</body>
+</html>

@@ -63,9 +63,21 @@ class Settings(BaseSettings):
     minio_secure: bool = False
 
     # Segurança
-    cors_origins: list[str] = ["http://localhost:3001", "http://localhost:3000"]
+    cors_origins: list[str] = [
+        "http://localhost:3001",
+        "http://localhost:3000",
+        "http://192.168.10.156:3001",
+        "http://192.168.10.156:8000",
+        "http://192.168.10.156",
+        "*"  # Permitir todas as origens durante desenvolvimento
+    ]
     rate_limit_requests: int = 100
     rate_limit_period: int = 60  # segundos
+
+    # JWT Authentication
+    access_token_expire_minutes: int = 30
+    jwt_secret_key: str = "your-jwt-secret-key-change-in-production"
+    jwt_algorithm: str = "HS256"
 
     # Negócio
     default_delivery_time_minutes: int = 40

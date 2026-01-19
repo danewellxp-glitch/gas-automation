@@ -16,9 +16,7 @@ class WebSocketService {
       return
     }
 
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const host = window.location.host
-    const url = `${protocol}//${host}/ws/dashboard`
+    const url = `${import.meta.env.VITE_WS_URL}/dashboard`
 
     console.log('Conectando WebSocket:', url)
 

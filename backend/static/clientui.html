@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gas Automation - Cliente</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="client-container">
+        <header class="client-header">
+            <h1>🏠 Loja de Gás Online</h1>
+            <p>Peça seu gás com entrega rápida e segura</p>
+        </header>
+
+        <main class="client-main">
+            <section class="products-section">
+                <h2>Nossos Produtos</h2>
+                <div class="products-grid">
+                    <div class="product-card">
+                        <div class="product-image">🛢️</div>
+                        <h3>Botijão P13</h3>
+                        <p class="product-description">13kg - Perfeito para residências</p>
+                        <div class="product-price">R$ 100,00</div>
+                        <button class="btn-primary order-btn" data-product="P13">Pedir Agora</button>
+                    </div>
+
+                    <div class="product-card">
+                        <div class="product-image">🛢️</div>
+                        <h3>Botijão P20</h3>
+                        <p class="product-description">20kg - Para famílias maiores</p>
+                        <div class="product-price">R$ 165,00</div>
+                        <button class="btn-primary order-btn" data-product="P20">Pedir Agora</button>
+                    </div>
+
+                    <div class="product-card">
+                        <div class="product-image">🛢️</div>
+                        <h3>Botijão P45</h3>
+                        <p class="product-description">45kg - Para estabelecimentos</p>
+                        <div class="product-price">R$ 320,00</div>
+                        <button class="btn-primary order-btn" data-product="P45">Pedir Agora</button>
+                    </div>
+                </div>
+            </section>
+
+            <section class="order-section" id="order-section" style="display: none;">
+                <h2>Fazer Pedido</h2>
+                <form id="order-form" class="order-form">
+                    <div class="form-group">
+                        <label for="customer-name">Nome Completo</label>
+                        <input type="text" id="customer-name" name="name" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="customer-phone">Telefone (WhatsApp)</label>
+                        <input type="tel" id="customer-phone" name="phone" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="customer-address">Endereço Completo</label>
+                        <textarea id="customer-address" name="address" required></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="delivery-neighborhood">Bairro</label>
+                        <select id="delivery-neighborhood" name="neighborhood" required>
+                            <option value="">Selecione o bairro</option>
+                            <option value="Alto Boqueirão">Alto Boqueirão</option>
+                            <option value="Boqueirão">Boqueirão</option>
+                            <option value="Ganchinho">Ganchinho</option>
+                            <option value="Hauer">Hauer</option>
+                            <option value="Sítio Cercado">Sítio Cercado</option>
+                            <option value="Umbará">Umbará</option>
+                            <option value="Xaxim">Xaxim</option>
+                        </select>
+                    </div>
+
+                    <div class="selected-product">
+                        <h3>Produto Selecionado:</h3>
+                        <div id="selected-product-info"></div>
+                    </div>
+
+                    <button type="submit" class="btn-primary">Confirmar Pedido</button>
+                    <button type="button" id="cancel-order" class="btn-secondary">Cancelar</button>
+                </form>
+            </section>
+
+            <section class="status-section" id="status-section" style="display: none;">
+                <div class="status-card">
+                    <h2>Pedido Realizado!</h2>
+                    <div class="status-icon">✅</div>
+                    <p>Seu pedido foi enviado com sucesso. Nossa equipe entrará em contato pelo WhatsApp para confirmar os detalhes.</p>
+                    <div class="order-details" id="order-details"></div>
+                    <button class="btn-primary" onclick="location.reload()">Fazer Novo Pedido</button>
+                </div>
+            </section>
+        </main>
+
+        <footer class="client-footer">
+            <div class="contact-info">
+                <h3>Contato</h3>
+                <p>📞 (41) 99999-9999</p>
+                <p>📍 Rua Principal, 123 - Centro</p>
+                <p>🕒 Seg-Sáb: 8h às 18h | Dom: 8h às 12h</p>
+            </div>
+        </footer>
+    </div>
+
+    <script src="/static/app.js"></script>
+    <script>
+        let selectedProduct = null;
+
+        // Product selection
+        document.querySelectorAll('.order-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                selectedProduct = e.target.dataset.product;
+                showOrderForm(selectedProduct);
+            });
+        });
+
+        // Cancel order
+        document.getElementById('cancel-order').addEventListener('click', () => {
+            hideOrderForm();
+        });
+
+        // Order form submission
+        document.getElementById('order-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const formData = new FormData(e.target);
+            const orderData = {
+                name: formData.get('name'),
+                phone: formData.get('phone'),
+                address: formData.get('address'),
+                neighborhood: formData.get('neighborhood'),
+                product: selectedProduct
+            };
+
+            try {
+                const response = await fetch('/api/orders', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(orderData),
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    showOrderStatus(result);
+                } else {
+                    alert('Erro ao fazer pedido. Tente novamente.');
+                }
+            } catch (error) {
+                alert('Erro de conexão. Tente novamente.');
+            }
+        });
+
+        function showOrderForm(product) {
+            document.querySelector('.products-section').style.display = 'none';
+            document.getElementById('order-section').style.display = 'block';
+
+            // Update selected product info
+            const productInfo = getProductInfo(product);
+            document.getElementById('selected-product-info').innerHTML = `
+                <strong>${productInfo.name}</strong><br>
+                ${productInfo.description}<br>
+                <strong>${productInfo.price}</strong>
+            `;
+        }
+
+        function hideOrderForm() {
+            document.getElementById('order-section').style.display = 'none';
+            document.querySelector('.products-section').style.display = 'block';
+            selectedProduct = null;
+        }
+
+        function showOrderStatus(order) {
+            document.getElementById('order-section').style.display = 'none';
+            document.getElementById('status-section').style.display = 'block';
+
+            document.getElementById('order-details').innerHTML = `
+                <p><strong>Número do Pedido:</strong> #${order.id}</p>
+                <p><strong>Produto:</strong> ${getProductInfo(order.product).name}</p>
+                <p><strong>Cliente:</strong> ${order.customer_name}</p>
+                <p><strong>Status:</strong> ${order.status}</p>
+            `;
+        }
+
+        function getProductInfo(product) {
+            const products = {
+                'P13': { name: 'Botijão P13', description: '13kg - Perfeito para residências', price: 'R$ 100,00' },
+                'P20': { name: 'Botijão P20', description: '20kg - Para famílias maiores', price: 'R$ 165,00' },
+                'P45': { name: 'Botijão P45', description: '45kg - Para estabelecimentos', price: 'R$ 320,00' }
+            };
+            return products[product] || { name: 'Produto', description: '', price: '' };
+        }
+    </script>
+</body>
+</html>

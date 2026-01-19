@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Logs do Sistema - Gas Automation</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>📋 Logs do Sistema</h1>
+            <nav class="nav">
+                <a href="/static/dashboard.html" class="nav-link">← Voltar ao Dashboard</a>
+            </nav>
+        </header>
+
+        <main class="main-content">
+            <div class="logs-container">
+                <!-- Filters -->
+                <div class="filters-section">
+                    <div class="filter-group">
+                        <label for="log-level">Nível:</label>
+                        <select id="log-level">
+                            <option value="">Todos</option>
+                            <option value="INFO">INFO</option>
+                            <option value="WARNING">WARNING</option>
+                            <option value="ERROR">ERROR</option>
+                            <option value="DEBUG">DEBUG</option>
+                        </select>
+                    </div>
+
+                    <div class="filter-group">
+                        <label for="date-from">De:</label>
+                        <input type="date" id="date-from">
+                    </div>
+
+                    <div class="filter-group">
+                        <label for="date-to">Até:</label>
+                        <input type="date" id="date-to">
+                    </div>
+
+                    <div class="filter-group">
+                        <label for="search">Buscar:</label>
+                        <input type="text" id="search" placeholder="Buscar nos logs...">
+                    </div>
+
+                    <button id="refresh-btn" class="btn-secondary">🔄 Atualizar</button>
+                </div>
+
+                <!-- Logs Table -->
+                <div class="logs-table-container">
+                    <table class="logs-table">
+                        <thead>
+                            <tr>
+                                <th>Data/Hora</th>
+                                <th>Nível</th>
+                                <th>Módulo</th>
+                                <th>Mensagem</th>
+                                <th>Detalhes</th>
+                            </tr>
+                        </thead>
+                        <tbody id="logs-body">
+                            <!-- Logs will be loaded here -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Pagination -->
+                <div class="pagination">
+                    <button id="prev-page" class="btn-secondary" disabled>&larr; Anterior</button>
+                    <span id="page-info">Página 1 de 1</span>
+                    <button id="next-page" class="btn-secondary" disabled>Próximo &rarr;</button>
+                </div>
+
+                <!-- Loading indicator -->
+                <div id="loading" class="loading" style="display: none;">
+                    <div class="spinner"></div>
+                    Carregando logs...
+                </div>
+
+                <!-- No results message -->
+                <div id="no-results" class="no-results" style="display: none;">
+                    <p>Nenhum log encontrado com os filtros aplicados.</p>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="/static/app.js"></script>
+    <script>
+        let currentPage = 1;
+        let totalPages = 1;
+        const logsPerPage = 50;
+
+        // Load logs on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            loadLogs();
+
+            // Set default date range (last 7 days)
+            const today = new Date();
+            const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+            document.getElementById('date-to').value = today.toISOString().split('T')[0];
+            document.getElementById('date-from').value = weekAgo.toISOString().split('T')[0];
+        });
+
+        // Refresh button
+        document.getElementById('refresh-btn').addEventListener('click', () => {
+            currentPage = 1;
+            loadLogs();
+        });
+
+        // Filter change events
+        document.getElementById('log-level').addEventListener('change', () => {
+            currentPage = 1;
+            loadLogs();
+        });
+
+        document.getElementById('date-from').addEventListener('change', () => {
+            currentPage = 1;
+            loadLogs();
+        });
+
+        document.getElementById('date-to').addEventListener('change', () => {
+            currentPage = 1;
+            loadLogs();
+        });
+
+        document.getElementById('search').addEventListener('input', debounce(() => {
+            currentPage = 1;
+            loadLogs();
+        }, 500));
+
+        // Pagination
+        document.getElementById('prev-page').addEventListener('click', () => {
+            if (currentPage > 1) {
+                currentPage--;
+                loadLogs();
+            }
+        });
+
+        document.getElementById('next-page').addEventListener('click', () => {
+            if (currentPage < totalPages) {
+                currentPage++;
+                loadLogs();
+            }
+        });
+
+        async function loadLogs() {
+            const loadingEl = document.getElementById('loading');
+            const noResultsEl = document.getElementById('no-results');
+            const logsBody = document.getElementById('logs-body');
+
+            loadingEl.style.display = 'block';
+            noResultsEl.style.display = 'none';
+
+            const filters = {
+                level: document.getElementById('log-level').value,
+                date_from: document.getElementById('date-from').value,
+                date_to: document.getElementById('date-to').value,
+                search: document.getElementById('search').value,
+                page: currentPage,
+                per_page: logsPerPage
+            };
+
+            try {
+                const queryParams = new URLSearchParams();
+                Object.entries(filters).forEach(([key, value]) => {
+                    if (value) queryParams.append(key, value);
+                });
+
+                const response = await fetch(`/api/logs?${queryParams}`, {
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    displayLogs(data.logs);
+                    updatePagination(data.total_pages, data.total_count);
+                } else {
+                    logsBody.innerHTML = '<tr><td colspan="5" class="error">Erro ao carregar logs</td></tr>';
+                }
+            } catch (error) {
+                logsBody.innerHTML = '<tr><td colspan="5" class="error">Erro de conexão</td></tr>';
+            } finally {
+                loadingEl.style.display = 'none';
+            }
+        }
+
+        function displayLogs(logs) {
+            const logsBody = document.getElementById('logs-body');
+            const noResultsEl = document.getElementById('no-results');
+
+            if (logs.length === 0) {
+                logsBody.innerHTML = '';
+                noResultsEl.style.display = 'block';
+                return;
+            }
+
+            noResultsEl.style.display = 'none';
+
+            const html = logs.map(log => `
+                <tr class="log-row log-${log.level.toLowerCase()}">
+                    <td>${formatDateTime(log.timestamp)}</td>
+                    <td><span class="log-level log-level-${log.level.toLowerCase()}">${log.level}</span></td>
+                    <td>${log.module || '-'}</td>
+                    <td class="log-message">${escapeHtml(log.message)}</td>
+                    <td>
+                        ${log.details ? `<button class="btn-small" onclick="showLogDetails(${JSON.stringify(log.details).replace(/"/g, '&quot;')})">Ver</button>` : '-'}
+                    </td>
+                </tr>
+            `).join('');
+
+            logsBody.innerHTML = html;
+        }
+
+        function updatePagination(totalPagesCount, totalCount) {
+            totalPages = totalPagesCount;
+            const pageInfo = document.getElementById('page-info');
+            const prevBtn = document.getElementById('prev-page');
+            const nextBtn = document.getElementById('next-page');
+
+            pageInfo.textContent = `Página ${currentPage} de ${totalPages} (${totalCount} logs)`;
+
+            prevBtn.disabled = currentPage <= 1;
+            nextBtn.disabled = currentPage >= totalPages;
+        }
+
+        function showLogDetails(details) {
+            alert(JSON.stringify(details, null, 2));
+        }
+
+        function formatDateTime(timestamp) {
+            const date = new Date(timestamp);
+            return date.toLocaleString('pt-BR');
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function debounce(func, wait) {
+            let timeout;
+            return function executedFunction(...args) {
+                const later = () => {
+                    clearTimeout(timeout);
+                    func(...args);
+                };
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+            };
+        }
+    </script>
+</body>
+</html>

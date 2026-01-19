@@ -8,12 +8,13 @@ from datetime import datetime, timezone
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
 from app.database import redis_manager, AsyncSessionLocal
 
 # Importar rotas
-from app.api import webhooks, orders, products, customers, test_flow, websocket, chats
+from app.api import webhooks, orders, products, customers, test_flow, websocket, chats, auth, chatbot, images
 
 
 @asynccontextmanager
@@ -74,6 +75,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Montar arquivos estáticos
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Middleware de métricas Prometheus
 from app.metrics import MetricsMiddleware, metrics_endpoint
@@ -176,6 +180,8 @@ app.include_router(customers.router, prefix="/api/customers", tags=["Customers"]
 app.include_router(test_flow.router, prefix="/api/test", tags=["Test Flow"])
 app.include_router(websocket.router, prefix="/ws", tags=["WebSocket"])
 app.include_router(chats.router, prefix="/api/chats", tags=["Chats"])
+app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
+app.include_router(chatbot.router, prefix="/api/chatbot", tags=["Chatbot"])
 
 
 # ==================== Métricas Prometheus ====================

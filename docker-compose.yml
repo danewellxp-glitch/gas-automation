@@ -239,8 +239,8 @@ services:
     container_name: gas_frontend
     restart: unless-stopped
     environment:
-      VITE_API_URL: http://localhost:8000
-      VITE_WS_URL: ws://localhost:8000
+      VITE_API_URL: http://192.168.10.156:8000
+      VITE_WS_URL: ws://192.168.10.156:8000/ws
     ports:
       - "3001:3001"
     volumes:
@@ -253,7 +253,7 @@ services:
     command: npm run dev -- --host 0.0.0.0 --port 3001
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.frontend.rule=Host(`app.localhost`)"
+      - "traefik.http.routers.frontend.rule=Host(`192.168.10.156`)"
       - "traefik.http.routers.frontend.entrypoints=web"
       - "traefik.http.services.frontend.loadbalancer.server.port=3001"
 
