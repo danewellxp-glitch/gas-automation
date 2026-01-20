@@ -1,6 +1,14 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../../hooks/useAuth'
 import { apiRequest, getApiUrl } from '../../utils/api'
+import {
+  getRoleBadge,
+  formatDateTime,
+  showToast,
+  filterUsers,
+  sortUsers,
+  debounce
+} from '../../utils/adminHelpers'
 
 const VALID_ROLES = [
   { value: 'admin', label: 'Admin', icon: '👑', description: 'Acesso total ao sistema' },
@@ -18,6 +26,9 @@ export default function AdminDashboard() {
   const [newRole, setNewRole] = useState('')
   const [showConfirmation, setShowConfirmation] = useState(false)
   const [updating, setUpdating] = useState(false)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [sortField, setSortField] = useState('created_at')
+  const [sortDirection, setSortDirection] = useState('desc')
 
   useEffect(() => {
     fetchUsers()
@@ -46,6 +57,16 @@ export default function AdminDashboard() {
   const handleRoleChange = (role) => {
     setNewRole(role)
     setShowConfirmation(true)
+  }
+
+  const handleSort = (field) => {
+    if (sortField === field) {
+      // Toggle direction
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortField(field)
+      setSortDirection('asc')
+    }
   }
 
   const updateUserRole = async () => {
@@ -79,6 +100,15 @@ export default function AdminDashboard() {
     }
   }
 
+  // Aplicar filtros e ordenação
+  const getDisplayedUsers = () => {
+    let filtered = filterUsers(users, searchTerm)
+    let sorted = sortUsers(filtered, sortField, sortDirection)
+    return sorted
+  }
+
+  const displayedUsers = getDisplayedUsers()
+
   const getRoleColor = (role) => {
     switch (role) {
       case 'admin':
@@ -95,6 +125,11 @@ export default function AdminDashboard() {
   const getRoleIcon = (role) => {
     const roleObj = VALID_ROLES.find(r => r.value === role)
     return roleObj?.icon || '📦'
+  }
+
+  const SortIcon = ({ field }) => {
+    if (sortField !== field) return <span className="text-gray-400">⇅</span>
+    return sortDirection === 'asc' ? <span>↑</span> : <span>↓</span>
   }
 
   return (
@@ -157,6 +192,20 @@ export default function AdminDashboard() {
 
           {/* Users Table */}
           <div className="bg-white rounded-lg shadow">
+            {/* Search Bar */}
+            <div className="p-4 border-b">
+              <input
+                type="text"
+                placeholder="Buscar por email, nome ou usuário..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:border-blue-500"
+              />
+              <p className="text-xs text-gray-500 mt-2">
+                {displayedUsers.length} de {users.length} usuários
+              </p>
+            </div>
+
             {loading ? (
               <div className="p-8 text-center">
                 <div className="inline-block">
@@ -164,27 +213,54 @@ export default function AdminDashboard() {
                 </div>
                 <p className="text-gray-600 mt-4">Carregando usuários...</p>
               </div>
-            ) : users.length === 0 ? (
+            ) : displayedUsers.length === 0 ? (
               <div className="p-8 text-center">
-                <p className="text-gray-500">Nenhum usuário encontrado</p>
+                <p className="text-gray-500">
+                  {searchTerm ? 'Nenhum usuário encontrado com esse critério' : 'Nenhum usuário encontrado'}
+                </p>
               </div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead className="bg-gray-50 border-b">
                     <tr>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">Email</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">Nome</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">Role Atual</th>
+                      <th 
+                        onClick={() => handleSort('email')}
+                        className="px-6 py-4 text-left text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition"
+                      >
+                        <div className="flex items-center gap-2">
+                          Email
+                          <SortIcon field="email" />
+                        </div>
+                      </th>
+                      <th 
+                        onClick={() => handleSort('full_name')}
+                        className="px-6 py-4 text-left text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition"
+                      >
+                        <div className="flex items-center gap-2">
+                          Nome
+                          <SortIcon field="full_name" />
+                        </div>
+                      </th>
+                      <th 
+                        onClick={() => handleSort('role')}
+                        className="px-6 py-4 text-left text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition"
+                      >
+                        <div className="flex items-center gap-2">
+                          Role
+                          <SortIcon field="role" />
+                        </div>
+                      </th>
                       <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">Status</th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">Criado em</th>
                       <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">Ações</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y">
-                    {users.map(userData => (
+                    {displayedUsers.map(userData => (
                       <tr key={userData.id} className="hover:bg-gray-50 transition">
                         <td className="px-6 py-4 text-sm text-gray-800">{userData.email}</td>
-                        <td className="px-6 py-4 text-sm text-gray-800">{userData.full_name || userData.username}</td>
+                        <td className="px-6 py-4 text-sm text-gray-800">{userData.full_name || userData.username || '-'}</td>
                         <td className="px-6 py-4 text-sm">
                           <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold border ${getRoleColor(userData.role)}`}>
                             {getRoleIcon(userData.role)} {userData.role}
@@ -194,6 +270,9 @@ export default function AdminDashboard() {
                           <span className={`px-2 py-1 rounded text-xs font-medium ${userData.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
                             {userData.is_active ? '✓ Ativo' : '✗ Inativo'}
                           </span>
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-600">
+                          {userData.created_at ? formatDateTime(userData.created_at) : '-'}
                         </td>
                         <td className="px-6 py-4 text-sm">
                           <button 
