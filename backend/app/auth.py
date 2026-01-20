@@ -6,11 +6,11 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 from sqlmodel import Session, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.models.auth_models import User, brazilian_now
+from app.models.auth_models import User
 from app.config import settings
 from app.database import get_db
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/token")
 
 def credentials_exception():
@@ -26,14 +26,16 @@ def verify_password(plain_password, hashed_password):
 
 def get_password_hash(password):
     """Hash a password"""
+    # Truncate password to 72 bytes as required by bcrypt
+    password = password.encode('utf-8')[:72].decode('utf-8')
     return pwd_context.hash(password)
 
 async def authenticate_user(session: AsyncSession, username: str, password: str):
     """Authenticate a user by username and password"""
-    user = await session.execute(
+    result = await session.execute(
         select(User).where(User.username == username)
     )
-    user = user.first()
+    user = result.scalar_one_or_none()
     if not user:
         return False
     if not verify_password(password, user.hashed_password):
@@ -60,8 +62,8 @@ async def create_user(session: AsyncSession, username: str, email: str, full_nam
         full_name=full_name,
         hashed_password=hashed_password,
         role=role,
-        created_at=brazilian_now(),
-        updated_at=brazilian_now()
+        created_at=datetime.now(),
+        updated_at=datetime.now()
     )
     session.add(user)
     await session.commit()
@@ -81,7 +83,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme), session: AsyncSe
     user = await session.execute(
         select(User).where(User.username == username)
     )
-    user = user.first()
+    user = user.scalar_one_or_none()
     if user is None:
         raise credentials_exception()
     return user

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { ShoppingCart, DollarSign, Users, TrendingUp, Clock, CheckCircle, Wifi, WifiOff } from 'lucide-react'
+import { ShoppingCart, DollarSign, Clock, CheckCircle, Wifi, WifiOff } from 'lucide-react'
 import { getOrders } from '../services/api'
 import { useWebSocket, useWebSocketEvent } from '../hooks/useWebSocket'
 

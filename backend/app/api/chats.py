@@ -51,45 +51,62 @@ async def list_chats(
 ):
     """Lista todas as conversas ativas."""
     chats = []
+    
+    # Buscar todos os eventos de mensagem recebida
+    result = await db.execute(
+        select(EventLog)
+        .where(EventLog.event_type == "message_received")
+        .order_by(desc(EventLog.created_at))
+    )
+    events = result.scalars().all()
+    
+    # Extrair telefones únicos em ordem de última mensagem
+    seen_phones = set()
+    phones_ordered = []
+    for event in events:
+        phone = event.payload.get("phone")
+        if phone and phone not in seen_phones:
+            phones_ordered.append(phone)
+            seen_phones.add(phone)
+    
+    for phone in phones_ordered:
+        # Buscar cliente
+        result = await db.execute(
+            select(Customer).where(Customer.phone == phone)
+        )
+        customer = result.scalar_one_or_none()
 
-    # Buscar conversas ativas do Redis
-    redis = redis_manager.client
-    if redis:
-        keys = await redis.keys("conversation:*")
+        # Buscar ultima mensagem do log
+        result = await db.execute(
+            select(EventLog)
+            .where(EventLog.event_type == "message_received")
+            .where(EventLog.payload["phone"].astext == phone)
+            .order_by(desc(EventLog.created_at))
+            .limit(1)
+        )
+        last_event = result.scalar_one_or_none()
+        
+        # Buscar estado do Redis
+        state = "start"
+        redis = redis_manager.client
+        if redis:
+            try:
+                context_data = await redis.hgetall(f"conversation:{phone}")
+                state = context_data.get("state", "start") if context_data else "start"
+            except Exception as e:
+                print(f"Erro ao buscar estado do Redis para {phone}: {e}")
 
-        for key in keys:
-            phone = key.split(":")[-1]
-            context_data = await redis.hgetall(key)
+        chat = ChatOut(
+            phone=phone,
+            customer_name=customer.name if customer else None,
+            customer_id=str(customer.id) if customer else None,
+            last_message=last_event.payload.get("message") if last_event else None,
+            last_message_time=last_event.created_at if last_event else None,
+            unread_count=0,
+            state=state
+        )
+        chats.append(chat)
 
-            # Buscar cliente
-            result = await db.execute(
-                select(Customer).where(Customer.phone == phone)
-            )
-            customer = result.scalar_one_or_none()
-
-            # Buscar ultima mensagem do log
-            result = await db.execute(
-                select(EventLog)
-                .where(EventLog.event_type == "message_received")
-                .where(EventLog.payload["phone"].astext == phone)
-                .order_by(desc(EventLog.created_at))
-                .limit(1)
-            )
-            last_event = result.scalar_one_or_none()
-
-            chat = ChatOut(
-                phone=phone,
-                customer_name=customer.name if customer else None,
-                customer_id=str(customer.id) if customer else None,
-                last_message=last_event.payload.get("message") if last_event else None,
-                last_message_time=last_event.created_at if last_event else None,
-                unread_count=0,
-                state=context_data.get("state", "start") if context_data else "start"
-            )
-            chats.append(chat)
-
-    # Ordenar por ultima mensagem
-    chats.sort(key=lambda x: x.last_message_time or datetime.min, reverse=True)
     return chats
 
 

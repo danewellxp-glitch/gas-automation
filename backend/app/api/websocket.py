@@ -35,9 +35,11 @@ class ConnectionManager:
     async def broadcast(self, message: dict):
         """Envia mensagem para todas as conexões ativas."""
         if not self.active_connections:
+            logger.debug(f"Sem conexões ativas para broadcast de {message.get('type')}")
             return
 
         message_json = json.dumps(message, default=str)
+        logger.debug(f"Broadcasting {message.get('type')} para {len(self.active_connections)} conexões")
         disconnected = set()
 
         for connection in self.active_connections:

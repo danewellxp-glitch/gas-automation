@@ -118,22 +118,30 @@ async def process_whatsapp_message(message: WAHAMessage):
 
     Esta função é chamada em background para não bloquear o webhook.
     """
+    phone = message.phone
+    text = message.text
+    button_id = message.button_id
+    message_id = message.key.id if message.key else None
+
+    # Usar button_id se não tiver texto (clique em botão)
+    content = text or button_id or ""
+
+    if not content:
+        logger.warning(f"Mensagem sem conteúdo de {phone}")
+        return
+
+    logger.info(f"Processando mensagem de {phone}: {content[:50]}")
+
+    # EMITIR WEBSOCKET IMEDIATAMENTE (antes de qualquer processamento complexo)
     try:
-        phone = message.phone
-        text = message.text
-        button_id = message.button_id
-        message_id = message.key.id if message.key else None
+        from app.api.websocket import emit_new_message
+        await emit_new_message(phone, content, "incoming")
+        logger.info(f"WebSocket emitido para {phone}: {content[:50]}")
+    except Exception as e:
+        logger.error(f"Erro ao emitir WebSocket: {e}", exc_info=True)
 
-        # Usar button_id se não tiver texto (clique em botão)
-        content = text or button_id or ""
-
-        if not content:
-            logger.warning(f"Mensagem sem conteúdo de {phone}")
-            return
-
-        logger.info(f"Processando mensagem de {phone}: {content[:50]}")
-
-        # Salvar mensagem recebida no EventLog
+    # Salvar mensagem recebida no EventLog
+    try:
         async with AsyncSessionLocal() as db:
             event = EventLog(
                 event_type="message_received",
@@ -142,7 +150,11 @@ async def process_whatsapp_message(message: WAHAMessage):
             )
             db.add(event)
             await db.commit()
+    except Exception as e:
+        logger.warning(f"Erro ao salvar EventLog: {e}")
 
+    # Processar mensagem pelo flow engine
+    try:
         # Importar aqui para evitar import circular
         from app.core.flow_engine import flow_engine
 
@@ -161,16 +173,8 @@ async def process_whatsapp_message(message: WAHAMessage):
             f"Mensagem processada: {phone} | "
             f"Estado: {result.context.state} -> {result.new_state}"
         )
-
-        # Emitir evento WebSocket
-        try:
-            from app.api.websocket import emit_new_message
-            await emit_new_message(phone, content, "incoming")
-        except Exception:
-            pass  # WebSocket é opcional
-
     except Exception as e:
-        logger.error(f"Erro ao processar mensagem WhatsApp: {e}", exc_info=True)
+        logger.error(f"Erro ao processar mensagem no flow engine: {e}", exc_info=True)
         # Tentar enviar mensagem de erro ao usuário
         try:
             from app.integrations.waha import waha_client

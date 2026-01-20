@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Search, Filter, RefreshCw } from 'lucide-react'
+import { Search, RefreshCw } from 'lucide-react'
 import { getOrders, updateOrderStatus } from '../services/api'
 
 const statusColors = {

@@ -488,6 +488,26 @@ async def handle_awaiting_payment(
         order = await create_order(context, total)
         context.order_id = str(order.id)
 
+        # Emitir evento WebSocket de novo pedido
+        try:
+            from app.api.websocket import emit_new_order
+            order_data = {
+                "id": str(order.id),
+                "order_number": order.order_number,
+                "customer_id": str(context.customer_id),
+                "status": order.status,
+                "total_amount": float(order.total_amount),
+                "payment_method": "pix",
+                "created_at": order.created_at.isoformat() if order.created_at else None,
+                "product": product["name"],
+                "quantity": context.selected_quantity,
+                "address": context.address.get("full_address", ""),
+            }
+            await emit_new_order(order_data)
+            logger.info(f"Evento WebSocket emitido para novo pedido: #{order.order_number}")
+        except Exception as e:
+            logger.error(f"Erro ao emitir evento WebSocket de novo pedido: {e}")
+
         # TODO: Gerar QR Code Pix via Asaas
         # Por enquanto, simular código Pix
 
@@ -522,6 +542,26 @@ async def handle_awaiting_payment(
         order = await create_order(context, total)
         context.order_id = str(order.id)
         context.state = ConversationState.ORDER_CONFIRMED
+
+        # Emitir evento WebSocket de novo pedido
+        try:
+            from app.api.websocket import emit_new_order
+            order_data = {
+                "id": str(order.id),
+                "order_number": order.order_number,
+                "customer_id": str(context.customer_id),
+                "status": order.status,
+                "total_amount": float(order.total_amount),
+                "payment_method": "cash",
+                "created_at": order.created_at.isoformat() if order.created_at else None,
+                "product": product["name"],
+                "quantity": context.selected_quantity,
+                "address": context.address.get("full_address", ""),
+            }
+            await emit_new_order(order_data)
+            logger.info(f"Evento WebSocket emitido para novo pedido: #{order.order_number}")
+        except Exception as e:
+            logger.error(f"Erro ao emitir evento WebSocket de novo pedido: {e}")
 
         return ProcessedMessage(
             context=context,
@@ -682,6 +722,92 @@ async def handle_order_confirmed(
     # Novo pedido
     context.reset()
     return await handle_start(context, message)
+
+
+async def handle_confirming_order(
+    context: ConversationContext,
+    message: str,
+) -> ProcessedMessage:
+    """
+    Handler para confirmar pedido com cartão.
+    """
+    msg_lower = message.lower().strip()
+
+    product = PRODUCTS[context.selected_product]
+    total = product["price"] * context.selected_quantity
+
+    # Confirmar pedido
+    if msg_lower in ["confirmar", "confirmar_cartao", "1", "sim"] or "confirm" in msg_lower:
+        context.payment_method = "credit_card"
+
+        # Criar pedido
+        order = await create_order(context, total)
+        context.order_id = str(order.id)
+        context.state = ConversationState.ORDER_CONFIRMED
+
+        # Emitir evento WebSocket de novo pedido
+        try:
+            from app.api.websocket import emit_new_order
+            order_data = {
+                "id": str(order.id),
+                "order_number": order.order_number,
+                "customer_id": str(context.customer_id),
+                "status": order.status,
+                "total_amount": float(order.total_amount),
+                "payment_method": context.payment_method,
+                "created_at": order.created_at.isoformat() if order.created_at else None,
+                "product": product["name"],
+                "quantity": context.selected_quantity,
+                "address": context.address.get("full_address", ""),
+            }
+            await emit_new_order(order_data)
+            logger.info(f"Evento WebSocket emitido para novo pedido: #{order.order_number}")
+        except Exception as e:
+            logger.error(f"Erro ao emitir evento WebSocket de novo pedido: {e}")
+
+        return ProcessedMessage(
+            context=context,
+            responses=[
+                MessageResponse(
+                    text=(
+                        f"✅ *Pedido Confirmado!*\n\n"
+                        f"📦 Pedido #{order.order_number}\n"
+                        f"Produto: {context.selected_quantity}x {product['name']}\n"
+                        f"Total: *{format_currency(total)}*\n"
+                        f"Pagamento: 💳 Cartão na entrega\n\n"
+                        f"📍 Entrega em: {context.address.get('full_address', context.address.get('bairro', 'Endereço cadastrado'))}\n"
+                        f"⏱️ Previsão: *{settings.default_delivery_time_minutes} minutos*\n\n"
+                        "Você receberá atualizações sobre sua entrega!"
+                    ),
+                    footer="Obrigado pela preferência! 🔥",
+                )
+            ],
+            new_state=ConversationState.ORDER_CONFIRMED,
+        )
+
+    # Voltar
+    if msg_lower in ["voltar", "voltar_pagamento", "2"] or "volt" in msg_lower:
+        return await handle_awaiting_payment(context, "")
+
+    # Não entendeu
+    return ProcessedMessage(
+        context=context,
+        responses=[
+            MessageResponse(
+                text=(
+                    "💳 *Pagamento com Cartão*\n\n"
+                    "O pagamento com cartão será feito na entrega.\n"
+                    "Aceitamos débito e crédito.\n\n"
+                    "Deseja confirmar o pedido?"
+                ),
+                buttons=[
+                    {"id": "confirmar_cartao", "text": "✅ Confirmar"},
+                    {"id": "voltar_pagamento", "text": "🔙 Voltar"},
+                ],
+            )
+        ],
+        new_state=ConversationState.CONFIRMING_ORDER,
+    )
 
 
 async def handle_tracking_order(

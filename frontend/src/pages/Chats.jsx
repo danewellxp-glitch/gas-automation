@@ -214,14 +214,22 @@ function Chats() {
   const [messages, setMessages] = useState([])
   const [loadingChats, setLoadingChats] = useState(true)
   const [loadingMessages, setLoadingMessages] = useState(false)
+  const [lastLoadTime, setLastLoadTime] = useState(0)
+  const DEBOUNCE_MS = 1000 // Carregar conversas no máximo a cada 1 segundo
 
   // Carregar lista de chats
   const loadChats = useCallback(async () => {
+    console.log('[Chats] Iniciando loadChats...')
+    setLoadingChats(true)
     try {
+      console.log('[Chats] Chamando getChats()...')
       const data = await getChats()
+      console.log('[Chats] getChats() retornou:', data)
       setChats(data)
+      console.log('[Chats] Estado atualizado com', data.length, 'conversas')
     } catch (error) {
-      console.error('Erro ao carregar chats:', error)
+      console.error('[Chats] Erro ao carregar chats:', error)
+      setChats([])
     } finally {
       setLoadingChats(false)
     }
@@ -258,8 +266,15 @@ function Chats() {
   const handleNewMessage = useCallback((data) => {
     console.log('Nova mensagem via WebSocket:', data)
 
-    // Atualizar lista de chats
-    loadChats()
+    // Debounce: carregar conversas no máximo a cada DEBOUNCE_MS ms
+    const now = Date.now()
+    if (now - lastLoadTime > DEBOUNCE_MS) {
+      console.log('[Chats] Recarregando conversas (debounce ok)')
+      setLastLoadTime(now)
+      loadChats()
+    } else {
+      console.log('[Chats] Pulando reload (debounce ativo)')
+    }
 
     // Se for do chat selecionado, adicionar mensagem
     if (selectedChat && data.phone === selectedChat.phone) {
@@ -271,7 +286,7 @@ function Chats() {
         timestamp: new Date().toISOString()
       }])
     }
-  }, [selectedChat, loadChats])
+  }, [selectedChat, loadChats, lastLoadTime])
 
   useWebSocketEvent('new_message', handleNewMessage)
 
