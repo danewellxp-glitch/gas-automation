@@ -17,4 +17,9 @@ export default defineConfig({
       },
     },
   },
+  define: {
+    // Variáveis de ambiente para o frontend
+    __API_URL__: JSON.stringify('http://192.168.10.156:8000/api'),
+    __WS_URL__: JSON.stringify('ws://192.168.10.156:8000/ws'),
+  },
 })

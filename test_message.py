@@ -11,26 +11,24 @@ from datetime import datetime
 # URL do webhook
 WEBHOOK_URL = "http://localhost:8000/webhooks/waha"
 
-# Dados da mensagem simulada (formato WAHA)
+# Dados da mensagem simulada (formato esperado pelo webhook)
 payload = {
     "event": "message",
-    "instanceId": "test_instance",
-    "data": {
-        "key": {
-            "remoteJid": "5585987654321@s.whatsapp.net",
-            "fromMe": False,
-            "id": f"test_{datetime.now().timestamp()}"
-        },
-        "message": {
-            "conversation": "Oi, essa é uma mensagem de teste!"
-        },
-        "messageTimestamp": int(datetime.now().timestamp())
+    "session": "default",
+    "payload": {
+        "from": "5585987654321@c.us",
+        "fromMe": False,
+        "id": f"test_{datetime.now().timestamp()}",
+        "body": "Oi, essa é uma mensagem de teste!",
+        "timestamp": int(datetime.now().timestamp()),
+        "pushName": "João da Silva",
+        "_data": {"notifyName": "João da Silva"}
     }
 }
 
 print(f"📤 Enviando mensagem de teste para {WEBHOOK_URL}")
 print(f"📱 Telefone: 5585987654321")
-print(f"💬 Mensagem: {payload['data']['message']['conversation']}")
+print(f"💬 Mensagem: {payload['payload']['body']}")
 print()
 
 try:

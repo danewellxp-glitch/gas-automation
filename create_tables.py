@@ -1,6 +1,6 @@
 import asyncio
 from app.database import engine
-from app.models import auth_models, customer, order, delivery, event_log
+from app.models import *
 from sqlmodel import SQLModel
 
 async def create_tables():
