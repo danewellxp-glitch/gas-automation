@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../../hooks/useAuth'
+import { apiRequest } from '../../utils/api'
 
 export default function OwnerDashboard() {
   const { user, logout } = useAuth()
@@ -9,6 +10,8 @@ export default function OwnerDashboard() {
     revenue: 0,
     activeOperators: 0
   })
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
   useEffect(() => {
     fetchStats()
@@ -16,17 +19,15 @@ export default function OwnerDashboard() {
 
   const fetchStats = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/stats', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      })
-      if (response.ok) {
-        const data = await response.json()
-        setStats(data)
-      }
-    } catch (error) {
-      console.error('Erro ao buscar estatísticas:', error)
+      setLoading(true)
+      setError('')
+      const data = await apiRequest('stats')
+      setStats(data)
+    } catch (err) {
+      console.error('Erro ao buscar estatísticas:', err)
+      setError(err.message || 'Erro ao carregar estatísticas')
+    } finally {
+      setLoading(false)
     }
   }
 

@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../../hooks/useAuth'
+import { apiRequest } from '../../utils/api'
 
 export default function OperatorDashboard() {
   const { user, logout } = useAuth()
   const [conversations, setConversations] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
   useEffect(() => {
     fetchConversations()
@@ -12,17 +14,13 @@ export default function OperatorDashboard() {
 
   const fetchConversations = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/conversations', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      })
-      if (response.ok) {
-        const data = await response.json()
-        setConversations(data)
-      }
-    } catch (error) {
-      console.error('Erro ao buscar conversas:', error)
+      setLoading(true)
+      setError('')
+      const data = await apiRequest('conversations')
+      setConversations(data)
+    } catch (err) {
+      console.error('Erro ao buscar conversas:', err)
+      setError(err.message || 'Erro ao carregar conversas')
     } finally {
       setLoading(false)
     }

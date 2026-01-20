@@ -1,12 +1,23 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../../hooks/useAuth'
+import { apiRequest, getApiUrl } from '../../utils/api'
+
+const VALID_ROLES = [
+  { value: 'admin', label: 'Admin', icon: '👑', description: 'Acesso total ao sistema' },
+  { value: 'operator', label: 'Operador', icon: '👤', description: 'Gerencia conversas e pedidos' },
+  { value: 'owner', label: 'Proprietário', icon: '💼', description: 'Visão executiva' },
+  { value: 'user', label: 'Usuário', icon: '📦', description: 'Acesso básico' }
+]
 
 export default function AdminDashboard() {
   const { user, logout } = useAuth()
   const [users, setUsers] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
   const [selectedUser, setSelectedUser] = useState(null)
   const [newRole, setNewRole] = useState('')
+  const [showConfirmation, setShowConfirmation] = useState(false)
+  const [updating, setUpdating] = useState(false)
 
   useEffect(() => {
     fetchUsers()
@@ -14,82 +25,113 @@ export default function AdminDashboard() {
 
   const fetchUsers = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/users', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      })
-      if (response.ok) {
-        const data = await response.json()
-        setUsers(data)
-      }
-    } catch (error) {
-      console.error('Erro ao buscar usuários:', error)
+      setLoading(true)
+      setError('')
+      const data = await apiRequest('users')
+      setUsers(data)
+    } catch (err) {
+      console.error('Erro ao buscar usuários:', err)
+      setError(err.message || 'Erro ao carregar usuários')
     } finally {
       setLoading(false)
     }
   }
 
+  const handleEditClick = (userData) => {
+    setSelectedUser(userData)
+    setNewRole(userData.role)
+    setShowConfirmation(false)
+  }
+
+  const handleRoleChange = (role) => {
+    setNewRole(role)
+    setShowConfirmation(true)
+  }
+
   const updateUserRole = async () => {
-    if (!selectedUser || !newRole) return
+    if (!selectedUser || !newRole || newRole === selectedUser.role) return
+
+    // Validação: admin não pode editar sua própria role
+    if (selectedUser.id === user?.id) {
+      setError('Você não pode alterar sua própria role')
+      return
+    }
 
     try {
-      const response = await fetch(`http://localhost:8000/api/users/${selectedUser.id}/role`, {
+      setUpdating(true)
+      setError('')
+      
+      const response = await apiRequest(`users/${selectedUser.id}/role`, {
         method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          'Content-Type': 'application/json'
-        },
         body: JSON.stringify({ role: newRole })
       })
 
-      if (response.ok) {
-        alert('Role atualizada com sucesso!')
-        setSelectedUser(null)
-        setNewRole('')
-        fetchUsers()
-      }
-    } catch (error) {
-      console.error('Erro ao atualizar role:', error)
-      alert('Erro ao atualizar role')
+      // Atualizar lista de usuários
+      await fetchUsers()
+      setSelectedUser(null)
+      setNewRole('')
+      setShowConfirmation(false)
+    } catch (err) {
+      console.error('Erro ao atualizar role:', err)
+      setError(err.message || 'Erro ao atualizar role')
+    } finally {
+      setUpdating(false)
     }
+  }
+
+  const getRoleColor = (role) => {
+    switch (role) {
+      case 'admin':
+        return 'bg-red-100 text-red-800 border-red-300'
+      case 'operator':
+        return 'bg-blue-100 text-blue-800 border-blue-300'
+      case 'owner':
+        return 'bg-purple-100 text-purple-800 border-purple-300'
+      default:
+        return 'bg-gray-100 text-gray-800 border-gray-300'
+    }
+  }
+
+  const getRoleIcon = (role) => {
+    const roleObj = VALID_ROLES.find(r => r.value === role)
+    return roleObj?.icon || '📦'
   }
 
   return (
     <div className="flex h-screen bg-gray-100">
       {/* Sidebar */}
-      <div className="w-64 bg-white shadow-lg">
+      <div className="w-64 bg-white shadow-lg flex flex-col">
         <div className="p-6 border-b">
           <h1 className="text-xl font-bold text-gray-800">Gas Automation</h1>
           <p className="text-sm text-gray-500">Painel do Admin</p>
         </div>
         
-        <nav className="p-4">
+        <nav className="p-4 flex-1">
           <div className="space-y-2">
-            <button className="w-full text-left px-4 py-3 bg-blue-500 text-white rounded hover:bg-blue-600">
+            <button className="w-full text-left px-4 py-3 bg-blue-500 text-white rounded hover:bg-blue-600 transition">
               📊 Dashboard
             </button>
-            <button className="w-full text-left px-4 py-3 hover:bg-gray-100 rounded">
+            <button className="w-full text-left px-4 py-3 hover:bg-gray-100 rounded transition">
               👥 Usuários
             </button>
-            <button className="w-full text-left px-4 py-3 hover:bg-gray-100 rounded">
+            <button className="w-full text-left px-4 py-3 hover:bg-gray-100 rounded transition">
               📋 Relatórios
             </button>
-            <button className="w-full text-left px-4 py-3 hover:bg-gray-100 rounded">
+            <button className="w-full text-left px-4 py-3 hover:bg-gray-100 rounded transition">
               ⚙️ Configurações
             </button>
           </div>
         </nav>
 
-        <div className="border-t p-4 absolute bottom-0 w-64">
-          <div className="flex items-center justify-between">
-            <div className="text-sm">
-              <p className="font-semibold text-gray-800">{user?.email}</p>
-              <p className="text-gray-500 text-xs uppercase">{user?.role}</p>
+        <div className="border-t p-4">
+          <div className="flex items-center justify-between gap-2">
+            <div className="text-sm min-w-0">
+              <p className="font-semibold text-gray-800 truncate">{user?.email}</p>
+              <p className="text-gray-500 text-xs uppercase font-bold">{getRoleIcon(user?.role)} {user?.role}</p>
             </div>
             <button 
               onClick={logout}
-              className="px-3 py-1 bg-red-500 text-white rounded text-sm hover:bg-red-600"
+              className="px-3 py-1 bg-red-500 text-white rounded text-xs hover:bg-red-600 transition whitespace-nowrap"
             >
               Sair
             </button>
@@ -98,100 +140,188 @@ export default function AdminDashboard() {
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 p-8">
-        <div className="bg-white rounded-lg shadow">
-          <div className="p-6 border-b">
-            <h2 className="text-lg font-semibold text-gray-800">Gerenciar Usuários</h2>
-            <p className="text-sm text-gray-500">Atribuir roles e permissões aos usuários</p>
+      <div className="flex-1 overflow-auto">
+        <div className="p-8">
+          {/* Header */}
+          <div className="mb-6">
+            <h2 className="text-2xl font-bold text-gray-800">Gerenciamento de Usuários</h2>
+            <p className="text-gray-600">Gerencie roles e permissões do sistema</p>
           </div>
 
-          {loading ? (
-            <div className="p-6">
-              <p className="text-gray-500">Carregando usuários...</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50 border-b">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Email</th>
-                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Nome</th>
-                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Role Atual</th>
-                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Ações</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  {users.map(u => (
-                    <tr key={u.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 text-sm text-gray-800">{u.email}</td>
-                      <td className="px-6 py-4 text-sm text-gray-800">{u.full_name || u.username}</td>
-                      <td className="px-6 py-4 text-sm">
-                        <span className={`px-3 py-1 rounded-full text-xs font-semibold
-                          ${u.role === 'admin' ? 'bg-red-100 text-red-800' : 
-                            u.role === 'operator' ? 'bg-blue-100 text-blue-800' : 
-                            'bg-gray-100 text-gray-800'}`}>
-                          {u.role}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-sm">
-                        <button 
-                          onClick={() => setSelectedUser(u)}
-                          className="px-3 py-1 bg-blue-500 text-white rounded text-xs hover:bg-blue-600"
-                        >
-                          Editar
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+          {/* Error Message */}
+          {error && (
+            <div className="mb-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded">
+              {error}
             </div>
           )}
+
+          {/* Users Table */}
+          <div className="bg-white rounded-lg shadow">
+            {loading ? (
+              <div className="p-8 text-center">
+                <div className="inline-block">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+                </div>
+                <p className="text-gray-600 mt-4">Carregando usuários...</p>
+              </div>
+            ) : users.length === 0 ? (
+              <div className="p-8 text-center">
+                <p className="text-gray-500">Nenhum usuário encontrado</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50 border-b">
+                    <tr>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">Email</th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">Nome</th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">Role Atual</th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">Status</th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {users.map(userData => (
+                      <tr key={userData.id} className="hover:bg-gray-50 transition">
+                        <td className="px-6 py-4 text-sm text-gray-800">{userData.email}</td>
+                        <td className="px-6 py-4 text-sm text-gray-800">{userData.full_name || userData.username}</td>
+                        <td className="px-6 py-4 text-sm">
+                          <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold border ${getRoleColor(userData.role)}`}>
+                            {getRoleIcon(userData.role)} {userData.role}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-sm">
+                          <span className={`px-2 py-1 rounded text-xs font-medium ${userData.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
+                            {userData.is_active ? '✓ Ativo' : '✗ Inativo'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-sm">
+                          <button 
+                            onClick={() => handleEditClick(userData)}
+                            disabled={userData.id === user?.id}
+                            className={`px-3 py-1 rounded text-xs font-medium transition ${
+                              userData.id === user?.id 
+                                ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+                                : 'bg-blue-500 text-white hover:bg-blue-600'
+                            }`}
+                            title={userData.id === user?.id ? 'Você não pode editar sua própria role' : 'Editar role'}
+                          >
+                            Editar
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </div>
+      </div>
 
-        {/* Modal para editar role */}
-        {selectedUser && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg shadow-lg p-6 w-96">
-              <h3 className="text-lg font-semibold text-gray-800 mb-4">
-                Alterar Role - {selectedUser.email}
+      {/* Modal para editar role */}
+      {selectedUser && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-2xl w-full max-w-md">
+            {/* Header */}
+            <div className="p-6 border-b">
+              <h3 className="text-lg font-bold text-gray-800">
+                Alterar Role
               </h3>
+              <p className="text-sm text-gray-600 mt-1">
+                {selectedUser.email}
+              </p>
+            </div>
 
-              <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Nova Role
+            {/* Content */}
+            <div className="p-6">
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-3">
+                  Role Atual
                 </label>
-                <select 
-                  value={newRole} 
-                  onChange={(e) => setNewRole(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">Selecione uma role</option>
-                  <option value="admin">Admin</option>
-                  <option value="operator">Operador</option>
-                  <option value="owner">Proprietário</option>
-                  <option value="user">Usuário</option>
-                </select>
+                <div className={`px-4 py-3 rounded-lg border-2 ${getRoleColor(selectedUser.role)}`}>
+                  <span className="font-medium">{getRoleIcon(selectedUser.role)} {selectedUser.role}</span>
+                </div>
               </div>
 
-              <div className="flex gap-3">
-                <button 
-                  onClick={() => setSelectedUser(null)}
-                  className="flex-1 px-4 py-2 bg-gray-300 text-gray-800 rounded hover:bg-gray-400"
-                >
-                  Cancelar
-                </button>
-                <button 
-                  onClick={updateUserRole}
-                  className="flex-1 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-                >
-                  Salvar
-                </button>
-              </div>
+              {!showConfirmation ? (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-3">
+                    Nova Role
+                  </label>
+                  <div className="space-y-2">
+                    {VALID_ROLES.map(role => (
+                      <button
+                        key={role.value}
+                        onClick={() => handleRoleChange(role.value)}
+                        className={`w-full p-3 text-left rounded-lg border-2 transition ${
+                          newRole === role.value
+                            ? 'border-blue-500 bg-blue-50'
+                            : 'border-gray-200 hover:border-gray-300'
+                        }`}
+                      >
+                        <div className="font-medium text-gray-800">
+                          {role.icon} {role.label}
+                        </div>
+                        <div className="text-xs text-gray-600 mt-1">
+                          {role.description}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                  <p className="font-medium text-gray-800 mb-2">Confirmar alteração?</p>
+                  <p className="text-sm text-gray-700">
+                    Você está alterando a role de <strong>{selectedUser.email}</strong> para <strong>{newRole}</strong>
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="p-6 border-t bg-gray-50 rounded-b-lg flex gap-3">
+              {!showConfirmation ? (
+                <>
+                  <button 
+                    onClick={() => {
+                      setSelectedUser(null)
+                      setNewRole('')
+                    }}
+                    className="flex-1 px-4 py-2 bg-gray-300 text-gray-800 rounded hover:bg-gray-400 transition font-medium"
+                  >
+                    Cancelar
+                  </button>
+                  <button 
+                    onClick={() => setShowConfirmation(true)}
+                    disabled={newRole === selectedUser.role || !newRole}
+                    className="flex-1 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Próximo
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button 
+                    onClick={() => setShowConfirmation(false)}
+                    className="flex-1 px-4 py-2 bg-gray-300 text-gray-800 rounded hover:bg-gray-400 transition font-medium"
+                  >
+                    Voltar
+                  </button>
+                  <button 
+                    onClick={updateUserRole}
+                    disabled={updating}
+                    className="flex-1 px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {updating ? 'Salvando...' : 'Confirmar'}
+                  </button>
+                </>
+              )}
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   )
 }
