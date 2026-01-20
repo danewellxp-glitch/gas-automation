@@ -22,7 +22,11 @@ export function AuthProvider({ children }) {
 
   const login = useCallback(async (email, password) => {
     try {
-      const response = await fetch('http://localhost:8000/api/auth/login', {
+      // Usar variável de ambiente para URL da API
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://192.168.10.156:8000/api'
+      const loginUrl = `${apiUrl}/auth/login`
+      
+      const response = await fetch(loginUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
