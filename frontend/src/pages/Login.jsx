@@ -2,6 +2,13 @@ import { useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 
+const ROLE_ROUTES = {
+  admin: '/admin',
+  operator: '/operador',
+  owner: '/owner',
+  user: '/operador'
+}
+
 export default function Login() {
   const [email, setEmail] = useState('admin@gasautomation.local')
   const [password, setPassword] = useState('Admin@123456')
@@ -21,7 +28,14 @@ export default function Login() {
 
     try {
       await login(email, password)
-      navigate(from, { replace: true })
+      
+      // Obter a role do usuário salva
+      const savedUser = JSON.parse(localStorage.getItem('user'))
+      const userRole = savedUser?.role || 'user'
+      
+      // Redirecionar baseado na role
+      const targetRoute = ROLE_ROUTES[userRole] || '/operador'
+      navigate(targetRoute, { replace: true })
     } catch (err) {
       setError(err.message || 'Erro ao fazer login')
     } finally {

@@ -23,6 +23,8 @@ class UserCreate(BaseModel):
 class Token(BaseModel):
     access_token: str
     token_type: str
+    role: Optional[str] = "operator"
+    email: Optional[str] = None
 
 class TokenData(BaseModel):
     username: Optional[str] = None
@@ -61,7 +63,12 @@ async def login_by_email(
     access_token = create_access_token(
         data={"sub": user.username}, expires_delta=access_token_expires
     )
-    return {"access_token": access_token, "token_type": "bearer"}
+    return {
+        "access_token": access_token, 
+        "token_type": "bearer",
+        "role": user.role,
+        "email": user.email
+    }
 
 @router.post("/register", response_model=Token)
 async def register_user(

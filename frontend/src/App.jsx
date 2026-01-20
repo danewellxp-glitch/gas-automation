@@ -19,15 +19,27 @@ function AppRoutes() {
 
   return (
     <Routes>
+      {/* Home redireciona para login ou dashboard baseado em autenticação */}
+      <Route 
+        path="/" 
+        element={
+          isAuthenticated ? (
+            <Navigate to="/dashboard" replace />
+          ) : (
+            <Navigate to="/login" replace />
+          )
+        } 
+      />
+
       {/* Login */}
       <Route 
         path="/login" 
-        element={isAuthenticated ? <Navigate to="/" replace /> : <Login />} 
+        element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <Login />} 
       />
 
-      {/* Rotas protegidas com layout padrao */}
+      {/* Dashboard padrão (protegido) */}
       <Route 
-        path="/" 
+        path="/dashboard" 
         element={
           <ProtectedRoute>
             <Layout />
@@ -39,11 +51,11 @@ function AppRoutes() {
         <Route path="chats" element={<Chats />} />
       </Route>
 
-      {/* Paineis por Role (layout proprio) */}
+      {/* Paineis por Role (com layout próprio) */}
       <Route 
         path="/operador" 
         element={
-          <ProtectedRoute>
+          <ProtectedRoute requiredRole="operator">
             <OperatorDashboard />
           </ProtectedRoute>
         } 
@@ -51,7 +63,7 @@ function AppRoutes() {
       <Route 
         path="/admin" 
         element={
-          <ProtectedRoute>
+          <ProtectedRoute requiredRole="admin">
             <AdminDashboard />
           </ProtectedRoute>
         } 
@@ -59,13 +71,13 @@ function AppRoutes() {
       <Route 
         path="/owner" 
         element={
-          <ProtectedRoute>
+          <ProtectedRoute requiredRole="owner">
             <OwnerDashboard />
           </ProtectedRoute>
         } 
       />
 
-      {/* Fallback */}
+      {/* Fallback para login */}
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
   )
