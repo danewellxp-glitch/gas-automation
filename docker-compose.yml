@@ -239,8 +239,9 @@ services:
     container_name: gas_frontend
     restart: unless-stopped
     environment:
-      VITE_API_URL: http://192.168.10.156:8000
+      VITE_API_URL: http://192.168.10.156:8000/api
       VITE_WS_URL: ws://192.168.10.156:8000/ws
+      VITE_SERVER_URL: http://192.168.10.156:8000
     ports:
       - "3001:3001"
     volumes:

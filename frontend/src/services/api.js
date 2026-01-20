@@ -1,7 +1,10 @@
 import axios from 'axios'
 
+// Pega a URL base da API das variáveis de ambiente
+const apiBaseURL = import.meta.env.VITE_API_URL || 'http://192.168.10.156:8000/api'
+
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: apiBaseURL,
   timeout: 10000,
 })
 
