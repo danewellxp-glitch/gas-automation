@@ -6,6 +6,7 @@ Carrega variáveis de ambiente automaticamente.
 from functools import lru_cache
 from typing import Optional
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import Field, field_validator
 
 
 class Settings(BaseSettings):
@@ -23,7 +24,7 @@ class Settings(BaseSettings):
     app_version: str = "1.0.0"
     debug: bool = False
     environment: str = "development"
-    secret_key: str = "supersecretkey123changeme"
+    secret_key: str = Field(..., min_length=32, description="Chave secreta para sessões (mínimo 32 caracteres)")
 
     # PostgreSQL
     database_url: str = "postgresql+asyncpg://gasadmin:gasadmin123@localhost:5432/gas_automation"
@@ -66,18 +67,24 @@ class Settings(BaseSettings):
     cors_origins: list[str] = [
         "http://localhost:3001",
         "http://localhost:3000",
+        "http://localhost:3003",
         "http://192.168.10.156:3001",
+        "http://192.168.10.156:3003",
         "http://192.168.10.156:8000",
         "http://192.168.10.156",
-        "*"  # Permitir todas as origens durante desenvolvimento
+        # Em produção, adicionar apenas o domínio real:
+        # "https://seu-dominio.com.br"
     ]
     rate_limit_requests: int = 100
     rate_limit_period: int = 60  # segundos
 
     # JWT Authentication
     access_token_expire_minutes: int = 30
-    jwt_secret_key: str = "your-jwt-secret-key-change-in-production"
+    jwt_secret_key: str = Field(..., min_length=32, description="Chave secreta para JWT (mínimo 32 caracteres)")
     jwt_algorithm: str = "HS256"
+    
+    # Métricas
+    metrics_token: Optional[str] = Field(None, description="Token para acesso ao endpoint /metrics")
 
     # Negócio
     default_delivery_time_minutes: int = 40
@@ -90,6 +97,58 @@ class Settings(BaseSettings):
         "Umbará",
         "Xaxim"
     ]
+
+    @field_validator('cors_origins')
+    @classmethod
+    def validate_cors_origins(cls, v: list[str]) -> list[str]:
+        """Valida que CORS não permite todas as origens (wildcard)."""
+        if "*" in v:
+            raise ValueError(
+                "CORS com '*' (wildcard) não é permitido por questões de segurança. "
+                "Especifique apenas as origens necessárias no formato: "
+                "http://dominio.com ou https://dominio.com"
+            )
+        
+        # Validar formato básico das URLs
+        for origin in v:
+            if not origin.startswith(('http://', 'https://')):
+                raise ValueError(
+                    f"Origem CORS inválida: '{origin}'. "
+                    f"Deve começar com http:// ou https://"
+                )
+        
+        return v
+    
+    @field_validator('secret_key', 'jwt_secret_key')
+    @classmethod
+    def validate_secret_keys(cls, v: str, info) -> str:
+        """Valida que chaves de segurança são fortes e não são valores padrão."""
+        dangerous_keys = [
+            "supersecretkey123changeme",
+            "your-jwt-secret-key-change-in-production",
+            "changeme",
+            "secret",
+            "key123",
+            "password",
+            "admin",
+            "test"
+        ]
+        
+        # Verificar se é uma chave padrão/perigosa
+        if v.lower() in [k.lower() for k in dangerous_keys]:
+            raise ValueError(
+                f"{info.field_name} não pode ser uma chave padrão. "
+                f"Gere uma nova: openssl rand -hex 32"
+            )
+        
+        # Verificar comprimento mínimo
+        if len(v) < 32:
+            raise ValueError(
+                f"{info.field_name} deve ter no mínimo 32 caracteres. "
+                f"Gere uma nova: openssl rand -hex 32"
+            )
+        
+        return v
 
     @property
     def is_production(self) -> bool:

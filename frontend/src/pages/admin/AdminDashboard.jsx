@@ -10,6 +10,11 @@ import {
   debounce
 } from '../../utils/adminHelpers'
 
+// Importar componentes das views
+import DashboardOverview from '../../components/admin/DashboardOverview'
+import AuditLogsPanel from '../../components/admin/AuditLogsPanel'
+import SystemSettings from '../../components/admin/SystemSettings'
+
 const VALID_ROLES = [
   { value: 'admin', label: 'Admin', icon: '👑', description: 'Acesso total ao sistema' },
   { value: 'operator', label: 'Operador', icon: '👤', description: 'Gerencia conversas e pedidos' },
@@ -19,6 +24,11 @@ const VALID_ROLES = [
 
 export default function AdminDashboard() {
   const { user, logout } = useAuth()
+  
+  // Estado de navegação
+  const [activeView, setActiveView] = useState('dashboard')
+  
+  // Estados para gerenciamento de usuários
   const [users, setUsers] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -143,16 +153,44 @@ export default function AdminDashboard() {
         
         <nav className="p-4 flex-1">
           <div className="space-y-2">
-            <button className="w-full text-left px-4 py-3 bg-blue-500 text-white rounded hover:bg-blue-600 transition">
+            <button 
+              onClick={() => setActiveView('dashboard')}
+              className={`w-full text-left px-4 py-3 rounded transition ${
+                activeView === 'dashboard' 
+                  ? 'bg-blue-500 text-white' 
+                  : 'hover:bg-gray-100'
+              }`}
+            >
               📊 Dashboard
             </button>
-            <button className="w-full text-left px-4 py-3 hover:bg-gray-100 rounded transition">
+            <button 
+              onClick={() => setActiveView('users')}
+              className={`w-full text-left px-4 py-3 rounded transition ${
+                activeView === 'users' 
+                  ? 'bg-blue-500 text-white' 
+                  : 'hover:bg-gray-100'
+              }`}
+            >
               👥 Usuários
             </button>
-            <button className="w-full text-left px-4 py-3 hover:bg-gray-100 rounded transition">
+            <button 
+              onClick={() => setActiveView('reports')}
+              className={`w-full text-left px-4 py-3 rounded transition ${
+                activeView === 'reports' 
+                  ? 'bg-blue-500 text-white' 
+                  : 'hover:bg-gray-100'
+              }`}
+            >
               📋 Relatórios
             </button>
-            <button className="w-full text-left px-4 py-3 hover:bg-gray-100 rounded transition">
+            <button 
+              onClick={() => setActiveView('settings')}
+              className={`w-full text-left px-4 py-3 rounded transition ${
+                activeView === 'settings' 
+                  ? 'bg-blue-500 text-white' 
+                  : 'hover:bg-gray-100'
+              }`}
+            >
               ⚙️ Configurações
             </button>
           </div>
@@ -177,20 +215,29 @@ export default function AdminDashboard() {
       {/* Main Content */}
       <div className="flex-1 overflow-auto">
         <div className="p-8">
-          {/* Header */}
-          <div className="mb-6">
-            <h2 className="text-2xl font-bold text-gray-800">Gerenciamento de Usuários</h2>
-            <p className="text-gray-600">Gerencie roles e permissões do sistema</p>
-          </div>
+          {/* Renderizar view baseada no estado */}
+          {activeView === 'dashboard' && <DashboardOverview />}
+          
+          {activeView === 'reports' && <AuditLogsPanel />}
+          
+          {activeView === 'settings' && <SystemSettings />}
+          
+          {activeView === 'users' && (
+            <>
+              {/* Header */}
+              <div className="mb-6">
+                <h2 className="text-2xl font-bold text-gray-800">Gerenciamento de Usuários</h2>
+                <p className="text-gray-600">Gerencie roles e permissões do sistema</p>
+              </div>
 
-          {/* Error Message */}
-          {error && (
-            <div className="mb-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded">
-              {error}
-            </div>
-          )}
+              {/* Error Message */}
+              {error && (
+                <div className="mb-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded">
+                  {error}
+                </div>
+              )}
 
-          {/* Users Table */}
+              {/* Users Table */}
           <div className="bg-white rounded-lg shadow">
             {/* Search Bar */}
             <div className="p-4 border-b">
@@ -295,10 +342,12 @@ export default function AdminDashboard() {
               </div>
             )}
           </div>
+            </>
+          )}
         </div>
       </div>
 
-      {/* Modal para editar role */}
+      {/* Modal para editar role (só aparece na view de users) */}
       {selectedUser && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-2xl w-full max-w-md">

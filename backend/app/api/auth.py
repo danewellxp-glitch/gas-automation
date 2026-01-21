@@ -1,10 +1,12 @@
 from datetime import timedelta
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 from pydantic import BaseModel
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from app.database import get_db
 from app.auth import authenticate_user, create_access_token, get_current_user, create_user
@@ -12,6 +14,9 @@ from app.models.auth_models import User
 from app.config import settings
 
 router = APIRouter()
+
+# Configurar limiter para este router
+limiter = Limiter(key_func=get_remote_address)
 
 class UserCreate(BaseModel):
     username: str
@@ -34,7 +39,9 @@ class LoginRequest(BaseModel):
     password: str
 
 @router.post("/login", response_model=Token)
+@limiter.limit("5/minute")  # 5 tentativas por minuto
 async def login_by_email(
+    request: Request,
     credentials: LoginRequest,
     session: AsyncSession = Depends(get_db)
 ):
@@ -71,7 +78,9 @@ async def login_by_email(
     }
 
 @router.post("/register", response_model=Token)
+@limiter.limit("3/hour")  # 3 registros por hora
 async def register_user(
+    request: Request,
     user_data: UserCreate,
     session: AsyncSession = Depends(get_db)
 ):
@@ -105,7 +114,9 @@ async def register_user(
     return {"access_token": access_token, "token_type": "bearer"}
 
 @router.post("/token", response_model=Token)
+@limiter.limit("5/minute")  # 5 tentativas por minuto
 async def login_for_access_token(
+    request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
     session: AsyncSession = Depends(get_db)
 ):

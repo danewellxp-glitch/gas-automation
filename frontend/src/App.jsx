@@ -1,4 +1,5 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
+import { useCallback } from 'react'
 import { AuthProvider, useAuth } from './hooks/useAuth'
 import ProtectedRoute from './components/ProtectedRoute'
 import Layout from './components/Layout'
@@ -14,27 +15,49 @@ import OperatorDashboard from './pages/operator/OperatorDashboard'
 import AdminDashboard from './pages/admin/AdminDashboard'
 import OwnerDashboard from './pages/owner/OwnerDashboard'
 
+// Pages do Driver
+import DriverLogin from './pages/driver/DriverLogin'
+import DriverDashboard from './pages/driver/DriverDashboard'
+import DeliveryDetail from './pages/driver/DeliveryDetail'
+import DeliveryHistory from './pages/driver/DeliveryHistory'
+import DriverProfile from './pages/driver/DriverProfile'
+
 function AppRoutes() {
-  const { isAuthenticated } = useAuth()
+  const { isAuthenticated, user } = useAuth()
+
+  // Função para obter o dashboard correto baseado na role
+  const getDashboardPath = useCallback(() => {
+    if (!user?.role) return '/login'
+    
+    const roleRoutes = {
+      'driver': '/driver/dashboard',
+      'admin': '/admin',
+      'owner': '/owner',
+      'operator': '/operador',
+      'user': '/operador'
+    }
+    
+    return roleRoutes[user.role] || '/dashboard'
+  }, [user])
 
   return (
     <Routes>
-      {/* Home redireciona para login ou dashboard baseado em autenticação */}
+      {/* Home redireciona para login ou dashboard baseado em autenticação e role */}
       <Route 
         path="/" 
         element={
           isAuthenticated ? (
-            <Navigate to="/dashboard" replace />
+            <Navigate to={getDashboardPath()} replace />
           ) : (
             <Navigate to="/login" replace />
           )
         } 
       />
 
-      {/* Login */}
+      {/* Login redireciona para o dashboard correto se já autenticado */}
       <Route 
         path="/login" 
-        element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <Login />} 
+        element={isAuthenticated ? <Navigate to={getDashboardPath()} replace /> : <Login />} 
       />
 
       {/* Dashboard padrão (protegido) */}
@@ -73,6 +96,46 @@ function AppRoutes() {
         element={
           <ProtectedRoute requiredRole="owner">
             <OwnerDashboard />
+          </ProtectedRoute>
+        } 
+      />
+
+      {/* Rotas do Driver */}
+      <Route 
+        path="/driver/login" 
+        element={
+          isAuthenticated ? <Navigate to="/driver/dashboard" replace /> : <DriverLogin />
+        } 
+      />
+      <Route 
+        path="/driver/dashboard" 
+        element={
+          <ProtectedRoute requiredRole="driver">
+            <DriverDashboard />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/driver/delivery/:id" 
+        element={
+          <ProtectedRoute requiredRole="driver">
+            <DeliveryDetail />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/driver/history" 
+        element={
+          <ProtectedRoute requiredRole="driver">
+            <DeliveryHistory />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/driver/profile" 
+        element={
+          <ProtectedRoute requiredRole="driver">
+            <DriverProfile />
           </ProtectedRoute>
         } 
       />

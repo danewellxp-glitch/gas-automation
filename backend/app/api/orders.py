@@ -22,32 +22,31 @@ from app.schemas.order import (
     OrderResponse,
     OrderStatusUpdate,
     OrderUpdate,
+    PaginatedOrdersResponse,
 )
 
 router = APIRouter()
 
 
-@router.get("", response_model=list[OrderBrief])
+@router.get("", response_model=PaginatedOrdersResponse)
 async def list_orders(
     status: Optional[str] = Query(None, description="Filtrar por status"),
     bairro: Optional[str] = Query(None, description="Filtrar por bairro"),
     customer_id: Optional[UUID] = Query(None, description="Filtrar por cliente"),
     date_from: Optional[datetime] = Query(None, description="Data inicial"),
     date_to: Optional[datetime] = Query(None, description="Data final"),
-    limit: int = Query(50, le=200, description="Limite de resultados"),
-    offset: int = Query(0, ge=0, description="Offset para paginação"),
+    page: int = Query(1, ge=1, description="Número da página"),
+    page_size: int = Query(30, ge=1, le=100, description="Itens por página"),
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Lista pedidos com filtros.
+    Lista pedidos com filtros e paginação.
 
     Retorna versão resumida para performance.
+    Suporta paginação e metadados (total, has_next, has_prev).
     """
-    query = (
-        select(Order)
-        .options(selectinload(Order.customer))
-        .order_by(Order.created_at.desc())
-    )
+    # Query base
+    base_query = select(Order).options(selectinload(Order.customer))
 
     # Aplicar filtros
     filters = []
@@ -68,14 +67,28 @@ async def list_orders(
         filters.append(Order.created_at <= date_to)
 
     if filters:
-        query = query.where(and_(*filters))
+        base_query = base_query.where(and_(*filters))
 
-    query = query.limit(limit).offset(offset)
+    # Contar total (antes de paginação)
+    count_query = select(func.count()).select_from(base_query.subquery())
+    total_result = await db.execute(count_query)
+    total = total_result.scalar() or 0
 
-    result = await db.execute(query)
+    # Aplicar paginação
+    offset = (page - 1) * page_size
+    paginated_query = base_query.order_by(Order.created_at.desc()).limit(page_size).offset(offset)
+
+    # Executar query
+    result = await db.execute(paginated_query)
     orders = result.scalars().all()
 
-    return [OrderBrief.from_order(o) for o in orders]
+    # Retornar resposta paginada
+    return PaginatedOrdersResponse.create(
+        items=[OrderBrief.from_order(o) for o in orders],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
 
 
 @router.get("/today", response_model=list[OrderBrief])
@@ -182,57 +195,63 @@ async def create_order(
     Cria um novo pedido.
 
     Normalmente criado pelo flow engine do bot.
+    
+    Usa transação atômica para garantir consistência:
+    - Se qualquer operação falhar, tudo é revertido
+    - Pedido e itens são criados juntos
     """
-    # Verificar se cliente existe
-    customer = await db.execute(
-        select(Customer).where(Customer.id == data.customer_id)
-    )
-    customer = customer.scalar_one_or_none()
+    try:
+        async with db.begin():
+            # Verificar se cliente existe
+            customer = await db.execute(
+                select(Customer).where(Customer.id == data.customer_id)
+            )
+            customer = customer.scalar_one_or_none()
 
-    if not customer:
-        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+            if not customer:
+                raise HTTPException(status_code=404, detail="Cliente não encontrado")
 
-    # Criar pedido
-    order = Order(
-        customer_id=data.customer_id,
-        status=OrderStatus.PENDING.value,
-        payment_method=data.payment_method,
-        delivery_bairro=data.delivery_bairro,
-        notes=data.notes,
-        total_amount=0,
-    )
-
-    # Processar endereço
-    if data.delivery_address:
-        order.delivery_address = data.delivery_address.model_dump()
-        if not order.delivery_bairro and data.delivery_address.bairro:
-            order.delivery_bairro = data.delivery_address.bairro
-
-    db.add(order)
-    await db.flush()  # Obter ID
-
-    # Adicionar itens
-    total = 0
-    for item_data in data.items:
-        # Buscar produto
-        product = await db.execute(
-            select(Product).where(Product.code == item_data.product_code.upper())
-        )
-        product = product.scalar_one_or_none()
-
-        if not product:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Produto {item_data.product_code} não encontrado"
+            # Criar pedido
+            order = Order(
+                customer_id=data.customer_id,
+                status=OrderStatus.PENDING.value,
+                payment_method=data.payment_method,
+                delivery_bairro=data.delivery_bairro,
+                notes=data.notes,
+                total_amount=0,
             )
 
-        if not product.is_active:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Produto {item_data.product_code} não está disponível"
-            )
+            # Processar endereço
+            if data.delivery_address:
+                order.delivery_address = data.delivery_address.model_dump()
+                if not order.delivery_bairro and data.delivery_address.bairro:
+                    order.delivery_bairro = data.delivery_address.bairro
 
-        subtotal = product.price * item_data.quantity
+            db.add(order)
+            await db.flush()  # Obter ID
+
+            # Adicionar itens
+            total = 0
+            for item_data in data.items:
+                # Buscar produto
+                product = await db.execute(
+                    select(Product).where(Product.code == item_data.product_code.upper())
+                )
+                product = product.scalar_one_or_none()
+
+                if not product:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Produto {item_data.product_code} não encontrado"
+                    )
+
+                if not product.is_active:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Produto {item_data.product_code} não está disponível"
+                    )
+
+                subtotal = product.price * item_data.quantity
 
         item = OrderItem(
             order_id=order.id,

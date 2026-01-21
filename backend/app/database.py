@@ -157,6 +157,29 @@ class RedisManager:
         if count == 1:
             await self._redis.expire(key, window)
         return count
+    
+    # ==================== Pub/Sub para WebSocket ====================
+    
+    async def publish(self, channel: str, message: str) -> int:
+        """
+        Publica mensagem em um canal Redis.
+        Retorna o número de subscribers que receberam a mensagem.
+        """
+        if not self._redis:
+            raise RuntimeError("Redis não conectado")
+        return await self._redis.publish(channel, message)
+    
+    async def subscribe(self, channel: str):
+        """
+        Cria um subscriber para um canal Redis.
+        Retorna um objeto PubSub que pode ser usado para receber mensagens.
+        """
+        if not self._redis:
+            raise RuntimeError("Redis não conectado")
+        
+        pubsub = self._redis.pubsub()
+        await pubsub.subscribe(channel)
+        return pubsub
 
 
 # Instância global do gerenciador Redis
