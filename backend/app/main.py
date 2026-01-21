@@ -11,6 +11,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 from app.config import settings
 from app.database import redis_manager, AsyncSessionLocal, get_db
@@ -187,6 +190,11 @@ app = FastAPI(
     redoc_url="/redoc" if _enable_docs else None,
     lifespan=lifespan,
 )
+
+# Configurar Rate Limiting
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Configurar CORS
 app.add_middleware(
