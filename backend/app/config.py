@@ -72,7 +72,8 @@ class Settings(BaseSettings):
         "http://192.168.10.156:3003",
         "http://192.168.10.156:8000",
         "http://192.168.10.156",
-        "*"  # Permitir todas as origens durante desenvolvimento
+        # Em produção, adicionar apenas o domínio real:
+        # "https://seu-dominio.com.br"
     ]
     rate_limit_requests: int = 100
     rate_limit_period: int = 60  # segundos
@@ -94,6 +95,27 @@ class Settings(BaseSettings):
         "Xaxim"
     ]
 
+    @field_validator('cors_origins')
+    @classmethod
+    def validate_cors_origins(cls, v: list[str]) -> list[str]:
+        """Valida que CORS não permite todas as origens (wildcard)."""
+        if "*" in v:
+            raise ValueError(
+                "CORS com '*' (wildcard) não é permitido por questões de segurança. "
+                "Especifique apenas as origens necessárias no formato: "
+                "http://dominio.com ou https://dominio.com"
+            )
+        
+        # Validar formato básico das URLs
+        for origin in v:
+            if not origin.startswith(('http://', 'https://')):
+                raise ValueError(
+                    f"Origem CORS inválida: '{origin}'. "
+                    f"Deve começar com http:// ou https://"
+                )
+        
+        return v
+    
     @field_validator('secret_key', 'jwt_secret_key')
     @classmethod
     def validate_secret_keys(cls, v: str, info) -> str:
