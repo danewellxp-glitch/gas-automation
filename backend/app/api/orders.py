@@ -195,57 +195,63 @@ async def create_order(
     Cria um novo pedido.
 
     Normalmente criado pelo flow engine do bot.
+    
+    Usa transação atômica para garantir consistência:
+    - Se qualquer operação falhar, tudo é revertido
+    - Pedido e itens são criados juntos
     """
-    # Verificar se cliente existe
-    customer = await db.execute(
-        select(Customer).where(Customer.id == data.customer_id)
-    )
-    customer = customer.scalar_one_or_none()
+    try:
+        async with db.begin():
+            # Verificar se cliente existe
+            customer = await db.execute(
+                select(Customer).where(Customer.id == data.customer_id)
+            )
+            customer = customer.scalar_one_or_none()
 
-    if not customer:
-        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+            if not customer:
+                raise HTTPException(status_code=404, detail="Cliente não encontrado")
 
-    # Criar pedido
-    order = Order(
-        customer_id=data.customer_id,
-        status=OrderStatus.PENDING.value,
-        payment_method=data.payment_method,
-        delivery_bairro=data.delivery_bairro,
-        notes=data.notes,
-        total_amount=0,
-    )
-
-    # Processar endereço
-    if data.delivery_address:
-        order.delivery_address = data.delivery_address.model_dump()
-        if not order.delivery_bairro and data.delivery_address.bairro:
-            order.delivery_bairro = data.delivery_address.bairro
-
-    db.add(order)
-    await db.flush()  # Obter ID
-
-    # Adicionar itens
-    total = 0
-    for item_data in data.items:
-        # Buscar produto
-        product = await db.execute(
-            select(Product).where(Product.code == item_data.product_code.upper())
-        )
-        product = product.scalar_one_or_none()
-
-        if not product:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Produto {item_data.product_code} não encontrado"
+            # Criar pedido
+            order = Order(
+                customer_id=data.customer_id,
+                status=OrderStatus.PENDING.value,
+                payment_method=data.payment_method,
+                delivery_bairro=data.delivery_bairro,
+                notes=data.notes,
+                total_amount=0,
             )
 
-        if not product.is_active:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Produto {item_data.product_code} não está disponível"
-            )
+            # Processar endereço
+            if data.delivery_address:
+                order.delivery_address = data.delivery_address.model_dump()
+                if not order.delivery_bairro and data.delivery_address.bairro:
+                    order.delivery_bairro = data.delivery_address.bairro
 
-        subtotal = product.price * item_data.quantity
+            db.add(order)
+            await db.flush()  # Obter ID
+
+            # Adicionar itens
+            total = 0
+            for item_data in data.items:
+                # Buscar produto
+                product = await db.execute(
+                    select(Product).where(Product.code == item_data.product_code.upper())
+                )
+                product = product.scalar_one_or_none()
+
+                if not product:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Produto {item_data.product_code} não encontrado"
+                    )
+
+                if not product.is_active:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Produto {item_data.product_code} não está disponível"
+                    )
+
+                subtotal = product.price * item_data.quantity
 
         item = OrderItem(
             order_id=order.id,
