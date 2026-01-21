@@ -83,12 +83,29 @@ class DriverTimeLog(Base):
     )
     
     def finalize(self):
-        """Finaliza o log calculando a duração."""
+        """
+        Finaliza o log calculando a duração.
+        Limita duração máxima a 16h (960min) para prevenir métricas infladas.
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+        
         if not self.ended_at:
             self.ended_at = datetime.now(timezone.utc)
         
         delta = self.ended_at - self.started_at
-        self.duration_minutes = int(delta.total_seconds() / 60)
+        duration_minutes = int(delta.total_seconds() / 60)
+        
+        # Limitar a 16 horas (960 minutos)
+        MAX_DURATION = 960
+        if duration_minutes > MAX_DURATION:
+            logger.warning(
+                f"Time log {self.id} excede {MAX_DURATION}min "
+                f"(duração: {duration_minutes}min). Limitando para prevenir métricas infladas."
+            )
+            duration_minutes = MAX_DURATION
+        
+        self.duration_minutes = duration_minutes
     
     def __repr__(self):
         return f"<DriverTimeLog {self.driver_id} {self.status} {self.date}>"
