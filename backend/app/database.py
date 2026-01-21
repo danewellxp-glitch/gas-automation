@@ -3,7 +3,7 @@ Configuração de conexões com banco de dados PostgreSQL e Redis.
 """
 
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator
+from typing import AsyncGenerator, List
 
 import redis.asyncio as aioredis
 from sqlalchemy.ext.asyncio import (

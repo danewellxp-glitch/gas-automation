@@ -20,16 +20,19 @@ export default function DashboardOverview() {
     try {
       setLoading(true)
       
-      // Buscar múltiplas métricas em paralelo
+      // Buscar múltiplas métricas em paralelo usando variável de ambiente
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://192.168.10.156:8000/api'
+      const token = localStorage.getItem('token')
+      
       const [usersRes, driversRes, metricsRes] = await Promise.all([
-        fetch('http://192.168.10.156:8000/api/users', {
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        fetch(`${apiUrl}/users`, {
+          headers: { 'Authorization': `Bearer ${token}` }
         }),
-        fetch('http://192.168.10.156:8000/api/drivers', {
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        fetch(`${apiUrl}/drivers`, {
+          headers: { 'Authorization': `Bearer ${token}` }
         }),
-        fetch('http://192.168.10.156:8000/api/drivers/metrics/dashboard?period=today', {
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        fetch(`${apiUrl}/drivers/metrics/dashboard?period=today`, {
+          headers: { 'Authorization': `Bearer ${token}` }
         })
       ])
 
@@ -39,8 +42,13 @@ export default function DashboardOverview() {
 
       // Calcular estatísticas
       const activeUsers = users.filter(u => u.is_active).length
-      const activeDrivers = drivers.filter(d => d.is_active && d.status !== 'offline').length
-      const totalDrivers = drivers.length
+      // Contar drivers pela role de usuário (fonte única da verdade)
+      const driversUsers = users.filter(u => u.role === 'driver')
+      const totalDrivers = driversUsers.length
+      const activeDrivers = driversUsers.filter(u => u.is_active).length
+      
+      // Para status dos drivers, usar a tabela drivers (se disponível)
+      const activeDriversFromTable = drivers.filter(d => d.is_active && d.status !== 'offline').length
 
       setMetrics({
         users: {
@@ -55,8 +63,8 @@ export default function DashboardOverview() {
           }
         },
         drivers: {
-          total: totalDrivers,
-          active: activeDrivers,
+          total: totalDrivers, // Usa contagem de usuários com role 'driver'
+          active: activeDriversFromTable, // Usa status da tabela drivers
           offline: drivers.filter(d => d.status === 'offline').length,
           available: drivers.filter(d => d.status === 'available').length,
           busy: drivers.filter(d => d.status === 'busy').length,

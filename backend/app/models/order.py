@@ -6,7 +6,7 @@ import enum
 import uuid
 from datetime import datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Optional, List
 
 import sqlalchemy as sa
 from sqlalchemy import (
@@ -97,6 +97,12 @@ class Order(BaseModel):
         String(50),
         nullable=True,
     )
+    asaas_payment_id: Mapped[Optional[str]] = mapped_column(
+        String(100),
+        nullable=True,
+        index=True,
+        comment="ID da cobrança no Asaas (PIX/Boleto)"
+    )
 
     # Valores
     total_amount: Mapped[Decimal] = mapped_column(
@@ -152,13 +158,13 @@ class Order(BaseModel):
         "Customer",
         back_populates="orders",
     )
-    items: Mapped[list["OrderItem"]] = relationship(
+    items: Mapped[List["OrderItem"]] = relationship(
         "OrderItem",
         back_populates="order",
         lazy="selectin",
         cascade="all, delete-orphan",
     )
-    payments: Mapped[list["Payment"]] = relationship(
+    payments: Mapped[List["Payment"]] = relationship(
         "Payment",
         back_populates="order",
         lazy="selectin",
@@ -197,7 +203,7 @@ class Order(BaseModel):
         """Atualiza status e timestamps relacionados."""
         self.status = new_status
 
-        now = func.now()
+        now = datetime.utcnow()
         if new_status == OrderStatus.PAID.value:
             self.paid_at = now
         elif new_status == OrderStatus.DISPATCHED.value:

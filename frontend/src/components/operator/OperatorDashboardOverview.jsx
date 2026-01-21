@@ -20,13 +20,16 @@ export default function OperatorDashboardOverview() {
     try {
       setLoading(true)
       
-      // Buscar métricas em paralelo
+      // Buscar métricas em paralelo usando api.js
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://192.168.10.156:8000/api'
+      const token = localStorage.getItem('token')
+      
       const [ordersRes, conversationsRes] = await Promise.all([
-        fetch('http://192.168.10.156:8000/api/orders/pending', {
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        fetch(`${apiUrl}/orders/pending`, {
+          headers: { 'Authorization': `Bearer ${token}` }
         }),
-        fetch('http://192.168.10.156:8000/api/my-conversations', {
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        fetch(`${apiUrl}/my-conversations`, {
+          headers: { 'Authorization': `Bearer ${token}` }
         })
       ])
 

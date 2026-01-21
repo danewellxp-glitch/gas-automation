@@ -39,11 +39,9 @@ async def waha_webhook(
     """
     try:
         body = await request.json()
-        # DEBUG: Mostrar payload completo
-        import json
-        print(f"=== WAHA WEBHOOK RAW ===")
-        print(json.dumps(body, indent=2, default=str))
-        print(f"========================")
+
+        # Log estruturado em vez de print
+        logger.debug(f"WAHA Webhook recebido: {body.get('event', 'unknown')}")
 
         event = body.get("event", "")
         session = body.get("session", "")
@@ -79,11 +77,7 @@ async def waha_webhook(
                 pushName=sender_name or payload.get("pushName"),
             )
 
-            print(f"=== Processando mensagem ===")
-            print(f"ChatID: {chat_id}")
-            print(f"Sender: {sender_name}")
-            print(f"Body: {message_body}")
-            print(f"==============================")
+            logger.info(f"Processando mensagem - ChatID: {chat_id}, Sender: {sender_name}")
 
             # Processar em background para não bloquear
             background_tasks.add_task(

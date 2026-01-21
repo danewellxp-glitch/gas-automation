@@ -4,19 +4,25 @@
  */
 
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { getProducts, getCustomers, createCustomer, createOrder } from '../../services/api'
 
 export default function CreateOrderPanel() {
+  const navigate = useNavigate()
+  
   // Estados do formulário
   const [products, setProducts] = useState([])
-  const [customers, setCustomers] = useState([])
   
   // Dados do pedido
   const [customerData, setCustomerData] = useState({
     name: '',
     phone: '',
     cpf: '',
+    cep: '',
     address: '',
     bairro: '',
+    city: 'Curitiba',
+    state: 'PR',
     numero: '',
     complemento: '',
     pontoReferencia: ''
@@ -26,6 +32,7 @@ export default function CreateOrderPanel() {
   const [paymentMethod, setPaymentMethod] = useState('dinheiro')
   const [notes, setNotes] = useState('')
   const [searchingCustomer, setSearchingCustomer] = useState(false)
+  const [searchingCep, setSearchingCep] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [loading, setLoading] = useState(true)
 
@@ -36,16 +43,8 @@ export default function CreateOrderPanel() {
   const fetchProducts = async () => {
     try {
       setLoading(true)
-      const response = await fetch('http://192.168.10.156:8000/api/products', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      })
-      
-      if (response.ok) {
-        const data = await response.json()
-        setProducts(data)
-      }
+      const data = await getProducts()
+      setProducts(data)
     } catch (error) {
       console.error('Erro ao buscar produtos:', error)
     } finally {
@@ -53,32 +52,93 @@ export default function CreateOrderPanel() {
     }
   }
 
-  const searchCustomer = async (phone) => {
-    if (phone.length < 10) return
+  /**
+   * Busca CEP na BrasilAPI e preenche endereço automaticamente
+   */
+  const searchCep = async (cep) => {
+    // Remove formatação do CEP
+    const cleanCep = cep.replace(/\D/g, '')
+    
+    if (cleanCep.length !== 8) return
     
     try {
-      setSearchingCustomer(true)
-      const response = await fetch(`http://192.168.10.156:8000/api/customers?phone=${phone}`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      })
+      setSearchingCep(true)
+      
+      // Tenta BrasilAPI primeiro
+      let response = await fetch(`https://brasilapi.com.br/api/cep/v1/${cleanCep}`)
+      
+      // Se falhar, tenta ViaCEP
+      if (!response.ok) {
+        response = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`)
+      }
       
       if (response.ok) {
         const data = await response.json()
-        if (data && data.length > 0) {
-          const customer = data[0]
-          setCustomerData({
-            name: customer.name || '',
-            phone: customer.phone || '',
-            cpf: customer.cpf || '',
-            address: customer.address || '',
-            bairro: customer.bairro || '',
-            numero: customer.numero || '',
-            complemento: customer.complemento || '',
-            pontoReferencia: customer.ponto_referencia || ''
-          })
+        
+        // BrasilAPI usa 'street', ViaCEP usa 'logradouro'
+        const street = data.street || data.logradouro || ''
+        const neighborhood = data.neighborhood || data.bairro || ''
+        const city = data.city || data.localidade || 'Curitiba'
+        const state = data.state || data.uf || 'PR'
+        
+        if (!data.erro) {  // ViaCEP retorna {erro: true} quando não encontra
+          setCustomerData(prev => ({
+            ...prev,
+            address: street,
+            bairro: neighborhood,
+            city: city,
+            state: state
+          }))
         }
+      }
+    } catch (error) {
+      console.error('Erro ao buscar CEP:', error)
+    } finally {
+      setSearchingCep(false)
+    }
+  }
+
+  /**
+   * Busca cliente existente por telefone
+   * SOMENTE preenche se encontrar no banco de dados
+   */
+  const searchCustomer = async (phone) => {
+    // Remove formatação do telefone
+    const cleanPhone = phone.replace(/\D/g, '')
+
+    if (cleanPhone.length < 10) return
+
+    try {
+      setSearchingCustomer(true)
+      const data = await getCustomers({ phone: cleanPhone })
+
+      // SOMENTE preenche se encontrar cliente cadastrado
+      if (data && data.length > 0) {
+        const customer = data[0]
+
+        // Address é JSONB, precisa extrair os campos
+        const address = customer.address || {}
+
+        setCustomerData({
+          name: customer.name || '',
+          phone: customer.phone || cleanPhone,
+          cpf: customer.cpf_cnpj || '',
+          cep: address.cep || '',
+          address: address.street || '',
+          bairro: address.bairro || '',
+          city: address.city || 'Curitiba',
+          state: address.state || 'PR',
+          numero: address.number || '',
+          complemento: address.complement || '',
+          pontoReferencia: address.reference || ''
+        })
+      } else {
+        // Cliente não encontrado - DEIXA CAMPOS VAZIOS
+        // Mantém apenas o telefone digitado
+        setCustomerData(prev => ({
+          ...prev,
+          phone: cleanPhone
+        }))
       }
     } catch (error) {
       console.error('Erro ao buscar cliente:', error)
@@ -154,31 +214,25 @@ export default function CreateOrderPanel() {
 
     try {
       setSubmitting(true)
-      
+
       // PASSO 1: Criar/Buscar cliente
       let customerId = null
-      
+
       // Tentar buscar cliente existente pelo telefone
-      const searchResponse = await fetch(
-        `http://192.168.10.156:8000/api/customers?phone=${encodeURIComponent(customerData.phone)}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
-          }
-        }
-      )
-      
-      if (searchResponse.ok) {
-        const existingCustomers = await searchResponse.json()
+      const cleanPhone = customerData.phone.replace(/\D/g, '')
+      try {
+        const existingCustomers = await getCustomers({ phone: cleanPhone })
         if (existingCustomers && existingCustomers.length > 0) {
           customerId = existingCustomers[0].id
         }
+      } catch (err) {
+        // Ignore - cliente não encontrado
       }
-      
+
       // Se não existe, criar novo cliente
       if (!customerId) {
         const customerPayload = {
-          phone: customerData.phone,
+          phone: cleanPhone,
           name: customerData.name,
           cpf_cnpj: customerData.cpf || null,
           address: {
@@ -186,29 +240,23 @@ export default function CreateOrderPanel() {
             number: customerData.numero || '',
             complement: customerData.complemento || '',
             bairro: customerData.bairro || '',
+            city: customerData.city || 'Curitiba',
+            state: customerData.state || 'PR',
+            cep: customerData.cep || null,
             reference: customerData.pontoReferencia || ''
           }
         }
-        
-        const createCustomerResponse = await fetch('http://192.168.10.156:8000/api/customers', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(customerPayload)
-        })
-        
-        if (createCustomerResponse.ok) {
-          const newCustomer = await createCustomerResponse.json()
+
+        try {
+          const newCustomer = await createCustomer(customerPayload)
           customerId = newCustomer.id
-        } else {
-          const error = await createCustomerResponse.json()
-          alert(`❌ Erro ao criar cliente: ${error.detail || 'Erro desconhecido'}`)
+        } catch (err) {
+          const errorMsg = err.response?.data?.detail || 'Erro desconhecido'
+          alert(`❌ Erro ao criar cliente: ${errorMsg}`)
           return
         }
       }
-      
+
       // PASSO 2: Buscar códigos dos produtos (product_code ao invés de product_id)
       const itemsWithCodes = []
       for (const item of orderItems) {
@@ -220,7 +268,7 @@ export default function CreateOrderPanel() {
           })
         }
       }
-      
+
       // PASSO 3: Criar pedido com formato correto
       const orderPayload = {
         customer_id: customerId,
@@ -231,48 +279,23 @@ export default function CreateOrderPanel() {
           number: customerData.numero || '',
           complement: customerData.complemento || '',
           bairro: customerData.bairro || '',
-          city: 'Curitiba',  // Cidade padrão
-          state: 'PR',       // Estado padrão
-          cep: null          // Corrigido de zipcode para cep
+          city: customerData.city || 'Curitiba',
+          state: customerData.state || 'PR',
+          cep: customerData.cep || null
         },
         delivery_bairro: customerData.bairro || null,
         notes: notes || null
       }
 
-      const response = await fetch('http://192.168.10.156:8000/api/orders', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(orderPayload)
-      })
+      const order = await createOrder(orderPayload)
+      alert(`✅ Pedido #${order.order_number || order.id} criado com sucesso!`)
 
-      if (response.ok) {
-        const order = await response.json()
-        alert(`✅ Pedido #${order.order_number || order.id} criado com sucesso!`)
-        
-        // Limpar formulário
-        setCustomerData({
-          name: '',
-          phone: '',
-          cpf: '',
-          address: '',
-          bairro: '',
-          numero: '',
-          complemento: '',
-          pontoReferencia: ''
-        })
-        setOrderItems([])
-        setPaymentMethod('dinheiro')
-        setNotes('')
-      } else {
-        const error = await response.json()
-        alert(`❌ Erro ao criar pedido: ${error.detail || 'Erro desconhecido'}`)
-      }
+      // Redirecionar para dashboard do operador
+      navigate('/operador')
     } catch (error) {
       console.error('Erro ao criar pedido:', error)
-      alert('❌ Erro ao criar pedido: ' + error.message)
+      const errorMsg = error.response?.data?.detail || error.message
+      alert(`❌ Erro ao criar pedido: ${errorMsg}`)
     } finally {
       setSubmitting(false)
     }
@@ -315,17 +338,17 @@ export default function CreateOrderPanel() {
                   onChange={(e) => setCustomerData({...customerData, phone: e.target.value})}
                   onBlur={(e) => searchCustomer(e.target.value)}
                   className="flex-1 px-4 py-2 border rounded-lg focus:outline-none focus:border-blue-500"
-                  placeholder="(11) 99999-9999"
+                  placeholder="5541999999999"
                   required
                 />
                 {searchingCustomer && (
-                  <div className="flex items-center px-4 bg-gray-100 rounded-lg">
-                    <span className="text-sm text-gray-600">Buscando...</span>
+                  <div className="flex items-center px-4 bg-blue-100 rounded-lg">
+                    <span className="text-sm text-blue-600">🔍 Buscando...</span>
                   </div>
                 )}
               </div>
               <p className="text-xs text-gray-500 mt-1">
-                Digite o telefone para buscar cliente cadastrado
+                ✅ Busca automática se telefone já cadastrado
               </p>
             </div>
 
@@ -358,6 +381,47 @@ export default function CreateOrderPanel() {
               />
             </div>
 
+            {/* CEP com busca automática */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                CEP
+              </label>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={customerData.cep}
+                  onChange={(e) => setCustomerData({...customerData, cep: e.target.value})}
+                  onBlur={(e) => searchCep(e.target.value)}
+                  className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:border-blue-500"
+                  placeholder="80000-000"
+                  maxLength="9"
+                />
+                {searchingCep && (
+                  <div className="absolute right-2 top-2">
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+                  </div>
+                )}
+              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                ✨ Preenche endereço automaticamente
+              </p>
+            </div>
+
+            {/* Endereço */}
+            <div className="col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Endereço (Rua) *
+              </label>
+              <input
+                type="text"
+                value={customerData.address}
+                onChange={(e) => setCustomerData({...customerData, address: e.target.value})}
+                className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:border-blue-500"
+                placeholder="Rua Exemplo"
+                required
+              />
+            </div>
+
             {/* Bairro */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -372,25 +436,10 @@ export default function CreateOrderPanel() {
               />
             </div>
 
-            {/* Endereço */}
-            <div className="col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Endereço *
-              </label>
-              <input
-                type="text"
-                value={customerData.address}
-                onChange={(e) => setCustomerData({...customerData, address: e.target.value})}
-                className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:border-blue-500"
-                placeholder="Rua Exemplo"
-                required
-              />
-            </div>
-
             {/* Número */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Número
+                Número *
               </label>
               <input
                 type="text"
@@ -398,11 +447,41 @@ export default function CreateOrderPanel() {
                 onChange={(e) => setCustomerData({...customerData, numero: e.target.value})}
                 className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:border-blue-500"
                 placeholder="123"
+                required
+              />
+            </div>
+
+            {/* Cidade */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Cidade
+              </label>
+              <input
+                type="text"
+                value={customerData.city}
+                onChange={(e) => setCustomerData({...customerData, city: e.target.value})}
+                className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:border-blue-500"
+                placeholder="Curitiba"
+              />
+            </div>
+
+            {/* Estado */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Estado
+              </label>
+              <input
+                type="text"
+                value={customerData.state}
+                onChange={(e) => setCustomerData({...customerData, state: e.target.value})}
+                className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:border-blue-500"
+                placeholder="PR"
+                maxLength="2"
               />
             </div>
 
             {/* Complemento */}
-            <div>
+            <div className="col-span-2">
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Complemento
               </label>
@@ -555,18 +634,10 @@ export default function CreateOrderPanel() {
           <div className="flex gap-3">
             <button
               type="button"
-              onClick={() => {
-                setCustomerData({
-                  name: '', phone: '', cpf: '', address: '',
-                  bairro: '', numero: '', complemento: '', pontoReferencia: ''
-                })
-                setOrderItems([])
-                setPaymentMethod('dinheiro')
-                setNotes('')
-              }}
+              onClick={() => navigate('/operador')}
               className="flex-1 px-6 py-3 bg-gray-300 text-gray-800 rounded-lg hover:bg-gray-400 transition font-medium"
             >
-              🔄 Limpar
+              ⬅️ Voltar
             </button>
             <button
               type="submit"

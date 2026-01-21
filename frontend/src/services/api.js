@@ -1,6 +1,7 @@
 import axios from 'axios'
 
 // Pega a URL base da API das variáveis de ambiente
+// Em produção, VITE_API_URL deve ser configurado no .env
 const apiBaseURL = import.meta.env.VITE_API_URL || 'http://192.168.10.156:8000/api'
 
 const api = axios.create({
@@ -209,10 +210,8 @@ export const endConversation = async (id) => {
   return response.data
 }
 
-export const createTestConversation = async (data) => {
-  const response = await api.post('/conversations/test', data)
-  return response.data
-}
+// REMOVIDO: createTestConversation - Não usar em produção
+// Conversas devem ser criadas apenas através do fluxo real do WhatsApp
 
 // ==================== Bot Interactions ====================
 export const getBotInteractions = async () => {

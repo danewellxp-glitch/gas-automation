@@ -48,30 +48,10 @@ class BusinessRules:
     Contém todas as regras e políticas que governam o funcionamento do sistema.
     """
 
-    # Produtos disponíveis (preços atualizados)
-    PRODUCTS: dict[str, Product] = {
-        "P13": Product(
-            code="P13",
-            name="Botijão P13 - 13kg",
-            weight_kg=13,
-            price=Decimal("110.00"),
-            description="Botijão residencial padrão"
-        ),
-        "P20": Product(
-            code="P20",
-            name="Botijão P20 - 20kg",
-            weight_kg=20,
-            price=Decimal("150.00"),
-            description="Botijão comercial médio"
-        ),
-        "P45": Product(
-            code="P45",
-            name="Botijão P45 - 45kg",
-            weight_kg=45,
-            price=Decimal("280.00"),
-            description="Botijão comercial/industrial"
-        ),
-    }
+    # REMOVIDO: Produtos hardcoded
+    # Produtos devem ser buscados do banco de dados (PostgreSQL)
+    # Que é sincronizado do Firebird (Gerente.fdb)
+    # Usar ProductService ou buscar diretamente do banco
 
     # Taxas de entrega por bairro
     DELIVERY_FEES: dict[str, DeliveryFee] = {
@@ -116,14 +96,24 @@ class BusinessRules:
     PAYMENT_METHODS = ["pix", "dinheiro", "cartao", "credit_card", "cash"]
 
     @classmethod
-    def get_product(cls, code: str) -> Optional[Product]:
-        """Retorna produto pelo código."""
-        return cls.PRODUCTS.get(code.upper())
+    async def get_product(cls, code: str, db_session) -> Optional[Product]:
+        """Retorna produto pelo código do banco de dados."""
+        from sqlalchemy import select
+        from app.models.product import Product
+        result = await db_session.execute(
+            select(Product).where(Product.code == code.upper())
+        )
+        return result.scalar_one_or_none()
 
     @classmethod
-    def list_products(cls) -> list[Product]:
-        """Lista todos os produtos disponíveis."""
-        return list(cls.PRODUCTS.values())
+    async def list_products(cls, db_session) -> list[Product]:
+        """Lista todos os produtos disponíveis do banco de dados."""
+        from sqlalchemy import select
+        from app.models.product import Product
+        result = await db_session.execute(
+            select(Product).where(Product.is_active == True)
+        )
+        return result.scalars().all()
 
     @classmethod
     def get_delivery_fee(cls, bairro: str) -> DeliveryFee:

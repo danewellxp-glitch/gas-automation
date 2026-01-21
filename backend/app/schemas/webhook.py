@@ -3,7 +3,7 @@ Schemas de Webhooks (WAHA e Asaas).
 """
 
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any, Optional, List, Dict
 
 from pydantic import Field
 
@@ -167,7 +167,7 @@ class BotResponse(BaseSchema):
     """Resposta do bot para enviar ao cliente."""
 
     text: str  # Texto da mensagem
-    buttons: Optional[list[BotButton]] = None  # Botões (max 3)
+    buttons: Optional[List[BotButton]] = None  # Botões (max 3)
     image_url: Optional[str] = None  # URL de imagem
     image_base64: Optional[str] = None  # Imagem em base64
 
@@ -178,10 +178,10 @@ class ConversationState(BaseSchema):
     step: str  # Estado atual (start, awaiting_product, etc)
     customer_phone: str
     customer_id: Optional[str] = None
-    cart: list[dict] = Field(default_factory=list)  # [{product_code, quantity, price}]
+    cart: List[Dict] = Field(default_factory=list)  # [{product_code, quantity, price}]
     selected_product: Optional[str] = None
     selected_quantity: Optional[int] = None
-    delivery_address: Optional[dict] = None
+    delivery_address: Optional[Dict] = None
     payment_method: Optional[str] = None
     order_id: Optional[str] = None
     last_message_at: Optional[datetime] = None

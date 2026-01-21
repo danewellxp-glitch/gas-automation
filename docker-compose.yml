@@ -7,8 +7,8 @@ services:
     container_name: gas_traefik
     restart: unless-stopped
     command:
-      # API e Dashboard
-      - "--api.insecure=true"
+      # API e Dashboard (Seguro - não exposto publicamente)
+      - "--api.insecure=false"
       - "--api.dashboard=true"
       # Providers
       - "--providers.docker=true"
@@ -193,6 +193,15 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    # DESENVOLVIMENTO: usa --reload para hot-reload
+    # PRODUÇÃO: remover --reload e usar múltiplos workers
+    # command: gunicorn app.main:app -w 4 -k uvicorn.workers.UvicornWorker -b 0.0.0.0:8000
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     labels:
       - "traefik.enable=true"
@@ -204,10 +213,10 @@ services:
       - "traefik.http.middlewares.backend-ratelimit.ratelimit.average=100"
       - "traefik.http.middlewares.backend-ratelimit.ratelimit.burst=50"
       - "traefik.http.routers.backend.middlewares=backend-ratelimit"
-      # CORS Headers
+      # CORS Headers (Whitelist específica - Segurança)
       - "traefik.http.middlewares.backend-cors.headers.accesscontrolallowmethods=GET,POST,PUT,DELETE,OPTIONS"
       - "traefik.http.middlewares.backend-cors.headers.accesscontrolallowheaders=*"
-      - "traefik.http.middlewares.backend-cors.headers.accesscontrolalloworiginlist=*"
+      - "traefik.http.middlewares.backend-cors.headers.accesscontrolalloworiginlist=http://192.168.10.156:3001,http://localhost:3001"
 
   # ===========================================
   # IA LOCAL - OLLAMA
@@ -242,7 +251,7 @@ services:
     restart: unless-stopped
     environment:
       VITE_API_URL: http://192.168.10.156:8000/api
-      VITE_WS_URL: ws://192.168.10.156:8000/ws
+      VITE_WS_URL: ws://192.168.10.156:8000
       VITE_SERVER_URL: http://192.168.10.156:8000
     ports:
       - "3001:3001"
@@ -253,6 +262,15 @@ services:
       - gas_network
     depends_on:
       - backend
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3001/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    # DESENVOLVIMENTO: usa dev server com hot-reload
+    # PRODUÇÃO: usar build estático com nginx
+    # Ver frontend/Dockerfile.prod para configuração de produção
     command: npm run dev -- --host 0.0.0.0 --port 3001
     labels:
       - "traefik.enable=true"

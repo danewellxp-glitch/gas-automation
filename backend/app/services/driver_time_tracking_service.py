@@ -188,6 +188,7 @@ class DriverTimeTrackingService:
             summary = await DriverTimeTrackingService.get_driver_time_summary(
                 db, driver.id, start_date, end_date
             )
+            summary['driver_id'] = str(driver.id)  # Adicionar ID para identificar duplicatas
             summary['driver_name'] = driver.name
             summary['current_status'] = driver.status
             summary['rating'] = float(driver.rating)

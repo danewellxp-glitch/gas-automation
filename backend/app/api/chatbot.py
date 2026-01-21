@@ -55,29 +55,9 @@ async def process_chat_message(
         raise HTTPException(status_code=500, detail=f"Chat processing error: {str(e)}")
 
 
-@router.post("/test", response_model=ChatResponse)
-async def test_chat_message(
-    request: ChatRequest,
-    session: AsyncSession = Depends(get_db)
-):
-    """Test endpoint for chat processing without authentication"""
-    try:
-        chatbot_service = EnhancedClaudeChatbotService(session)
-        result = await chatbot_service.process_message(
-            phone_number=request.phone_number,
-            message=request.message,
-            profile_name=request.profile_name
-        )
-
-        return ChatResponse(
-            bot_response=result['bot_response'],
-            bot_service=result['bot_service'],
-            should_escalate=result['should_escalate'],
-            escalation_reason=result.get('escalation_reason'),
-            response_time_ms=result['response_time_ms']
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Chat processing error: {str(e)}")
+# REMOVIDO: Endpoint /test - Não usar em produção
+# Chat deve ser processado apenas através do webhook do WhatsApp
+# Para testes, usar ambiente de desenvolvimento com autenticação adequada
 
 
 @router.delete("/context/{phone_number}")

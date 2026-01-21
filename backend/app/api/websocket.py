@@ -333,8 +333,8 @@ class ScalableConnectionManager:
                             )
                             try:
                                 await metadata.websocket.close()
-                            except:
-                                pass
+                            except Exception as e:
+                                logger.debug(f"Erro ao fechar websocket: {e}")
                             self.disconnect(metadata.websocket, user_id)
                         else:
                             # Enviar ping para manter viva

@@ -1,60 +1,128 @@
-import { useState, useEffect, useCallback } from 'react'
-import websocketService from '../services/websocket'
-
 /**
- * Hook para usar WebSocket em componentes React.
+ * Hook useWebSocket - Conexão WebSocket com reconexão automática
+ * Uso: const { isConnected, send } = useWebSocket('/ws/chat');
  */
-export function useWebSocket() {
+
+import { useEffect, useRef, useCallback, useState } from 'react'
+
+export const useWebSocket = (url) => {
+  const ws = useRef(null)
   const [isConnected, setIsConnected] = useState(false)
-  const [lastMessage, setLastMessage] = useState(null)
+  const reconnectAttempts = useRef(0)
+  const maxReconnectAttempts = 5
+  const reconnectDelay = 3000
+  const eventListeners = useRef({})
 
-  useEffect(() => {
-    // Conectar ao montar
-    websocketService.connect()
+  const connect = useCallback(() => {
+    if (!url || ws.current?.readyState === WebSocket.OPEN) return
 
-    // Listeners
-    const unsubConnected = websocketService.on('connected', () => {
-      setIsConnected(true)
-    })
+    try {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+      const wsUrl = url.startsWith('ws')
+        ? url
+        : `${protocol}//${window.location.host}${url}`
 
-    const unsubDisconnected = websocketService.on('disconnected', () => {
+      ws.current = new WebSocket(wsUrl)
+
+      ws.current.onopen = () => {
+        console.log('WebSocket conectado:', wsUrl)
+        setIsConnected(true)
+        reconnectAttempts.current = 0
+      }
+
+      ws.current.onerror = (error) => {
+        console.error('Erro WebSocket:', error)
+        setIsConnected(false)
+      }
+
+      ws.current.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data)
+          // Disparar eventos registrados
+          if (data.type && eventListeners.current[data.type]) {
+            eventListeners.current[data.type].forEach(callback => {
+              callback(data)
+            })
+          }
+        } catch (error) {
+          console.error('Erro ao processar mensagem WebSocket:', error)
+        }
+      }
+
+      ws.current.onclose = () => {
+        console.log('WebSocket desconectado')
+        setIsConnected(false)
+        
+        // Tentar reconectar
+        if (reconnectAttempts.current < maxReconnectAttempts) {
+          reconnectAttempts.current++
+          setTimeout(() => {
+            console.log(
+              `Tentando reconectar WebSocket (${reconnectAttempts.current}/${maxReconnectAttempts})...`
+            )
+            connect()
+          }, reconnectDelay)
+        } else {
+          console.error('Máximo de tentativas de reconexão atingido')
+        }
+      }
+    } catch (error) {
+      console.error('Erro ao conectar WebSocket:', error)
       setIsConnected(false)
-    })
-
-    // Cleanup
-    return () => {
-      unsubConnected()
-      unsubDisconnected()
     }
-  }, [])
+  }, [url])
 
-  const subscribe = useCallback((event, callback) => {
-    return websocketService.on(event, (data) => {
-      setLastMessage(data)
-      callback(data)
-    })
-  }, [])
+  // Conectar ao montar
+  useEffect(() => {
+    connect()
+
+    // Desconectar ao desmontar
+    return () => {
+      if (ws.current) {
+        ws.current.close()
+      }
+      eventListeners.current = {}
+    }
+  }, [connect, url])
 
   const send = useCallback((data) => {
-    websocketService.send(data)
+    if (ws.current && ws.current.readyState === WebSocket.OPEN) {
+      ws.current.send(JSON.stringify(data))
+    } else {
+      console.warn('WebSocket não está conectado')
+    }
   }, [])
 
   return {
     isConnected,
-    lastMessage,
-    subscribe,
     send,
+    ws: ws.current
   }
 }
 
 /**
- * Hook para receber eventos específicos.
+ * Hook para escutar eventos específicos do WebSocket
+ * @param {string} event - Nome do evento (ex: 'new_order', 'order_update')
+ * @param {Function} callback - Função chamada quando evento ocorre
+ * 
+ * NOTA: Este hook é mantido apenas para compatibilidade.
+ * Use useSharedWebSocketEvent de './useSharedWebSocket' para melhor performance.
  */
 export function useWebSocketEvent(event, callback) {
   useEffect(() => {
-    const unsubscribe = websocketService.on(event, callback)
-    return unsubscribe
+    // Importar dinamicamente o serviço compartilhado
+    import('../services/sharedWebSocket').then((module) => {
+      const sharedService = module.default
+      if (sharedService && typeof sharedService.on === 'function') {
+        const unsubscribe = sharedService.on(event, callback)
+        return () => {
+          if (unsubscribe) unsubscribe()
+        }
+      }
+    }).catch(() => {
+      console.warn(`useWebSocketEvent: Evento '${event}' não pode ser registrado. Use useSharedWebSocketEvent.`)
+    })
+    
+    return () => {}
   }, [event, callback])
 }
-
-export default useWebSocket

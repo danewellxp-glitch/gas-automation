@@ -12,7 +12,7 @@ from app.models.driver_time_log import DriverTimeLog
 from app.models.event_log import ActorTypes, EventLog, EventTypes
 from app.models.order import Order, OrderItem, OrderStatus, PaymentMethod
 from app.models.payment import Payment, PaymentMethod as PaymentMethodType, PaymentStatus
-from app.models.product import DEFAULT_PRODUCTS, Product
+from app.models.product import Product
 
 __all__ = [
     # Auth Models
@@ -31,7 +31,6 @@ __all__ = [
     "Customer",
     # Product
     "Product",
-    "DEFAULT_PRODUCTS",
     # Order
     "Order",
     "OrderItem",

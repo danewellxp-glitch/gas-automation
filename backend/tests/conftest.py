@@ -109,3 +109,48 @@ def sample_order_data():
             "city": "Curitiba",
         },
     }
+
+
+@pytest_asyncio.fixture(scope="function")
+async def authenticated_client(client: AsyncClient, db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
+    """Cliente HTTP autenticado para testes que requerem login."""
+    from app.auth import create_access_token, get_password_hash
+    from app.models.auth_models import User
+    from datetime import timedelta
+
+    # Criar usuário de teste
+    test_user = User(
+        username="testuser",
+        email="test@example.com",
+        full_name="Test User",
+        hashed_password=get_password_hash("testpassword123"),
+        role="admin",
+        is_active=True,
+    )
+    db_session.add(test_user)
+    await db_session.commit()
+    await db_session.refresh(test_user)
+
+    # Criar token JWT
+    access_token = create_access_token(
+        data={"sub": test_user.username},
+        expires_delta=timedelta(minutes=30)
+    )
+
+    # Adicionar header de autenticação ao cliente
+    client.headers["Authorization"] = f"Bearer {access_token}"
+
+    yield client
+
+    # Limpar header após teste
+    if "Authorization" in client.headers:
+        del client.headers["Authorization"]
+
+
+@pytest.fixture
+def sample_order_items():
+    """Items de exemplo para pedido."""
+    return [
+        {"product_code": "P13", "quantity": 2},
+        {"product_code": "P20", "quantity": 1},
+    ]

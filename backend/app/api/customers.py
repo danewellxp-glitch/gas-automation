@@ -11,6 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models.customer import Customer
+from app.models.auth_models import User
+from app.auth import get_current_user
 from app.schemas.customer import CustomerCreate, CustomerResponse, CustomerUpdate
 
 router = APIRouter()
@@ -21,12 +23,17 @@ async def list_customers(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     search: Optional[str] = Query(None, description="Buscar por nome ou telefone"),
+    phone: Optional[str] = Query(None, description="Buscar por telefone exato"),
     db: AsyncSession = Depends(get_db),
 ):
     """Lista todos os clientes."""
     query = select(Customer).order_by(Customer.created_at.desc())
 
-    if search:
+    # Busca exata por telefone tem prioridade
+    if phone:
+        cleaned_phone = "".join(filter(str.isdigit, phone))
+        query = query.where(Customer.phone == cleaned_phone)
+    elif search:
         query = query.where(
             (Customer.name.ilike(f"%{search}%")) | (Customer.phone.contains(search))
         )
@@ -73,6 +80,7 @@ async def get_customer_by_phone(
 async def create_customer(
     data: CustomerCreate,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Cria um novo cliente."""
     # Verifica se já existe
@@ -103,6 +111,7 @@ async def update_customer(
     customer_id: UUID,
     data: CustomerUpdate,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Atualiza um cliente."""
     result = await db.execute(select(Customer).where(Customer.id == customer_id))
@@ -127,6 +136,7 @@ async def update_customer(
 async def delete_customer(
     customer_id: UUID,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Remove um cliente."""
     result = await db.execute(select(Customer).where(Customer.id == customer_id))

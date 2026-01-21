@@ -5,6 +5,9 @@ Inclui funcionalidades para upload, OCR, e análise de imagens.
 
 import os
 import uuid
+import logging
+
+logger = logging.getLogger(__name__)
 from typing import Optional, Dict, Any
 from pathlib import Path
 from PIL import Image
@@ -139,7 +142,7 @@ class ImageProcessor:
                 result["ocr_text"] = ocr_text.strip()
                 result["has_text"] = len(ocr_text.strip()) > 0
             except Exception as e:
-                print(f"Erro no OCR: {e}")
+                logger.warning(f"Erro no OCR: {e}")
                 result["ocr_text"] = None
                 result["has_text"] = False
 
@@ -147,7 +150,7 @@ class ImageProcessor:
             result["quality_score"] = self._calculate_image_quality(cv_image)
 
         except Exception as e:
-            print(f"Erro no processamento da imagem: {e}")
+            logger.error(f"Erro no processamento da imagem: {e}")
 
         return result
 
@@ -164,7 +167,8 @@ class ImageProcessor:
             quality_score = min(variance / 500.0, 1.0)
 
             return round(quality_score, 2)
-        except:
+        except Exception as e:
+            logger.debug(f"Erro ao calcular qualidade da imagem: {e}")
             return 0.0
 
     async def extract_text_from_image(self, image_path_or_url: str) -> Optional[str]:
@@ -180,7 +184,7 @@ class ImageProcessor:
                 text = pytesseract.image_to_string(image, lang='por+eng')
                 return text.strip()
         except Exception as e:
-            print(f"Erro na extração de texto: {e}")
+            logger.warning(f"Erro na extração de texto: {e}")
             return None
 
     async def detect_document_type(self, image_content: bytes) -> str:
@@ -203,7 +207,7 @@ class ImageProcessor:
                 return "documento_geral"
 
         except Exception as e:
-            print(f"Erro na detecção de tipo: {e}")
+            logger.warning(f"Erro na detecção de tipo: {e}")
             return "desconhecido"
 
 

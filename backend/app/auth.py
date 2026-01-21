@@ -93,19 +93,27 @@ async def get_current_user(token: str = Depends(oauth2_scheme), session: AsyncSe
     except JWTError:
         raise credentials_exception()
 
-    user = await session.execute(
+    result = await session.execute(
         select(User).where(User.username == username)
     )
-    user = user.scalar_one_or_none()
+    user = result.scalar_one_or_none()
     if user is None:
         raise credentials_exception()
+
+    # Verificar se usuário está ativo
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Usuário desativado. Contate o administrador."
+        )
+
     return user
 
 
 async def get_current_user_ws(token: str, session: AsyncSession) -> Optional[User]:
     """
     Get current user from JWT token for WebSocket connections.
-    Returns None if token is invalid instead of raising exception.
+    Returns None if token is invalid or user is inactive.
     """
     try:
         payload = jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
@@ -119,6 +127,11 @@ async def get_current_user_ws(token: str, session: AsyncSession) -> Optional[Use
         select(User).where(User.username == username)
     )
     user = result.scalar_one_or_none()
+
+    # Verificar se usuário está ativo
+    if user and not user.is_active:
+        return None
+
     return user
 
 

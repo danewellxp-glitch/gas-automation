@@ -9,6 +9,9 @@ const API_BASE = import.meta.env.VITE_API_URL || 'http://192.168.10.156:8000/api
 
 /**
  * Login específico para drivers
+ * @param {string} username - Username (apenas para salvar no localStorage)
+ * @param {string} email - Email do driver
+ * @param {string} password - Senha
  */
 export async function driverLogin(username, email, password) {
   const response = await fetch(`${API_BASE}/auth/login`, {
@@ -16,7 +19,7 @@ export async function driverLogin(username, email, password) {
     headers: {
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify({ username, email, password })
+    body: JSON.stringify({ email, password })
   })
 
   if (!response.ok) {
@@ -28,7 +31,7 @@ export async function driverLogin(username, email, password) {
 
   // Verificar se é driver
   if (data.role !== 'driver') {
-    throw new Error('Usuário não é um entregador')
+    throw new Error('Usuário não é um entregador. Acesso negado.')
   }
 
   return data

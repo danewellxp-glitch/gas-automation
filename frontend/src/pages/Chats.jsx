@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { MessageSquare, Send, RefreshCw, User, Bot, RotateCcw } from 'lucide-react'
 import { getChats, getChatMessages, sendChatMessage, resetChatContext } from '../services/api'
-import { useWebSocketEvent } from '../hooks/useWebSocket'
+import { useSharedWebSocketEvent } from '../hooks/useSharedWebSocket'
 
 function formatTime(dateStr) {
   if (!dateStr) return ''
@@ -288,7 +288,7 @@ function Chats() {
     }
   }, [selectedChat, loadChats, lastLoadTime])
 
-  useWebSocketEvent('new_message', handleNewMessage)
+  useSharedWebSocketEvent('new_message', handleNewMessage)
 
   // Enviar mensagem
   const handleSendMessage = async (message) => {

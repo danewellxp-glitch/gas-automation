@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 
 from fastapi import FastAPI, Request, Depends, HTTPException, Header
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
@@ -23,7 +24,8 @@ from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
 import app.metrics as metrics
 
 # Importar rotas
-from app.api import webhooks, orders, products, customers, websocket, chats, auth, chatbot, images, users, drivers
+from app.api import webhooks, orders, products, customers, websocket, chats, auth, chatbot, users, drivers
+from app.api import images
 
 # Importar serviços para delivery system
 try:
@@ -346,44 +348,66 @@ app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(users.router, prefix="/api", tags=["Users"])
 app.include_router(chatbot.router, prefix="/api/chatbot", tags=["Chatbot"])
 app.include_router(drivers.router, prefix="/api/drivers", tags=["Drivers"])
+app.include_router(images.router, prefix="/api/images", tags=["Images"])
 
 
 # ==================== DASHBOARD STATISTICS ENDPOINTS ====================
 
 @app.get("/api/stats")
 async def get_owner_stats(user: User = Depends(get_current_user), session: AsyncSession = Depends(get_db)):
-    """Estatísticas para dashboard do owner"""
+    """Estatísticas para dashboard do owner - DADOS REAIS"""
     try:
-        # Usuários
+        from datetime import datetime, timezone, timedelta
+        
+        # Usuários - contagem real
         from app.models.auth_models import User
-        total_users = len(await session.execute(select(User)))
-        active_users = len(await session.execute(select(User).where(User.is_active == True)))
+        total_users_result = await session.execute(select(func.count(User.id)))
+        total_users = total_users_result.scalar() or 0
+        
+        active_users_result = await session.execute(
+            select(func.count(User.id)).where(User.is_active == True)
+        )
+        active_users = active_users_result.scalar() or 0
 
-        # Conversas (aproximado)
+        # Conversas - contagem real
         from app.models.auth_models import Conversation
-        total_conversations = len(await session.execute(select(Conversation)))
+        total_conversations_result = await session.execute(select(func.count(Conversation.id)))
+        total_conversations = total_conversations_result.scalar() or 0
 
-        # Pedidos (se existir tabela orders)
+        # Pedidos - contagem e receita REAL
         try:
             from app.models.order import Order
-            total_orders = len(await session.execute(select(Order)))
-            # Pedidos hoje
-            from datetime import datetime, timedelta
-            today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-            today_orders = len(await session.execute(
-                select(Order).where(Order.created_at >= today)
-            ))
-        except:
+            total_orders_result = await session.execute(select(func.count(Order.id)))
+            total_orders = total_orders_result.scalar() or 0
+            
+            # Pedidos hoje - contagem real
+            today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+            today_orders_result = await session.execute(
+                select(func.count(Order.id)).where(Order.created_at >= today)
+            )
+            today_orders = today_orders_result.scalar() or 0
+            
+            # Receita REAL - soma dos valores dos pedidos
+            revenue_result = await session.execute(
+                select(func.coalesce(func.sum(Order.total_amount), 0))
+                .where(Order.status != 'cancelled')
+            )
+            revenue = float(revenue_result.scalar() or 0)
+            
+        except Exception as e:
+            print(f"Erro ao buscar pedidos: {e}")
             total_orders = 0
             today_orders = 0
+            revenue = 0.0
 
-        # Receita aproximada (R$ 100 por pedido)
-        revenue = total_orders * 100
-
-        # Operadores ativos (aproximado)
-        active_operators = len(await session.execute(
-            select(User).where(User.role.in_(["admin", "operator", "owner"]))
-        ))
+        # Operadores ativos - contagem real
+        active_operators_result = await session.execute(
+            select(func.count(User.id)).where(
+                User.role.in_(["admin", "operator", "owner"]),
+                User.is_active == True
+            )
+        )
+        active_operators = active_operators_result.scalar() or 0
 
         return {
             "totalConversations": total_conversations,
@@ -397,6 +421,8 @@ async def get_owner_stats(user: User = Depends(get_current_user), session: Async
 
     except Exception as e:
         print(f"Erro ao buscar estatísticas: {e}")
+        import traceback
+        traceback.print_exc()
         return {
             "totalConversations": 0,
             "totalOrders": 0,
@@ -423,13 +449,18 @@ async def get_admin_stats(user: User = Depends(get_current_user), session: Async
             select(Conversation).where(Conversation.status == "pending")
         ))
 
-        # Mensagens (aproximado)
-        total_messages = total_conversations * 5  # estimativa
+        # Mensagens reais da tabela message
+        from app.models.auth_models import Message
+        total_messages_result = await session.execute(select(func.count(Message.id)))
+        total_messages = total_messages_result.scalar() or 0
 
-        # Mensagens hoje (aproximado)
-        from datetime import datetime
-        today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-        messages_today = total_messages // 30  # estimativa
+        # Mensagens hoje (real)
+        from datetime import datetime, timezone
+        today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+        messages_today_result = await session.execute(
+            select(func.count(Message.id)).where(Message.timestamp >= today)
+        )
+        messages_today = messages_today_result.scalar() or 0
 
         # Logs de auditoria
         audit_logs = len(await session.execute(select(AuditLog)))
@@ -468,40 +499,90 @@ async def get_financial_report(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db)
 ):
-    """Relatório financeiro detalhado"""
+    """Relatório financeiro detalhado - DADOS REAIS"""
     try:
-        # Simulação de dados financeiros
-        from datetime import datetime, timedelta
-        import random
+        from datetime import datetime, timezone, timedelta
+        from app.models.order import Order
 
         # Se não especificar datas, usar último mês
         if not end_date:
-            end_date = datetime.now()
+            end_date = datetime.now(timezone.utc)
         else:
-            end_date = datetime.fromisoformat(end_date)
+            end_date = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+            if end_date.tzinfo is None:
+                end_date = end_date.replace(tzinfo=timezone.utc)
 
         if not start_date:
             start_date = end_date - timedelta(days=30)
         else:
-            start_date = datetime.fromisoformat(start_date)
+            start_date = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
+            if start_date.tzinfo is None:
+                start_date = start_date.replace(tzinfo=timezone.utc)
 
-        # Dados simulados
-        days_diff = (end_date - start_date).days
+        # Receita REAL - soma dos pedidos no período
+        revenue_result = await session.execute(
+            select(func.coalesce(func.sum(Order.total_amount), 0))
+            .where(
+                Order.created_at >= start_date,
+                Order.created_at <= end_date,
+                Order.status != 'cancelled'
+            )
+        )
+        total_revenue = float(revenue_result.scalar() or 0)
+
+        # Total de pedidos no período
+        orders_count_result = await session.execute(
+            select(func.count(Order.id))
+            .where(
+                Order.created_at >= start_date,
+                Order.created_at <= end_date
+            )
+        )
+        total_orders = orders_count_result.scalar() or 0
+
+        # Receita diária REAL
+        daily_revenue_result = await session.execute(
+            select(
+                func.date(Order.created_at).label('date'),
+                func.coalesce(func.sum(Order.total_amount), 0).label('revenue')
+            )
+            .where(
+                Order.created_at >= start_date,
+                Order.created_at <= end_date,
+                Order.status != 'cancelled'
+            )
+            .group_by(func.date(Order.created_at))
+            .order_by(func.date(Order.created_at))
+        )
+        
         daily_revenue = {}
-        total_revenue = 0
+        revenue_trend = []
+        dates = []
+        for row in daily_revenue_result:
+            day_str = row.date.strftime('%Y-%m-%d')
+            daily_revenue[day_str] = float(row.revenue or 0)
+            revenue_trend.append(float(row.revenue or 0))
+            dates.append(day_str)
 
-        for i in range(days_diff + 1):
-            day = (start_date + timedelta(days=i)).strftime('%Y-%m-%d')
-            day_revenue = random.randint(500, 2000)
-            daily_revenue[day] = day_revenue
-            total_revenue += day_revenue
+        # Preencher dias sem pedidos com 0
+        current_date = start_date.date()
+        end_date_only = end_date.date()
+        while current_date <= end_date_only:
+            day_str = current_date.strftime('%Y-%m-%d')
+            if day_str not in daily_revenue:
+                daily_revenue[day_str] = 0.0
+                revenue_trend.append(0.0)
+                dates.append(day_str)
+            current_date += timedelta(days=1)
 
-        # Gastos simulados (70% da receita)
-        total_expenses = total_revenue * 0.7
+        # Ordenar por data
+        sorted_dates = sorted(daily_revenue.keys())
+        revenue_trend = [daily_revenue[d] for d in sorted_dates]
+        dates = sorted_dates
+
+        # Despesas (por enquanto 0 - pode ser implementado depois)
+        total_expenses = 0.0
         net_profit = total_revenue - total_expenses
-
-        # Pedidos simulados
-        total_orders = len(daily_revenue) * random.randint(8, 15)
 
         return {
             "period": {
@@ -518,16 +599,18 @@ async def get_financial_report(
             },
             "daily_revenue": daily_revenue,
             "charts": {
-                "revenue_trend": list(daily_revenue.values()),
-                "dates": list(daily_revenue.keys())
+                "revenue_trend": revenue_trend,
+                "dates": dates
             }
         }
 
     except Exception as e:
         print(f"Erro no relatório financeiro: {e}")
+        import traceback
+        traceback.print_exc()
         return {
             "period": {"start_date": "", "end_date": ""},
-            "summary": {"total_revenue": 0, "total_expenses": 0, "net_profit": 0},
+            "summary": {"total_revenue": 0, "total_expenses": 0, "net_profit": 0, "total_orders": 0, "average_ticket": 0, "profit_margin": 0},
             "daily_revenue": {},
             "charts": {"revenue_trend": [], "dates": []}
         }
@@ -539,30 +622,87 @@ async def get_orders_report(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db)
 ):
-    """Relatório de pedidos"""
+    """Relatório de pedidos - DADOS REAIS"""
     try:
-        # Simulação de dados de pedidos
-        import random
-        from datetime import datetime, timedelta
+        from datetime import datetime, timezone, timedelta
+        from app.models.order import Order
+        from app.models.customer import Customer
 
         if not end_date:
-            end_date = datetime.now()
+            end_date = datetime.now(timezone.utc)
         else:
-            end_date = datetime.fromisoformat(end_date)
+            end_date = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+            if end_date.tzinfo is None:
+                end_date = end_date.replace(tzinfo=timezone.utc)
 
         if not start_date:
             start_date = end_date - timedelta(days=30)
         else:
-            start_date = datetime.fromisoformat(start_date)
+            start_date = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
+            if start_date.tzinfo is None:
+                start_date = start_date.replace(tzinfo=timezone.utc)
 
-        # Dados simulados
+        # Buscar pedidos reais do período
+        orders_result = await session.execute(
+            select(Order)
+            .where(
+                Order.created_at >= start_date,
+                Order.created_at <= end_date
+            )
+            .order_by(Order.created_at.desc())
+            .limit(50)  # Últimos 50 pedidos
+        )
+        orders_list = orders_result.scalars().all()
+
+        # Contar por status
         status_counts = {
-            "completed": random.randint(50, 100),
-            "pending": random.randint(10, 30),
-            "cancelled": random.randint(5, 15)
+            "completed": 0,
+            "delivered": 0,
+            "pending": 0,
+            "paid": 0,
+            "preparing": 0,
+            "dispatched": 0,
+            "cancelled": 0
         }
 
-        total_orders = sum(status_counts.values())
+        orders_data = []
+        for order in orders_list:
+            status = order.status or "pending"
+            if status in status_counts:
+                status_counts[status] += 1
+            else:
+                status_counts["pending"] += 1
+
+            # Buscar nome do cliente
+            customer_name = "Cliente"
+            if order.customer_id:
+                customer_result = await session.execute(
+                    select(Customer).where(Customer.id == order.customer_id)
+                )
+                customer = customer_result.scalar_one_or_none()
+                if customer:
+                    customer_name = customer.name or f"Cliente {customer.phone}"
+
+            orders_data.append({
+                "id": str(order.id),
+                "order_number": order.order_number,
+                "status": status,
+                "total": float(order.total_amount or 0),
+                "created_at": order.created_at.strftime('%Y-%m-%d %H:%M:%S') if order.created_at else "",
+                "customer": customer_name
+            })
+
+        total_orders = len(orders_list)
+        # Concluídos = delivered (entregue)
+        completed_count = status_counts.get("delivered", 0)
+        # Pendentes = pending (aguardando pagamento) - NÃO incluir paid
+        pending_count = status_counts.get("pending", 0)
+        # Em processamento = paid, preparing, dispatched (não são pendentes nem concluídos)
+        in_process_count = (
+            status_counts.get("paid", 0) + 
+            status_counts.get("preparing", 0) + 
+            status_counts.get("dispatched", 0)
+        )
 
         return {
             "period": {
@@ -571,23 +711,21 @@ async def get_orders_report(
             },
             "summary": {
                 "total_orders": total_orders,
-                "completed_rate": (status_counts["completed"] / total_orders * 100) if total_orders > 0 else 0,
-                "by_status": status_counts
-            },
-            "orders": [
-                {
-                    "id": i+1,
-                    "status": random.choice(["completed", "pending", "cancelled"]),
-                    "total": random.randint(50, 200),
-                    "created_at": (start_date + timedelta(days=random.randint(0, 30))).strftime('%Y-%m-%d'),
-                    "customer": f"Cliente {i+1}"
+                "completed_rate": (completed_count / total_orders * 100) if total_orders > 0 else 0,
+                "by_status": {
+                    "completed": completed_count,
+                    "pending": pending_count,
+                    "in_process": in_process_count,
+                    "cancelled": status_counts.get("cancelled", 0)
                 }
-                for i in range(min(10, total_orders))  # Máximo 10 pedidos na listagem
-            ]
+            },
+            "orders": orders_data
         }
 
     except Exception as e:
         print(f"Erro no relatório de pedidos: {e}")
+        import traceback
+        traceback.print_exc()
         return {
             "period": {"start_date": "", "end_date": ""},
             "summary": {"total_orders": 0, "completed_rate": 0, "by_status": {}},
@@ -598,19 +736,86 @@ async def get_orders_report(
 async def export_orders_csv(
     start_date: str = None,
     end_date: str = None,
-    user: User = Depends(get_current_user)
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db)
 ):
-    """Exportar pedidos em CSV"""
+    """Exportar pedidos em CSV - DADOS REAIS"""
     from fastapi.responses import Response
+    from datetime import datetime, timezone, timedelta
+    from app.models.order import Order
+    from app.models.customer import Customer
+    import csv
+    import io
 
-    # Simulação de dados CSV
-    csv_content = """ID,Status,Total,Data,Customer
-1,completed,150.00,2024-01-15,Cliente 1
-2,pending,89.90,2024-01-16,Cliente 2
-3,completed,200.00,2024-01-17,Cliente 3
-4,cancelled,75.50,2024-01-18,Cliente 4
-5,completed,120.00,2024-01-19,Cliente 5
-"""
+    try:
+        # Definir período
+        if not end_date:
+            end_date = datetime.now(timezone.utc)
+        else:
+            end_date = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+            if end_date.tzinfo is None:
+                end_date = end_date.replace(tzinfo=timezone.utc)
+
+        if not start_date:
+            start_date = end_date - timedelta(days=30)
+        else:
+            start_date = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
+            if start_date.tzinfo is None:
+                start_date = start_date.replace(tzinfo=timezone.utc)
+
+        # Buscar pedidos reais
+        orders_result = await session.execute(
+            select(Order)
+            .where(
+                Order.created_at >= start_date,
+                Order.created_at <= end_date
+            )
+            .order_by(Order.created_at.desc())
+        )
+        orders = orders_result.scalars().all()
+
+        # Gerar CSV
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(['ID', 'Número', 'Status', 'Total', 'Data', 'Cliente'])
+
+        for order in orders:
+            customer_name = "N/A"
+            if order.customer_id:
+                customer_result = await session.execute(
+                    select(Customer).where(Customer.id == order.customer_id)
+                )
+                customer = customer_result.scalar_one_or_none()
+                if customer:
+                    customer_name = customer.name or customer.phone or "N/A"
+
+            writer.writerow([
+                str(order.id),
+                order.order_number,
+                order.status or "pending",
+                f"{order.total_amount:.2f}" if order.total_amount else "0.00",
+                order.created_at.strftime('%Y-%m-%d %H:%M:%S') if order.created_at else "",
+                customer_name
+            ])
+
+        csv_content = output.getvalue()
+        output.close()
+
+        return Response(
+            content=csv_content,
+            media_type="text/csv",
+            headers={"Content-Disposition": "attachment; filename=pedidos.csv"}
+        )
+
+    except Exception as e:
+        print(f"Erro ao exportar pedidos: {e}")
+        import traceback
+        traceback.print_exc()
+        return Response(
+            content="Erro ao gerar CSV",
+            media_type="text/plain",
+            status_code=500
+        )
 
     return Response(
         content=csv_content,
@@ -622,24 +827,77 @@ async def export_orders_csv(
 async def export_financial_csv(
     start_date: str = None,
     end_date: str = None,
-    user: User = Depends(get_current_user)
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db)
 ):
-    """Exportar relatório financeiro em CSV"""
+    """Exportar relatório financeiro em CSV - DADOS REAIS"""
     from fastapi.responses import Response
+    from datetime import datetime, timezone, timedelta
+    from app.models.order import Order
+    import csv
+    import io
 
-    csv_content = """Data,Receita,Despesas,Lucro
-2024-01-15,1200.00,840.00,360.00
-2024-01-16,950.00,665.00,285.00
-2024-01-17,1450.00,1015.00,435.00
-2024-01-18,1100.00,770.00,330.00
-2024-01-19,1350.00,945.00,405.00
-"""
+    try:
+        # Definir período
+        if not end_date:
+            end_date = datetime.now(timezone.utc)
+        else:
+            end_date = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+            if end_date.tzinfo is None:
+                end_date = end_date.replace(tzinfo=timezone.utc)
 
-    return Response(
-        content=csv_content,
-        media_type="text/csv",
-        headers={"Content-Disposition": "attachment; filename=relatorio_financeiro.csv"}
-    )
+        if not start_date:
+            start_date = end_date - timedelta(days=30)
+        else:
+            start_date = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
+            if start_date.tzinfo is None:
+                start_date = start_date.replace(tzinfo=timezone.utc)
+
+        # Buscar receita diária real
+        daily_revenue_result = await session.execute(
+            select(
+                func.date(Order.created_at).label('date'),
+                func.coalesce(func.sum(Order.total_amount), 0).label('revenue')
+            )
+            .where(
+                Order.created_at >= start_date,
+                Order.created_at <= end_date,
+                Order.status != 'cancelled'
+            )
+            .group_by(func.date(Order.created_at))
+            .order_by(func.date(Order.created_at))
+        )
+
+        # Gerar CSV
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(['Data', 'Receita', 'Despesas', 'Lucro'])
+
+        for row in daily_revenue_result:
+            date_str = row.date.strftime('%Y-%m-%d')
+            revenue = float(row.revenue or 0)
+            expenses = 0.0  # Por enquanto 0 - pode ser implementado depois
+            profit = revenue - expenses
+            writer.writerow([date_str, f"{revenue:.2f}", f"{expenses:.2f}", f"{profit:.2f}"])
+
+        csv_content = output.getvalue()
+        output.close()
+
+        return Response(
+            content=csv_content,
+            media_type="text/csv",
+            headers={"Content-Disposition": "attachment; filename=relatorio_financeiro.csv"}
+        )
+
+    except Exception as e:
+        print(f"Erro ao exportar relatório financeiro: {e}")
+        import traceback
+        traceback.print_exc()
+        return Response(
+            content="Erro ao gerar CSV",
+            media_type="text/plain",
+            status_code=500
+        )
 
 # ==================== DELIVERY SYSTEM ENDPOINTS ====================
 

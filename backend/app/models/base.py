@@ -4,7 +4,7 @@ Modelo base com campos comuns para todas as entidades.
 
 import uuid
 from datetime import datetime
-from typing import Any
+from typing import Any, Dict
 
 from sqlalchemy import DateTime, func
 from sqlalchemy.dialects.postgresql import UUID
@@ -55,7 +55,7 @@ class BaseModel(Base, UUIDMixin, TimestampMixin):
 
     __abstract__ = True
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> Dict[str, Any]:
         """Converte modelo para dicionário."""
         return {
             column.name: getattr(self, column.name)

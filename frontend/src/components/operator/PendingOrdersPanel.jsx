@@ -4,6 +4,7 @@
  */
 
 import { useState, useEffect } from 'react'
+import api, { getOrdersPending } from '../../services/api'
 
 export default function PendingOrdersPanel() {
   const [orders, setOrders] = useState([])
@@ -20,17 +21,8 @@ export default function PendingOrdersPanel() {
   const fetchOrders = async () => {
     try {
       setLoading(true)
-      const response = await fetch('http://192.168.10.156:8000/api/orders/pending', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          'Content-Type': 'application/json'
-        }
-      })
-      
-      if (response.ok) {
-        const data = await response.json()
-        setOrders(data)
-      }
+      const data = await getOrdersPending()
+      setOrders(data)
     } catch (error) {
       console.error('Erro ao buscar pedidos:', error)
     } finally {
@@ -41,22 +33,11 @@ export default function PendingOrdersPanel() {
   const handleApprove = async (orderId) => {
     try {
       setProcessing(true)
-      const response = await fetch(`http://192.168.10.156:8000/api/orders/${orderId}/approve`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          'Content-Type': 'application/json'
-        }
-      })
-
-      if (response.ok) {
-        await fetchOrders()
-        setSelectedOrder(null)
-        setActionType(null)
-        alert('✅ Pedido aprovado com sucesso!')
-      } else {
-        alert('❌ Erro ao aprovar pedido')
-      }
+      await api.post(`/orders/${orderId}/approve`)
+      await fetchOrders()
+      setSelectedOrder(null)
+      setActionType(null)
+      alert('✅ Pedido aprovado com sucesso!')
     } catch (error) {
       console.error('Erro ao aprovar:', error)
       alert('❌ Erro ao aprovar pedido')
@@ -73,24 +54,12 @@ export default function PendingOrdersPanel() {
 
     try {
       setProcessing(true)
-      const response = await fetch(`http://192.168.10.156:8000/api/orders/${orderId}/reject`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ reason: rejectReason })
-      })
-
-      if (response.ok) {
-        await fetchOrders()
-        setSelectedOrder(null)
-        setActionType(null)
-        setRejectReason('')
-        alert('✅ Pedido rejeitado')
-      } else {
-        alert('❌ Erro ao rejeitar pedido')
-      }
+      await api.post(`/orders/${orderId}/reject`, { reason: rejectReason })
+      await fetchOrders()
+      setSelectedOrder(null)
+      setActionType(null)
+      setRejectReason('')
+      alert('✅ Pedido rejeitado')
     } catch (error) {
       console.error('Erro ao rejeitar:', error)
       alert('❌ Erro ao rejeitar pedido')

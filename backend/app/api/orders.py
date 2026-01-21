@@ -16,6 +16,8 @@ from app.database import get_db
 from app.models.customer import Customer
 from app.models.order import Order, OrderItem, OrderStatus
 from app.models.product import Product
+from app.models.auth_models import User
+from app.auth import get_current_user
 from app.schemas.order import (
     OrderBrief,
     OrderCreate,
@@ -24,6 +26,10 @@ from app.schemas.order import (
     OrderUpdate,
     PaginatedOrdersResponse,
 )
+
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -119,18 +125,14 @@ async def list_today_orders(
 async def list_pending_orders(
     db: AsyncSession = Depends(get_db),
 ):
-    """Lista pedidos pendentes (aguardando pagamento ou entrega)."""
-    pending_statuses = [
-        OrderStatus.PENDING.value,
-        OrderStatus.PAID.value,
-        OrderStatus.PREPARING.value,
-        OrderStatus.DISPATCHED.value,
-    ]
-
+    """Lista pedidos pendentes de aprovação (apenas status PENDING)."""
     query = (
         select(Order)
-        .options(selectinload(Order.customer))
-        .where(Order.status.in_(pending_statuses))
+        .options(
+            selectinload(Order.customer),
+            selectinload(Order.items),  # Carregar items também
+        )
+        .where(Order.status == OrderStatus.PENDING.value)
         .order_by(Order.created_at.asc())
     )
 
@@ -190,6 +192,7 @@ async def get_order_by_number(
 async def create_order(
     data: OrderCreate,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Cria um novo pedido.
@@ -197,84 +200,83 @@ async def create_order(
     Normalmente criado pelo flow engine do bot.
     
     Usa transação atômica para garantir consistência:
-    - Se qualquer operação falhar, tudo é revertido
+    - Se qualquer operação falhar, tudo é revertido (via get_db rollback)
     - Pedido e itens são criados juntos
     """
     try:
-        async with db.begin():
-            # Verificar se cliente existe
-            customer = await db.execute(
-                select(Customer).where(Customer.id == data.customer_id)
+        # Verificar se cliente existe
+        customer = await db.execute(
+            select(Customer).where(Customer.id == data.customer_id)
+        )
+        customer = customer.scalar_one_or_none()
+
+        if not customer:
+            raise HTTPException(status_code=404, detail="Cliente não encontrado")
+
+        # Processar endereço primeiro (para evitar problemas de serialização JSONB)
+        delivery_addr_dict = None
+        delivery_bairro = data.delivery_bairro
+        
+        if data.delivery_address:
+            # Converter para dict Python puro, não JSON string
+            delivery_addr_dict = dict(data.delivery_address.model_dump())
+            if not delivery_bairro and data.delivery_address.bairro:
+                delivery_bairro = data.delivery_address.bairro
+        
+        # Criar pedido
+        order = Order(
+            customer_id=data.customer_id,
+            status=OrderStatus.PENDING.value,
+            payment_method=data.payment_method,
+            delivery_address=delivery_addr_dict,
+            delivery_bairro=delivery_bairro,
+            notes=data.notes,
+            total_amount=0,
+        )
+
+        db.add(order)
+        await db.flush()  # Obter ID
+
+        # Adicionar itens
+        total = 0
+        for item_data in data.items:
+            # Buscar produto
+            product = await db.execute(
+                select(Product).where(Product.code == item_data.product_code.upper())
             )
-            customer = customer.scalar_one_or_none()
+            product = product.scalar_one_or_none()
 
-            if not customer:
-                raise HTTPException(status_code=404, detail="Cliente não encontrado")
+            if not product:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Produto {item_data.product_code} não encontrado"
+                )
 
-            # Processar endereço primeiro (para evitar problemas de serialização JSONB)
-            delivery_addr_dict = None
-            delivery_bairro = data.delivery_bairro
-            
-            if data.delivery_address:
-                # Converter para dict Python puro, não JSON string
-                delivery_addr_dict = dict(data.delivery_address.model_dump())
-                if not delivery_bairro and data.delivery_address.bairro:
-                    delivery_bairro = data.delivery_address.bairro
-            
-            # Criar pedido
-            order = Order(
-                customer_id=data.customer_id,
-                status=OrderStatus.PENDING.value,
-                payment_method=data.payment_method,
-                delivery_address=delivery_addr_dict,
-                delivery_bairro=delivery_bairro,
-                notes=data.notes,
-                total_amount=0,
+            if not product.is_active:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Produto {item_data.product_code} não está disponível"
+                )
+
+            subtotal = product.price * item_data.quantity
+
+            # Criar item (DENTRO do loop)
+            item = OrderItem(
+                order_id=order.id,
+                product_code=product.code,
+                product_name=product.name,
+                quantity=item_data.quantity,
+                unit_price=product.price,
+                subtotal=subtotal,
             )
+            db.add(item)
+            total += subtotal
 
-            db.add(order)
-            await db.flush()  # Obter ID
-
-            # Adicionar itens
-            total = 0
-            for item_data in data.items:
-                # Buscar produto
-                product = await db.execute(
-                    select(Product).where(Product.code == item_data.product_code.upper())
-                )
-                product = product.scalar_one_or_none()
-
-                if not product:
-                    raise HTTPException(
-                        status_code=400,
-                        detail=f"Produto {item_data.product_code} não encontrado"
-                    )
-
-                if not product.is_active:
-                    raise HTTPException(
-                        status_code=400,
-                        detail=f"Produto {item_data.product_code} não está disponível"
-                    )
-
-                subtotal = product.price * item_data.quantity
-
-                # Criar item (DENTRO do loop)
-                item = OrderItem(
-                    order_id=order.id,
-                    product_code=product.code,
-                    product_name=product.name,
-                    quantity=item_data.quantity,
-                    unit_price=product.price,
-                    subtotal=subtotal,
-                )
-                db.add(item)
-                total += subtotal
-
-            # Atualizar total do pedido
-            order.total_amount = total
-
-        # Commit da transação
-        await db.commit()
+        # Atualizar total do pedido
+        order.total_amount = total
+        
+        # Flush para persistir antes do refresh
+        await db.flush()
         
         # Recarregar pedido com todas as relações e campos gerados pelo DB
         await db.refresh(order, attribute_names=['order_number'])
@@ -294,8 +296,6 @@ async def create_order(
     except HTTPException:
         raise
     except Exception as e:
-        import logging
-        logger = logging.getLogger(__name__)
         logger.error(f"Erro ao criar pedido: {e}")
         raise HTTPException(
             status_code=500,
@@ -308,6 +308,7 @@ async def update_order(
     order_id: UUID,
     data: OrderUpdate,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Atualiza dados de um pedido."""
     result = await db.execute(
@@ -338,6 +339,7 @@ async def update_order_status(
     order_id: UUID,
     data: OrderStatusUpdate,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Atualiza o status de um pedido.
@@ -391,6 +393,7 @@ async def cancel_order(
     order_id: UUID,
     reason: Optional[str] = Query(None, description="Motivo do cancelamento"),
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Cancela um pedido."""
     result = await db.execute(
@@ -471,4 +474,92 @@ async def get_orders_summary(
         "total_revenue": total_revenue,
         "delivered_count": by_status.get("delivered", 0),
         "cancelled_count": by_status.get("cancelled", 0),
+    }
+
+
+# ==================== Aprovação/Rejeição de Pedidos ====================
+
+@router.post("/{order_id}/approve", response_model=OrderResponse)
+async def approve_order(
+    order_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Aprovar pedido pendente.
+    Muda status de 'pending' para 'paid' (pago e pronto para preparação).
+    """
+    # Buscar pedido
+    result = await db.execute(
+        select(Order)
+        .options(
+            selectinload(Order.customer),
+            selectinload(Order.items),
+        )
+        .where(Order.id == order_id)
+    )
+    order = result.scalar_one_or_none()
+    
+    if not order:
+        raise HTTPException(status_code=404, detail="Pedido não encontrado")
+    
+    # Verificar se está pendente
+    if order.status != OrderStatus.PENDING.value:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Pedido não pode ser aprovado. Status atual: {order.status}"
+        )
+    
+    # Atualizar status para 'paid' (aprovado e pago)
+    order.status = OrderStatus.PAID.value
+    order.paid_at = datetime.now()
+    
+    await db.commit()
+    await db.refresh(order)
+    
+    return order
+
+
+@router.post("/{order_id}/reject")
+async def reject_order(
+    order_id: UUID,
+    reason: dict,  # {"reason": "motivo da rejeição"}
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Rejeitar pedido pendente.
+    Muda status para 'cancelled' e registra motivo.
+    """
+    # Buscar pedido
+    result = await db.execute(
+        select(Order).where(Order.id == order_id)
+    )
+    order = result.scalar_one_or_none()
+    
+    if not order:
+        raise HTTPException(status_code=404, detail="Pedido não encontrado")
+    
+    # Verificar se está pendente
+    if order.status != OrderStatus.PENDING.value:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Pedido não pode ser rejeitado. Status atual: {order.status}"
+        )
+    
+    # Extrair motivo
+    cancellation_reason = reason.get("reason", "Rejeitado pelo operador")
+    
+    # Atualizar status para 'cancelled'
+    order.status = OrderStatus.CANCELLED.value
+    order.cancelled_at = datetime.now()
+    order.cancellation_reason = cancellation_reason
+    
+    await db.commit()
+    
+    return {
+        "success": True,
+        "message": "Pedido rejeitado com sucesso",
+        "order_id": str(order_id),
+        "reason": cancellation_reason
     }

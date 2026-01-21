@@ -21,16 +21,15 @@ class OrderService:
     def list_pending(self) -> List[Order]:
         """Lista pedidos pendentes"""
         return self.session.exec(
-            select(Order).where(Order.status == OrderStatus.PENDING)
+            select(Order).where(Order.status == OrderStatus.PENDING.value)
         ).all()
 
     def list_in_delivery(self) -> List[Order]:
-        """Lista pedidos em entrega"""
+        """Lista pedidos em entrega (dispatched ou delivered)"""
         return self.session.exec(
             select(Order).where(Order.status.in_([
-                OrderStatus.IN_DELIVERY,
-                OrderStatus.OUT_FOR_DELIVERY,
-                OrderStatus.DELIVERED
+                OrderStatus.DISPATCHED.value,
+                OrderStatus.DELIVERED.value
             ]))
         ).all()
 
@@ -69,12 +68,12 @@ class OrderService:
         return order
 
     def confirm(self, order_id: int) -> Optional[Order]:
-        """Confirma pedido"""
+        """Confirma pedido (muda para PAID)"""
         order = self.get_by_id(order_id)
         if not order:
             return None
 
-        order.status = OrderStatus.CONFIRMED
+        order.status = OrderStatus.PAID.value
         self.session.add(order)
         self.session.commit()
         self.session.refresh(order)
@@ -86,8 +85,8 @@ class OrderService:
         if not order:
             return None
 
-        order.status = OrderStatus.CANCELLED
-        order.notes = f"Cancelado: {reason}"
+        order.status = OrderStatus.CANCELLED.value
+        order.cancellation_reason = reason
         self.session.add(order)
         self.session.commit()
         self.session.refresh(order)

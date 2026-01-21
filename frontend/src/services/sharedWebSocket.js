@@ -163,9 +163,18 @@ class SharedWebSocketService {
     }
 
     const token = localStorage.getItem('access_token') || localStorage.getItem('token')
-    const url = token ? `${WS_URL}/dashboard?token=${token}` : `${WS_URL}/dashboard`
     
-    console.log(`[Leader Tab ${this.tabId}] Conectando WebSocket:`, url)
+    // Se não houver token, não tentar conectar (será rejeitado pelo backend)
+    if (!token) {
+      console.warn(`[Leader Tab ${this.tabId}] Sem token, não conectando WebSocket`)
+      return
+    }
+    
+    // WS_URL já inclui /ws, então o endpoint é /ws/dashboard
+    // Se WS_URL = 'ws://192.168.10.156:8000/ws', então url = 'ws://192.168.10.156:8000/ws/dashboard'
+    const url = `${WS_URL}/dashboard?token=${token}`
+    
+    console.log(`[Leader Tab ${this.tabId}] Conectando WebSocket:`, url.replace(token, 'TOKEN_HIDDEN'))
 
     try {
       this.ws = new WebSocket(url)
@@ -197,10 +206,19 @@ class SharedWebSocketService {
       }
 
       this.ws.onclose = (event) => {
-        console.log(`[Leader Tab ${this.tabId}] WebSocket fechado:`, event.code)
+        console.log(`[Leader Tab ${this.tabId}] WebSocket fechado:`, event.code, event.reason || '')
         this.ws = null
-        this.emit('disconnected', { timestamp: new Date() })
+        this.emit('disconnected', { timestamp: new Date(), code: event.code })
         
+        // Se foi 403 (Unauthorized) ou 1008 (Policy Violation), token pode estar expirado
+        // Não tentar reconectar infinitamente - usuário precisa fazer login novamente
+        if (event.code === 403 || event.code === 1008) {
+          console.warn(`[SharedWebSocket] Conexão rejeitada (${event.code}). Token pode estar expirado. Parando tentativas de reconexão.`)
+          this.emit('unauthorized', { code: event.code, reason: event.reason })
+          return
+        }
+        
+        // Tentar reconectar se não foi fechado intencionalmente
         if (event.code !== 1000 && this.reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
           this.tryReconnect()
         } else if (this.reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {

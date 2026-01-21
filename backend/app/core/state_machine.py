@@ -142,6 +142,7 @@ class ConversationContext:
     # Pagamento
     payment_method: Optional[str] = None  # pix, credit_card, cash
     payment_id: Optional[str] = None
+    asaas_payment_id: Optional[str] = None  # ID da cobrança no Asaas
 
     # Controle
     last_message_at: datetime = field(default_factory=datetime.utcnow)
@@ -166,6 +167,7 @@ class ConversationContext:
             "address_confirmed": self.address_confirmed,
             "payment_method": self.payment_method,
             "payment_id": self.payment_id,
+            "asaas_payment_id": self.asaas_payment_id,
             "last_message_at": self.last_message_at.isoformat(),
             "message_count": self.message_count,
             "retry_count": self.retry_count,
@@ -188,6 +190,7 @@ class ConversationContext:
             address_confirmed=data.get("address_confirmed", False),
             payment_method=data.get("payment_method"),
             payment_id=data.get("payment_id"),
+            asaas_payment_id=data.get("asaas_payment_id"),
             last_message_at=datetime.fromisoformat(data["last_message_at"]) if data.get("last_message_at") else datetime.utcnow(),
             message_count=data.get("message_count", 0),
             retry_count=data.get("retry_count", 0),
@@ -215,6 +218,7 @@ class ConversationContext:
         self.address_confirmed = False
         self.payment_method = None
         self.payment_id = None
+        self.asaas_payment_id = None
         self.retry_count = 0
         self.last_intent = None
         self.ai_confidence = 0.0

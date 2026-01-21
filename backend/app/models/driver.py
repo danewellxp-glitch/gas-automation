@@ -6,7 +6,7 @@ Gerencia entregadores e motoristas.
 import enum
 import uuid
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 
 from sqlalchemy import Boolean, DateTime, Index, String, Text, func, JSON
 from sqlalchemy.dialects.postgresql import UUID
@@ -122,7 +122,7 @@ class Driver(BaseModel):
     )
 
     # Relacionamentos
-    time_logs: Mapped[list["DriverTimeLog"]] = relationship(
+    time_logs: Mapped[List["DriverTimeLog"]] = relationship(
         "DriverTimeLog",
         back_populates="driver",
         cascade="all, delete-orphan"

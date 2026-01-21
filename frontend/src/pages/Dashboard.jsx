@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { ShoppingCart, DollarSign, Clock, CheckCircle, Wifi, WifiOff } from 'lucide-react'
 import { getOrders } from '../services/api'
-import { useWebSocket, useWebSocketEvent } from '../hooks/useWebSocket'
+import { useSharedWebSocket, useSharedWebSocketEvent } from '../hooks/useSharedWebSocket'
 
 function MetricCard({ title, value, icon: Icon, color, subtitle }) {
   return (
@@ -83,7 +83,7 @@ function Dashboard() {
     pendingOrders: 0,
     deliveredToday: 0,
   })
-  const { isConnected } = useWebSocket()
+  const { isConnected } = useSharedWebSocket()
 
   // Atualizar quando receber novo pedido
   const handleNewOrder = useCallback((data) => {
@@ -97,8 +97,8 @@ function Dashboard() {
     loadData()
   }, [])
 
-  useWebSocketEvent('new_order', handleNewOrder)
-  useWebSocketEvent('order_update', handleOrderUpdate)
+  useSharedWebSocketEvent('new_order', handleNewOrder)
+  useSharedWebSocketEvent('order_update', handleOrderUpdate)
 
   useEffect(() => {
     loadData()

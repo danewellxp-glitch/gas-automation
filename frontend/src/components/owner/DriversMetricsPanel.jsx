@@ -128,7 +128,14 @@ export default function DriversMetricsPanel() {
                       {index < 3 ? medalIcons[index] : `#${index + 1}`}
                     </div>
                     <div>
-                      <p className="font-bold text-gray-800">{driver.driver_name}</p>
+                      <p className="font-bold text-gray-800">
+                        {driver.driver_name}
+                        {driver.driver_id && (
+                          <span className="text-xs text-gray-400 ml-2">
+                            ({driver.driver_id.substring(0, 8)}...)
+                          </span>
+                        )}
+                      </p>
                       <p className="text-sm text-gray-500">
                         {driver.vehicle_type} • ⭐ {driver.rating.toFixed(1)}
                       </p>
@@ -194,7 +201,14 @@ export default function DriversMetricsPanel() {
                     <tr key={driver.driver_id}>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div>
-                          <div className="font-medium text-gray-900">{driver.driver_name}</div>
+                          <div className="font-medium text-gray-900">
+                            {driver.driver_name}
+                            {driver.driver_id && (
+                              <span className="text-xs text-gray-400 ml-2">
+                                (ID: {driver.driver_id.substring(0, 8)}...)
+                              </span>
+                            )}
+                          </div>
                           <div className="text-sm text-gray-500">⭐ {driver.rating.toFixed(1)}</div>
                         </div>
                       </td>

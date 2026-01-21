@@ -6,6 +6,41 @@ import pytest
 from httpx import AsyncClient
 
 
+class TestAuthAPI:
+    """Testes da API de autenticação."""
+
+    @pytest.mark.asyncio
+    async def test_login_invalid_credentials(self, client: AsyncClient):
+        """Testa login com credenciais inválidas."""
+        response = await client.post(
+            "/api/auth/token",
+            data={"username": "invalid", "password": "invalid"}
+        )
+        assert response.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_protected_endpoint_without_token(self, client: AsyncClient):
+        """Testa acesso a endpoint protegido sem token."""
+        response = await client.post("/api/orders", json={})
+        assert response.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_protected_endpoint_with_invalid_token(self, client: AsyncClient):
+        """Testa acesso a endpoint protegido com token inválido."""
+        client.headers["Authorization"] = "Bearer invalid_token"
+        response = await client.post("/api/orders", json={})
+        assert response.status_code == 401
+        del client.headers["Authorization"]
+
+    @pytest.mark.asyncio
+    async def test_get_current_user(self, authenticated_client: AsyncClient):
+        """Testa obtenção do usuário atual."""
+        response = await authenticated_client.get("/api/auth/users/me")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["username"] == "testuser"
+
+
 class TestHealthEndpoints:
     """Testes dos endpoints de saúde."""
 
@@ -92,6 +127,61 @@ class TestOrdersAPI:
     async def test_list_orders(self, client: AsyncClient):
         """Testa listagem de pedidos."""
         response = await client.get("/api/orders")
+        assert response.status_code == 200
+        data = response.json()
+        # Resposta paginada
+        assert "items" in data or isinstance(data, list)
+
+    @pytest.mark.asyncio
+    async def test_create_order_requires_auth(self, client: AsyncClient):
+        """Testa que criar pedido requer autenticação."""
+        response = await client.post("/api/orders", json={})
+        assert response.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_create_order_with_auth(self, authenticated_client: AsyncClient, sample_customer_data):
+        """Testa criação de pedido com autenticação."""
+        # Primeiro criar cliente
+        customer_response = await authenticated_client.post("/api/customers", json=sample_customer_data)
+        assert customer_response.status_code in [200, 201]
+        customer = customer_response.json()
+
+        # Criar pedido
+        order_data = {
+            "customer_id": customer["id"],
+            "items": [{"product_code": "P13", "quantity": 1}],
+            "payment_method": "pix",
+            "delivery_address": {
+                "street": "Rua Teste",
+                "number": "123",
+                "bairro": "Centro",
+                "city": "Curitiba",
+                "state": "PR"
+            }
+        }
+        response = await authenticated_client.post("/api/orders", json=order_data)
+        # Pode falhar se produto P13 não existir, mas não deve ser 401
+        assert response.status_code != 401
+
+    @pytest.mark.asyncio
+    async def test_delete_order_requires_auth(self, client: AsyncClient):
+        """Testa que deletar pedido requer autenticação."""
+        import uuid
+        response = await client.delete(f"/api/orders/{uuid.uuid4()}")
+        assert response.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_get_pending_orders(self, client: AsyncClient):
+        """Testa listagem de pedidos pendentes."""
+        response = await client.get("/api/orders/pending")
+        assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, list)
+
+    @pytest.mark.asyncio
+    async def test_get_today_orders(self, client: AsyncClient):
+        """Testa listagem de pedidos do dia."""
+        response = await client.get("/api/orders/today")
         assert response.status_code == 200
         data = response.json()
         assert isinstance(data, list)

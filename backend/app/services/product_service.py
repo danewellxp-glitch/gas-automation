@@ -63,18 +63,6 @@ class ProductService:
         self.session.commit()
         return True
 
-    def create_default_products(self):
-        """Cria produtos padrão do sistema de gás"""
-        from app.models.product import DEFAULT_PRODUCTS
-
-        for product_data in DEFAULT_PRODUCTS:
-            # Verificar se já existe
-            existing = self.session.exec(
-                select(Product).where(Product.code == product_data["code"])
-            ).first()
-
-            if not existing:
-                product = Product(**product_data)
-                self.session.add(product)
-
-        self.session.commit()
+    # REMOVIDO: create_default_products
+    # Produtos devem ser sincronizados do Firebird (Gerente.fdb)
+    # Usar script de sincronização: backend/scripts/sync_products_from_firebird.py

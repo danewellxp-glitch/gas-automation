@@ -3,7 +3,7 @@ Modelo de Cliente.
 Armazena dados dos clientes que fazem pedidos via WhatsApp.
 """
 
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Optional, List
 
 from sqlalchemy import Index, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
@@ -74,7 +74,7 @@ class Customer(BaseModel):
     address: Mapped[Optional[dict]] = mapped_column(
         JSONB,
         nullable=True,
-        default=dict,
+        default=None,
         comment="Endereço: {street, number, complement, bairro, city, state, cep}"
     )
 
@@ -86,7 +86,7 @@ class Customer(BaseModel):
     )
 
     # Relacionamentos
-    orders: Mapped[list["Order"]] = relationship(
+    orders: Mapped[List["Order"]] = relationship(
         "Order",
         back_populates="customer",
         lazy="selectin"

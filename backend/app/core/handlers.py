@@ -18,15 +18,13 @@ from app.core.flow_engine import MessageResponse, ProcessedMessage
 from app.models.customer import Customer
 from app.models.product import Product
 from app.models.order import Order, OrderItem, OrderStatus
+from app.integrations.asaas import asaas_client, AsaasError
 
 logger = logging.getLogger(__name__)
 
-# Preços dos produtos (cache simples)
-PRODUCTS = {
-    "P13": {"name": "Botijão P13 - 13kg", "price": Decimal("110.00"), "weight": 13},
-    "P20": {"name": "Botijão P20 - 20kg", "price": Decimal("150.00"), "weight": 20},
-    "P45": {"name": "Botijão P45 - 45kg", "price": Decimal("280.00"), "weight": 45},
-}
+# REMOVIDO: Dados hardcoded de produtos
+# Produtos devem ser buscados do banco de dados (PostgreSQL) que é sincronizado do Firebird
+# Usar get_product() que busca do banco
 
 
 async def get_or_create_customer(phone: str) -> tuple[Customer, bool]:
@@ -101,6 +99,42 @@ def format_currency(value: Decimal) -> str:
     return f"R$ {value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 
+async def _get_or_create_asaas_customer(customer: Customer) -> str:
+    """
+    Obtém ou cria cliente no Asaas e retorna o ID.
+    Atualiza o customer.asaas_customer_id no banco.
+    """
+    if customer.asaas_customer_id:
+        return customer.asaas_customer_id
+
+    try:
+        # Criar cliente no Asaas
+        asaas_customer = await asaas_client.get_or_create_customer(
+            name=customer.name or f"Cliente {customer.phone}",
+            cpf_cnpj=customer.cpf_cnpj,
+            email=customer.email,
+            phone=customer.phone,
+            external_reference=str(customer.id),
+        )
+
+        # Atualizar ID no banco local
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(
+                select(Customer).where(Customer.id == customer.id)
+            )
+            db_customer = result.scalar_one_or_none()
+            if db_customer:
+                db_customer.asaas_customer_id = asaas_customer["id"]
+                await db.commit()
+
+        logger.info(f"Cliente Asaas criado/encontrado: {asaas_customer['id']} para customer {customer.id}")
+        return asaas_customer["id"]
+
+    except AsaasError as e:
+        logger.error(f"Erro ao criar cliente no Asaas: {e.message}")
+        raise
+
+
 # ==================== HANDLERS ====================
 
 
@@ -126,6 +160,28 @@ async def handle_start(
         name = customer.name or "cliente"
         greeting = f"👋 *Olá, {name}!* Que bom ter você de volta!\n\n"
 
+    # Buscar produtos ativos do banco de dados
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(
+            select(Product)
+            .where(Product.is_active == True)
+            .order_by(Product.code)
+        )
+        products = result.scalars().all()
+
+    # Montar mensagem com produtos reais
+    if not products:
+        product_text = "⚠️ Nenhum produto disponível no momento."
+        buttons = []
+    else:
+        product_lines = []
+        buttons = []
+        for p in products:
+            price_str = f"R$ {p.price:.2f}".replace(".", ",")
+            product_lines.append(f"🔵 *{p.code}* - {p.name} - {price_str}")
+            buttons.append({"id": p.code, "text": f"{p.code} - {price_str}"})
+        product_text = "\n".join(product_lines)
+
     context.state = ConversationState.AWAITING_PRODUCT
 
     return ProcessedMessage(
@@ -135,16 +191,10 @@ async def handle_start(
                 text=(
                     f"{greeting}"
                     "Qual produto você deseja?\n\n"
-                    "🔵 *P13* - Botijão 13kg - R$ 110,00\n"
-                    "🟢 *P20* - Botijão 20kg - R$ 150,00\n"
-                    "🟠 *P45* - Botijão 45kg - R$ 280,00"
+                    f"{product_text}"
                 ),
-                buttons=[
-                    {"id": "P13", "text": "P13 - R$ 110"},
-                    {"id": "P20", "text": "P20 - R$ 150"},
-                    {"id": "P45", "text": "P45 - R$ 280"},
-                ],
-                footer="Escolha uma opção acima",
+                buttons=buttons,
+                footer="Escolha uma opção acima" if buttons else "Entre em contato com o suporte",
             )
         ],
         new_state=ConversationState.AWAITING_PRODUCT,
@@ -204,7 +254,19 @@ async def handle_awaiting_product(
     # Produto válido selecionado
     context.selected_product = product_code
     context.retry_count = 0
-    product = PRODUCTS[product_code]
+    
+    # Buscar produto do banco de dados
+    product = await get_product(product_code)
+    if not product:
+        return ProcessedMessage(
+            context=context,
+            responses=[
+                MessageResponse(
+                    text=f"❌ Produto {product_code} não encontrado. Por favor, escolha um produto válido."
+                )
+            ],
+            new_state=ConversationState.AWAITING_PRODUCT,
+        )
 
     context.state = ConversationState.AWAITING_QUANTITY
 
@@ -263,8 +325,19 @@ async def handle_awaiting_quantity(
     context.selected_quantity = quantity
     context.retry_count = 0
 
-    product = PRODUCTS[context.selected_product]
-    total = product["price"] * quantity
+    # Buscar produto do banco de dados
+    product = await get_product(context.selected_product)
+    if not product:
+        return ProcessedMessage(
+            context=context,
+            responses=[
+                MessageResponse(
+                    text="❌ Produto não encontrado. Por favor, escolha um produto válido."
+                )
+            ],
+            new_state=ConversationState.AWAITING_PRODUCT,
+        )
+    total = product.price * quantity
 
     # Verificar se cliente tem endereço cadastrado
     async with AsyncSessionLocal() as db:
@@ -338,8 +411,19 @@ async def handle_confirming_address(
         context.address_confirmed = True
         context.state = ConversationState.AWAITING_PAYMENT
 
-        product = PRODUCTS[context.selected_product]
-        total = product["price"] * context.selected_quantity
+        # Buscar produto do banco de dados
+        product = await get_product(context.selected_product)
+        if not product:
+            return ProcessedMessage(
+                context=context,
+                responses=[
+                    MessageResponse(
+                        text="❌ Produto não encontrado. Por favor, escolha um produto válido."
+                    )
+                ],
+                new_state=ConversationState.AWAITING_PRODUCT,
+            )
+        total = product.price * context.selected_quantity
 
         return ProcessedMessage(
             context=context,
@@ -444,8 +528,19 @@ async def handle_awaiting_address(
     context.address_confirmed = True
     context.state = ConversationState.AWAITING_PAYMENT
 
-    product = PRODUCTS[context.selected_product]
-    total = product["price"] * context.selected_quantity
+    # Buscar produto do banco de dados
+    product = await get_product(context.selected_product)
+    if not product:
+        return ProcessedMessage(
+            context=context,
+            responses=[
+                MessageResponse(
+                    text="❌ Produto não encontrado. Por favor, escolha um produto válido."
+                )
+            ],
+            new_state=ConversationState.AWAITING_PRODUCT,
+        )
+    total = product.price * context.selected_quantity
 
     return ProcessedMessage(
         context=context,
@@ -477,8 +572,19 @@ async def handle_awaiting_payment(
     """
     msg_lower = message.lower().strip()
 
-    product = PRODUCTS[context.selected_product]
-    total = product["price"] * context.selected_quantity
+    # Buscar produto do banco de dados
+    product = await get_product(context.selected_product)
+    if not product:
+        return ProcessedMessage(
+            context=context,
+            responses=[
+                MessageResponse(
+                    text="❌ Produto não encontrado. Por favor, escolha um produto válido."
+                )
+            ],
+            new_state=ConversationState.AWAITING_PRODUCT,
+        )
+    total = product.price * context.selected_quantity
 
     # Pix
     if msg_lower in ["pix", "1"] or "pix" in msg_lower:
@@ -508,23 +614,78 @@ async def handle_awaiting_payment(
         except Exception as e:
             logger.error(f"Erro ao emitir evento WebSocket de novo pedido: {e}")
 
-        # TODO: Gerar QR Code Pix via Asaas
-        # Por enquanto, simular código Pix
+        # Gerar QR Code Pix via Asaas (se configurado)
+        pix_payload = None
+        pix_qr_code = None
+
+        try:
+            # Buscar dados do cliente para Asaas
+            async with AsyncSessionLocal() as db:
+                result = await db.execute(
+                    select(Customer).where(Customer.id == context.customer_id)
+                )
+                customer = result.scalar_one_or_none()
+
+            if customer and customer.cpf_cnpj and settings.asaas_api_key:
+                # Criar pagamento PIX no Asaas
+                payment = await asaas_client.create_pix_payment(
+                    customer_id=customer.asaas_customer_id or await _get_or_create_asaas_customer(customer),
+                    value=total,
+                    description=f"Pedido #{order.order_number} - {product['name']}",
+                    external_reference=str(order.id),
+                )
+
+                # Armazenar payment_id no contexto
+                context.asaas_payment_id = payment["id"]
+                pix_payload = payment.get("pix", {}).get("payload", "")
+                pix_qr_code = payment.get("pix", {}).get("encodedImage", "")
+
+                # Atualizar pedido com payment_id
+                async with AsyncSessionLocal() as db:
+                    result = await db.execute(
+                        select(Order).where(Order.id == order.id)
+                    )
+                    db_order = result.scalar_one_or_none()
+                    if db_order:
+                        db_order.asaas_payment_id = payment["id"]
+                        await db.commit()
+
+                logger.info(f"PIX Asaas criado: {payment['id']} para pedido #{order.order_number}")
+            else:
+                logger.warning(f"Cliente sem CPF/CNPJ ou Asaas não configurado - usando PIX simulado")
+
+        except AsaasError as e:
+            logger.error(f"Erro ao criar PIX no Asaas: {e.message}")
+        except Exception as e:
+            logger.error(f"Erro inesperado ao criar PIX: {e}")
 
         context.state = ConversationState.AWAITING_PIX
+
+        # Montar mensagem com PIX real ou simulado
+        if pix_payload:
+            pix_message = (
+                f"📱 *Pagamento via Pix*\n\n"
+                f"Valor: *{format_currency(total)}*\n\n"
+                f"Copie o código PIX abaixo:\n"
+                f"`{pix_payload}`\n\n"
+                "Após o pagamento, envie o comprovante ou digite *pago*."
+            )
+        else:
+            # Fallback: PIX simulado (chave CNPJ)
+            pix_message = (
+                f"📱 *Pagamento via Pix*\n\n"
+                f"Valor: *{format_currency(total)}*\n\n"
+                f"Chave Pix (CNPJ):\n`12.345.678/0001-90`\n\n"
+                f"Ou copie o código:\n"
+                f"`00020126580014br.gov.bcb.pix0136{context.order_id[:36]}`\n\n"
+                "Após o pagamento, envie o comprovante ou digite *pago*."
+            )
 
         return ProcessedMessage(
             context=context,
             responses=[
                 MessageResponse(
-                    text=(
-                        f"📱 *Pagamento via Pix*\n\n"
-                        f"Valor: *{format_currency(total)}*\n\n"
-                        f"Chave Pix (CNPJ):\n`12.345.678/0001-90`\n\n"
-                        f"Ou copie o código:\n"
-                        f"`00020126580014br.gov.bcb.pix0136{context.order_id[:36]}`\n\n"
-                        "Após o pagamento, envie o comprovante ou digite *pago*."
-                    ),
+                    text=pix_message,
                     buttons=[
                         {"id": "pix_pago", "text": "✅ Já paguei"},
                         {"id": "cancelar", "text": "❌ Cancelar"},
@@ -632,13 +793,57 @@ async def handle_awaiting_pix(
     """
     msg_lower = message.lower().strip()
 
-    product = PRODUCTS[context.selected_product]
-    total = product["price"] * context.selected_quantity
+    # Buscar produto do banco de dados
+    product = await get_product(context.selected_product)
+    if not product:
+        return ProcessedMessage(
+            context=context,
+            responses=[
+                MessageResponse(
+                    text="❌ Produto não encontrado. Por favor, escolha um produto válido."
+                )
+            ],
+            new_state=ConversationState.AWAITING_PRODUCT,
+        )
+    total = product.price * context.selected_quantity
 
     # Pagamento confirmado
     if msg_lower in ["pago", "paguei", "pix_pago", "1"] or "pag" in msg_lower:
-        # TODO: Verificar pagamento via Asaas
-        # Por enquanto, assumir que foi pago
+        # Verificar pagamento via Asaas (se configurado)
+        payment_confirmed = False
+        payment_status = None
+
+        if hasattr(context, 'asaas_payment_id') and context.asaas_payment_id and settings.asaas_api_key:
+            try:
+                payment_status = await asaas_client.get_payment_status(context.asaas_payment_id)
+                payment_confirmed = payment_status in ["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH"]
+                logger.info(f"Status PIX Asaas: {payment_status} para {context.asaas_payment_id}")
+            except AsaasError as e:
+                logger.error(f"Erro ao verificar PIX no Asaas: {e.message}")
+            except Exception as e:
+                logger.error(f"Erro inesperado ao verificar PIX: {e}")
+
+        # Se não está confirmado via Asaas, assumir que foi pago (fallback)
+        # Em produção, você pode querer ser mais rigoroso
+        if not payment_confirmed and payment_status and payment_status not in ["RECEIVED", "CONFIRMED"]:
+            return ProcessedMessage(
+                context=context,
+                responses=[
+                    MessageResponse(
+                        text=(
+                            "⏳ *Pagamento ainda não identificado*\n\n"
+                            f"Status atual: {payment_status or 'Aguardando'}\n\n"
+                            "Por favor, aguarde alguns instantes e confirme novamente, "
+                            "ou envie o comprovante de pagamento."
+                        ),
+                        buttons=[
+                            {"id": "pix_pago", "text": "🔄 Verificar novamente"},
+                            {"id": "cancelar", "text": "❌ Cancelar"},
+                        ],
+                    )
+                ],
+                new_state=ConversationState.AWAITING_PIX,
+            )
 
         # Atualizar pedido
         async with AsyncSessionLocal() as db:
@@ -674,14 +879,51 @@ async def handle_awaiting_pix(
 
     # Cancelar
     if msg_lower in ["cancelar", "cancela", "2"]:
-        # TODO: Cancelar pedido
+        # Cancelar pedido no banco de dados
+        order_number = None
+        try:
+            async with AsyncSessionLocal() as db:
+                result = await db.execute(
+                    select(Order).where(Order.id == context.order_id)
+                )
+                order = result.scalar_one_or_none()
+                if order:
+                    order.status = OrderStatus.CANCELLED.value
+                    order_number = order.order_number
+                    await db.commit()
+                    logger.info(f"Pedido #{order_number} cancelado pelo cliente")
+
+            # Cancelar cobrança no Asaas (se existir)
+            if hasattr(context, 'asaas_payment_id') and context.asaas_payment_id and settings.asaas_api_key:
+                try:
+                    await asaas_client.cancel_payment(context.asaas_payment_id)
+                    logger.info(f"Cobrança Asaas cancelada: {context.asaas_payment_id}")
+                except AsaasError as e:
+                    logger.error(f"Erro ao cancelar cobrança no Asaas: {e.message}")
+                except Exception as e:
+                    logger.error(f"Erro inesperado ao cancelar cobrança: {e}")
+
+            # Emitir evento WebSocket de pedido cancelado
+            try:
+                from app.api.websocket import emit_order_update
+                await emit_order_update(
+                    order_id=context.order_id,
+                    status=OrderStatus.CANCELLED.value,
+                    order_data={"order_number": order_number}
+                )
+            except Exception as e:
+                logger.error(f"Erro ao emitir evento de cancelamento: {e}")
+
+        except Exception as e:
+            logger.error(f"Erro ao cancelar pedido: {e}")
+
         context.reset()
 
         return ProcessedMessage(
             context=context,
             responses=[
                 MessageResponse(
-                    text="❌ Pedido cancelado.\n\nDigite *menu* para fazer um novo pedido."
+                    text=f"❌ Pedido{' #' + str(order_number) if order_number else ''} cancelado.\n\nDigite *menu* para fazer um novo pedido."
                 )
             ],
             new_state=ConversationState.START,
@@ -733,8 +975,19 @@ async def handle_confirming_order(
     """
     msg_lower = message.lower().strip()
 
-    product = PRODUCTS[context.selected_product]
-    total = product["price"] * context.selected_quantity
+    # Buscar produto do banco de dados
+    product = await get_product(context.selected_product)
+    if not product:
+        return ProcessedMessage(
+            context=context,
+            responses=[
+                MessageResponse(
+                    text="❌ Produto não encontrado. Por favor, escolha um produto válido."
+                )
+            ],
+            new_state=ConversationState.AWAITING_PRODUCT,
+        )
+    total = product.price * context.selected_quantity
 
     # Confirmar pedido
     if msg_lower in ["confirmar", "confirmar_cartao", "1", "sim"] or "confirm" in msg_lower:
@@ -816,19 +1069,71 @@ async def handle_tracking_order(
 ) -> ProcessedMessage:
     """
     Handler para rastreamento de pedido.
+    Busca pedidos recentes do cliente e exibe status.
     """
-    # TODO: Buscar pedidos recentes do cliente
+    # Buscar pedidos recentes do cliente
+    orders_text = ""
+    try:
+        async with AsyncSessionLocal() as db:
+            from sqlalchemy import desc
+            result = await db.execute(
+                select(Order)
+                .where(Order.customer_id == context.customer_id)
+                .order_by(desc(Order.created_at))
+                .limit(5)
+            )
+            orders = result.scalars().all()
+
+            if orders:
+                orders_text = "📦 *Seus Pedidos Recentes*\n\n"
+                status_emoji = {
+                    OrderStatus.PENDING.value: "⏳",
+                    OrderStatus.PAID.value: "✅",
+                    OrderStatus.PREPARING.value: "🔧",
+                    OrderStatus.DISPATCHED.value: "🚚",
+                    OrderStatus.DELIVERED.value: "📬",
+                    OrderStatus.CANCELLED.value: "❌",
+                }
+                status_label = {
+                    OrderStatus.PENDING.value: "Aguardando pagamento",
+                    OrderStatus.PAID.value: "Pago",
+                    OrderStatus.PREPARING.value: "Em preparação",
+                    OrderStatus.DISPATCHED.value: "Saiu para entrega",
+                    OrderStatus.DELIVERED.value: "Entregue",
+                    OrderStatus.CANCELLED.value: "Cancelado",
+                }
+
+                for order in orders:
+                    emoji = status_emoji.get(order.status, "📦")
+                    label = status_label.get(order.status, order.status)
+                    date_str = order.created_at.strftime("%d/%m %H:%M") if order.created_at else ""
+                    orders_text += (
+                        f"{emoji} *Pedido #{order.order_number}*\n"
+                        f"   Status: {label}\n"
+                        f"   Total: {format_currency(order.total_amount)}\n"
+                        f"   Data: {date_str}\n\n"
+                    )
+
+                orders_text += "Digite *menu* para fazer um novo pedido."
+            else:
+                orders_text = (
+                    "📦 *Seus Pedidos*\n\n"
+                    "Você ainda não fez nenhum pedido.\n\n"
+                    "Digite *menu* para fazer seu primeiro pedido!"
+                )
+
+    except Exception as e:
+        logger.error(f"Erro ao buscar pedidos do cliente: {e}")
+        orders_text = (
+            "📦 *Seus Pedidos*\n\n"
+            "Não foi possível buscar seus pedidos no momento.\n\n"
+            "Digite *menu* para fazer um novo pedido."
+        )
 
     return ProcessedMessage(
         context=context,
         responses=[
-            MessageResponse(
-                text=(
-                    "📦 *Seus Pedidos Recentes*\n\n"
-                    "Ainda estamos desenvolvendo esta funcionalidade.\n\n"
-                    "Digite *menu* para fazer um novo pedido."
-                )
-            )
+            MessageResponse(text=orders_text)
         ],
         new_state=ConversationState.START,
     )
@@ -840,8 +1145,37 @@ async def handle_talking_to_human(
 ) -> ProcessedMessage:
     """
     Handler quando transferido para atendente.
+    Notifica operadores via WebSocket.
     """
-    # TODO: Notificar operador via WebSocket
+    # Notificar operador via WebSocket
+    try:
+        from app.api.websocket import emit_new_message
+
+        # Buscar dados do cliente para contexto
+        customer_data = None
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(
+                select(Customer).where(Customer.id == context.customer_id)
+            )
+            customer = result.scalar_one_or_none()
+            if customer:
+                customer_data = {
+                    "id": str(customer.id),
+                    "name": customer.name,
+                    "phone": customer.phone,
+                    "bairro": customer.address.get("bairro") if customer.address else None,
+                }
+
+        await emit_new_message(
+            phone=context.phone,
+            message=f"🔔 ATENDIMENTO HUMANO SOLICITADO\n{message}",
+            direction="incoming",
+            customer_data=customer_data,
+        )
+        logger.info(f"Notificação enviada para operadores: atendimento humano solicitado por {context.phone}")
+
+    except Exception as e:
+        logger.error(f"Erro ao notificar operadores via WebSocket: {e}")
 
     return ProcessedMessage(
         context=context,
@@ -866,10 +1200,13 @@ async def create_order(
     total: Decimal,
 ) -> Order:
     """Cria pedido no banco de dados."""
-    product = PRODUCTS[context.selected_product]
+    # Buscar produto do banco de dados
+    product = await get_product(context.selected_product)
+    if not product:
+        raise ValueError(f"Produto {context.selected_product} não encontrado")
 
     async with AsyncSessionLocal() as db:
-        # Buscar produto real do banco
+        # Produto já foi buscado acima
         result = await db.execute(
             select(Product).where(Product.code == context.selected_product)
         )

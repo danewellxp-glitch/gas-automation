@@ -27,12 +27,12 @@ async def list_users(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db)
 ):
-    """List all users (admin only)"""
-    # Verificar se é admin
-    if current_user.role != "admin":
+    """List all users (admin and owner only)"""
+    # Verificar se é admin ou owner
+    if current_user.role not in ["admin", "owner"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only admins can list users"
+            detail="Only admins and owners can list users"
         )
     
     stmt = select(User).order_by(User.created_at.desc())

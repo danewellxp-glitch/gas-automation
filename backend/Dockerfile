@@ -16,6 +16,9 @@ RUN apt-get update && apt-get install -y \
     libxrender-dev \
     tesseract-ocr \
     tesseract-ocr-por \
+    curl \
+    firebird-dev \
+    libfbclient2 \
     && rm -rf /var/lib/apt/lists/*
 
 # Criar diretório de trabalho

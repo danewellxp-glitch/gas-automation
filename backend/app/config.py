@@ -4,7 +4,7 @@ Carrega variáveis de ambiente automaticamente.
 """
 
 from functools import lru_cache
-from typing import Optional
+from typing import List, Optional
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field, field_validator
 
@@ -64,7 +64,7 @@ class Settings(BaseSettings):
     minio_secure: bool = False
 
     # Segurança
-    cors_origins: list[str] = [
+    cors_origins: List[str] = [
         "http://localhost:3001",
         "http://localhost:3000",
         "http://localhost:3003",

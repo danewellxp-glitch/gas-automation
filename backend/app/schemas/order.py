@@ -4,7 +4,7 @@ Schemas de Pedido.
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional
+from typing import Optional, List
 from uuid import UUID
 
 from pydantic import Field, field_validator
@@ -65,7 +65,7 @@ class OrderCreate(OrderBase):
     """Schema para criar pedido."""
 
     customer_id: UUID = Field(..., description="ID do cliente")
-    items: list[OrderItemCreate] = Field(..., min_length=1, description="Itens do pedido")
+    items: List[OrderItemCreate] = Field(..., min_length=1, description="Itens do pedido")
     payment_method: Optional[str] = Field(None, description="Método de pagamento")
 
     @field_validator("items")
@@ -100,7 +100,7 @@ class OrderResponse(OrderBase, TimestampSchema):
     delivered_at: Optional[datetime] = None
     cancelled_at: Optional[datetime] = None
     cancellation_reason: Optional[str] = None
-    items: list[OrderItemResponse] = []
+    items: List[OrderItemResponse] = []
     customer: Optional[CustomerBrief] = None
 
 
@@ -151,7 +151,7 @@ class OrderStatusUpdate(BaseSchema):
 class PaginatedOrdersResponse(BaseSchema):
     """Resposta paginada de pedidos."""
     
-    items: list[OrderBrief]
+    items: List[OrderBrief]
     total: int
     page: int
     page_size: int
@@ -160,7 +160,7 @@ class PaginatedOrdersResponse(BaseSchema):
     has_prev: bool
     
     @classmethod
-    def create(cls, items: list[OrderBrief], total: int, page: int, page_size: int):
+    def create(cls, items: List[OrderBrief], total: int, page: int, page_size: int):
         total_pages = (total + page_size - 1) // page_size if total > 0 else 0
         return cls(
             items=items,

@@ -94,30 +94,6 @@ class Product(BaseModel):
         return f"{self.code} - R$ {self.price:.0f}"
 
 
-# Dados iniciais para seed
-DEFAULT_PRODUCTS = [
-    {
-        "code": "P13",
-        "name": "Botijão P13 - 13kg",
-        "description": "Botijão residencial padrão de 13kg. Ideal para uso doméstico.",
-        "weight_kg": Decimal("13.00"),
-        "price": Decimal("110.00"),
-        "is_active": True,
-    },
-    {
-        "code": "P20",
-        "name": "Botijão P20 - 20kg",
-        "description": "Botijão de 20kg. Indicado para residências com maior consumo ou pequenos comércios.",
-        "weight_kg": Decimal("20.00"),
-        "price": Decimal("150.00"),
-        "is_active": True,
-    },
-    {
-        "code": "P45",
-        "name": "Botijão P45 - 45kg",
-        "description": "Botijão comercial/industrial de 45kg. Para estabelecimentos com alto consumo.",
-        "weight_kg": Decimal("45.00"),
-        "price": Decimal("280.00"),
-        "is_active": True,
-    },
-]
+# NOTA: Produtos devem ser sincronizados do Firebird (Gerente.fdb)
+# Não usar dados hardcoded em produção
+# Para sincronização inicial, usar: backend/scripts/sync_products_from_firebird.py
