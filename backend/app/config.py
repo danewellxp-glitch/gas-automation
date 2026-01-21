@@ -6,6 +6,7 @@ Carrega variáveis de ambiente automaticamente.
 from functools import lru_cache
 from typing import Optional
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import Field, field_validator
 
 
 class Settings(BaseSettings):
@@ -23,7 +24,7 @@ class Settings(BaseSettings):
     app_version: str = "1.0.0"
     debug: bool = False
     environment: str = "development"
-    secret_key: str = "supersecretkey123changeme"
+    secret_key: str = Field(..., min_length=32, description="Chave secreta para sessões (mínimo 32 caracteres)")
 
     # PostgreSQL
     database_url: str = "postgresql+asyncpg://gasadmin:gasadmin123@localhost:5432/gas_automation"
@@ -78,7 +79,7 @@ class Settings(BaseSettings):
 
     # JWT Authentication
     access_token_expire_minutes: int = 30
-    jwt_secret_key: str = "your-jwt-secret-key-change-in-production"
+    jwt_secret_key: str = Field(..., min_length=32, description="Chave secreta para JWT (mínimo 32 caracteres)")
     jwt_algorithm: str = "HS256"
 
     # Negócio
@@ -92,6 +93,37 @@ class Settings(BaseSettings):
         "Umbará",
         "Xaxim"
     ]
+
+    @field_validator('secret_key', 'jwt_secret_key')
+    @classmethod
+    def validate_secret_keys(cls, v: str, info) -> str:
+        """Valida que chaves de segurança são fortes e não são valores padrão."""
+        dangerous_keys = [
+            "supersecretkey123changeme",
+            "your-jwt-secret-key-change-in-production",
+            "changeme",
+            "secret",
+            "key123",
+            "password",
+            "admin",
+            "test"
+        ]
+        
+        # Verificar se é uma chave padrão/perigosa
+        if v.lower() in [k.lower() for k in dangerous_keys]:
+            raise ValueError(
+                f"{info.field_name} não pode ser uma chave padrão. "
+                f"Gere uma nova: openssl rand -hex 32"
+            )
+        
+        # Verificar comprimento mínimo
+        if len(v) < 32:
+            raise ValueError(
+                f"{info.field_name} deve ter no mínimo 32 caracteres. "
+                f"Gere uma nova: openssl rand -hex 32"
+            )
+        
+        return v
 
     @property
     def is_production(self) -> bool:
