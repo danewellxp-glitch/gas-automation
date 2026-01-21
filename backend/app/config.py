@@ -82,6 +82,9 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 30
     jwt_secret_key: str = Field(..., min_length=32, description="Chave secreta para JWT (mínimo 32 caracteres)")
     jwt_algorithm: str = "HS256"
+    
+    # Métricas
+    metrics_token: Optional[str] = Field(None, description="Token para acesso ao endpoint /metrics")
 
     # Negócio
     default_delivery_time_minutes: int = 40

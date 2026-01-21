@@ -6,7 +6,7 @@ import asyncio
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
-from fastapi import FastAPI, Request, Depends, HTTPException
+from fastapi import FastAPI, Request, Depends, HTTPException, Header
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse
@@ -301,9 +301,9 @@ async def global_exception_handler(request: Request, exc: Exception):
 # ==================== Endpoints Principais ====================
 
 @app.get("/metrics", tags=["Monitoring"], response_class=PlainTextResponse)
-def metrics_endpoint():
+def metrics_endpoint(x_metrics_token: str = Header(..., alias="X-Metrics-Token")):
     """
-    Endpoint de métricas Prometheus (FASE 3).
+    Endpoint de métricas Prometheus (FASE 3) - PROTEGIDO.
     
     Expõe métricas customizadas para coleta pelo Prometheus:
     - Conexões WebSocket ativas por role e instância
@@ -315,8 +315,19 @@ def metrics_endpoint():
     - Erros e desconexões
     - Uptime do sistema
     
+    Segurança:
+    - Requer token de autenticação no header X-Metrics-Token
+    - Token configurado via variável de ambiente METRICS_TOKEN
+    
     Formato: Prometheus text-based exposition format
     """
+    # Validar token
+    if not settings.metrics_token or x_metrics_token != settings.metrics_token:
+        raise HTTPException(
+            status_code=403,
+            detail="Invalid or missing metrics token. Set METRICS_TOKEN environment variable."
+        )
+    
     return PlainTextResponse(
         content=generate_latest().decode('utf-8'),
         media_type=CONTENT_TYPE_LATEST
