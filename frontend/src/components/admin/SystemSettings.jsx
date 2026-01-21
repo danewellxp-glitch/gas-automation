@@ -198,7 +198,7 @@ export default function SystemSettings() {
           </div>
           <div className="p-3 bg-gray-50 rounded">
             <p className="text-gray-600">Frontend</p>
-            <p className="font-bold text-gray-800">192.168.10.156:3003</p>
+            <p className="font-bold text-gray-800">192.168.10.156:3001</p>
           </div>
         </div>
       </div>

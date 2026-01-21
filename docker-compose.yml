@@ -174,6 +174,8 @@ services:
       FIREBIRD_USER: ${FIREBIRD_USER:-SYSDBA}
       FIREBIRD_PASSWORD: ${FIREBIRD_PASSWORD:-}
       SECRET_KEY: ${SECRET_KEY:-supersecretkey123changeme}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      METRICS_TOKEN: ${METRICS_TOKEN}
       DEBUG: ${DEBUG:-false}
       ENVIRONMENT: ${ENVIRONMENT:-development}
       # MinIO

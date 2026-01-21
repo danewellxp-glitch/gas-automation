@@ -211,21 +211,26 @@ async def create_order(
             if not customer:
                 raise HTTPException(status_code=404, detail="Cliente não encontrado")
 
+            # Processar endereço primeiro (para evitar problemas de serialização JSONB)
+            delivery_addr_dict = None
+            delivery_bairro = data.delivery_bairro
+            
+            if data.delivery_address:
+                # Converter para dict Python puro, não JSON string
+                delivery_addr_dict = dict(data.delivery_address.model_dump())
+                if not delivery_bairro and data.delivery_address.bairro:
+                    delivery_bairro = data.delivery_address.bairro
+            
             # Criar pedido
             order = Order(
                 customer_id=data.customer_id,
                 status=OrderStatus.PENDING.value,
                 payment_method=data.payment_method,
-                delivery_bairro=data.delivery_bairro,
+                delivery_address=delivery_addr_dict,
+                delivery_bairro=delivery_bairro,
                 notes=data.notes,
                 total_amount=0,
             )
-
-            # Processar endereço
-            if data.delivery_address:
-                order.delivery_address = data.delivery_address.model_dump()
-                if not order.delivery_bairro and data.delivery_address.bairro:
-                    order.delivery_bairro = data.delivery_address.bairro
 
             db.add(order)
             await db.flush()  # Obter ID
@@ -253,34 +258,49 @@ async def create_order(
 
                 subtotal = product.price * item_data.quantity
 
-        item = OrderItem(
-            order_id=order.id,
-            product_code=product.code,
-            product_name=product.name,
-            quantity=item_data.quantity,
-            unit_price=product.price,
-            subtotal=subtotal,
+                # Criar item (DENTRO do loop)
+                item = OrderItem(
+                    order_id=order.id,
+                    product_code=product.code,
+                    product_name=product.name,
+                    quantity=item_data.quantity,
+                    unit_price=product.price,
+                    subtotal=subtotal,
+                )
+                db.add(item)
+                total += subtotal
+
+            # Atualizar total do pedido
+            order.total_amount = total
+
+        # Commit da transação
+        await db.commit()
+        
+        # Recarregar pedido com todas as relações e campos gerados pelo DB
+        await db.refresh(order, attribute_names=['order_number'])
+        
+        result = await db.execute(
+            select(Order)
+            .options(
+                selectinload(Order.customer),
+                selectinload(Order.items),
+            )
+            .where(Order.id == order.id)
         )
-        db.add(item)
-        total += subtotal
+        order = result.scalar_one()
 
-    order.total_amount = total
-
-    await db.commit()
-    await db.refresh(order)
-
-    # Recarregar com relacionamentos
-    result = await db.execute(
-        select(Order)
-        .options(
-            selectinload(Order.customer),
-            selectinload(Order.items),
+        return order
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Erro ao criar pedido: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Erro ao criar pedido. Tente novamente."
         )
-        .where(Order.id == order.id)
-    )
-    order = result.scalar_one()
-
-    return order
 
 
 @router.patch("/{order_id}", response_model=OrderResponse)

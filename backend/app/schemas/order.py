@@ -90,7 +90,7 @@ class OrderResponse(OrderBase, TimestampSchema):
     """Schema de resposta de pedido."""
 
     id: UUID
-    order_number: int
+    order_number: Optional[int] = None  # Pode ser None se ainda não gerado
     customer_id: UUID
     status: str
     payment_method: Optional[str] = None

@@ -231,9 +231,9 @@ export default function CreateOrderPanel() {
           number: customerData.numero || '',
           complement: customerData.complemento || '',
           bairro: customerData.bairro || '',
-          city: 'São Paulo',
-          state: 'SP',
-          zipcode: ''
+          city: 'Curitiba',  // Cidade padrão
+          state: 'PR',       // Estado padrão
+          cep: null          // Corrigido de zipcode para cep
         },
         delivery_bairro: customerData.bairro || null,
         notes: notes || null
