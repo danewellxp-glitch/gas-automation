@@ -374,7 +374,7 @@ manager = ScalableConnectionManager(max_broadcasts_per_second=10)
 @router.websocket("/dashboard")
 async def websocket_dashboard(
     websocket: WebSocket,
-    token: Optional[str] = Query(None),
+    token: str = Query(..., description="JWT token obrigatório"),
     since_seq_id: Optional[int] = Query(None)
 ):
     """
@@ -387,7 +387,7 @@ async def websocket_dashboard(
     - metrics_update: Métricas atualizadas
     
     Query Parameters:
-    - token: JWT token para autenticação
+    - token: JWT token para autenticação (OBRIGATÓRIO)
     - since_seq_id: (FASE 3) Sequence ID da última mensagem recebida.
                      Se fornecido, faz replay de mensagens perdidas durante desconexão.
     
@@ -397,33 +397,31 @@ async def websocket_dashboard(
     - Heartbeat automático
     - Filtros por papel/bairro
     - Reconexão inteligente com replay (FASE 3)
+    
+    Segurança:
+    - Token JWT validado ANTES de aceitar conexão
+    - Conexões não autenticadas são rejeitadas imediatamente
     """
     from app.database import AsyncSessionLocal
     from app.auth import get_current_user_ws
     
-    # Validar token e obter usuário
-    user = None
-    user_id = "anonymous"
-    user_role = UserRole.USER
-    bairro = None
-    region = None
+    # VALIDAR TOKEN ANTES DE ACEITAR CONEXÃO
+    async with AsyncSessionLocal() as session:
+        user = await get_current_user_ws(token, session)
+        
+        if not user or not user.is_active:
+            logger.warning(f"Tentativa de conexão WebSocket com token inválido")
+            await websocket.close(code=1008, reason="Unauthorized: Invalid or expired token")
+            return
+        
+        user_id = str(user.id)
+        user_role = UserRole(user.role) if user.role in [r.value for r in UserRole] else UserRole.USER
+        # TODO: Adicionar campos bairro/region ao modelo User quando necessário
+        bairro = getattr(user, 'bairro', None)
+        region = getattr(user, 'region', None)
+        logger.info(f"WebSocket autenticado: user={user.username}, role={user_role}")
     
-    if token:
-        async with AsyncSessionLocal() as session:
-            user = await get_current_user_ws(token, session)
-            if user:
-                user_id = str(user.id)
-                user_role = UserRole(user.role) if user.role in [r.value for r in UserRole] else UserRole.USER
-                # TODO: Adicionar campos bairro/region ao modelo User quando necessário
-                bairro = getattr(user, 'bairro', None)
-                region = getattr(user, 'region', None)
-                logger.info(f"WebSocket autenticado: user={user.username}, role={user_role}")
-            else:
-                logger.warning("Token WebSocket inválido")
-    else:
-        logger.warning("WebSocket conectando sem token")
-    
-    # Conectar com metadados
+    # Conectar com metadados (apenas se autenticado)
     # Nota: Compressão é habilitada automaticamente pelo Uvicorn se o cliente suportar
     await manager.connect(
         websocket=websocket,
