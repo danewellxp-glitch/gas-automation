@@ -24,10 +24,23 @@ def verify_password(plain_password, hashed_password):
     """Verify a password against its hash"""
     return pwd_context.verify(plain_password, hashed_password)
 
-def get_password_hash(password):
-    """Hash a password"""
-    # Truncate password to 72 bytes as required by bcrypt
-    password = password.encode('utf-8')[:72].decode('utf-8')
+def get_password_hash(password: str) -> str:
+    """
+    Hash a password using Argon2.
+    
+    Valida comprimento antes de hash para prevenir truncamento silencioso.
+    """
+    # Validar comprimento mínimo
+    if len(password) < 8:
+        raise ValueError("Senha deve ter no mínimo 8 caracteres")
+    
+    # Validar comprimento máximo (limite do Argon2)
+    if len(password) > 72:
+        raise ValueError(
+            "Senha não pode ter mais de 72 caracteres "
+            "(limitação do algoritmo Argon2)"
+        )
+    
     return pwd_context.hash(password)
 
 async def authenticate_user(session: AsyncSession, username: str, password: str):
