@@ -1,0 +1,1418 @@
+PROMPT ATUALIZADO PARA CURSOR - MÉTRICAS DE TEMPO DOS DRIVERS
+📋 CONTEXTO
+Preciso implementar tracking de tempo dos entregadores (online, offline, ocupado, pausa) e adicionar métricas de tempo e ranking nos dashboards de Owner e Manager já existentes.
+
+🎯 OBJETIVOS
+Para o Driver (no seu painel):
+
+✅ Ver seu próprio tempo trabalhado (hoje, semana, mês)
+✅ Ver tempo em cada status (online, ocupado, pausa)
+
+Para Owner/Manager (adicionar aos dashboards existentes):
+
+✅ Métricas de tempo de todos os drivers
+✅ Ranking de entregas do dia (quem fez mais)
+✅ Tempo total trabalhado por driver
+✅ Tempo em cada status por driver
+✅ Filtros por período (hoje, semana, mês)
+✅ Cards/tabelas de performance
+
+
+🗄️ PARTE 1: BACKEND - TRACKING DE TEMPO
+1.1 - Nova Tabela: driver_time_logs
+Criar migration para rastrear mudanças de status com timestamps.
+python# backend/alembic/versions/XXXX_add_driver_time_logs.py
+
+"""add driver time logs table
+
+Revision ID: XXXX
+Create Date: 2026-01-21
+"""
+
+from alembic import op
+import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
+
+def upgrade():
+    op.create_table(
+        'driver_time_logs',
+        sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True, server_default=sa.text('gen_random_uuid()')),
+        sa.Column('driver_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('drivers.id', ondelete='CASCADE'), nullable=False),
+        sa.Column('status', sa.String(20), nullable=False),  # available, offline, busy, break
+        sa.Column('started_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+        sa.Column('ended_at', sa.DateTime(timezone=True), nullable=True),
+        sa.Column('duration_minutes', sa.Integer, nullable=True),  # calculado ao finalizar
+        sa.Column('date', sa.Date, nullable=False, index=True),  # para queries por data
+        sa.Column('metadata', postgresql.JSONB, nullable=True),  # dados extras
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
+    )
+    
+    # Índices para performance
+    op.create_index('ix_driver_time_logs_driver_date', 'driver_time_logs', ['driver_id', 'date'])
+    op.create_index('ix_driver_time_logs_status_date', 'driver_time_logs', ['status', 'date'])
+    op.create_index('ix_driver_time_logs_driver_status', 'driver_time_logs', ['driver_id', 'status'])
+
+def downgrade():
+    op.drop_table('driver_time_logs')
+Rodar migration:
+bashcd backend
+alembic revision --autogenerate -m "add_driver_time_logs"
+alembic upgrade head
+
+1.2 - Modelo DriverTimeLog
+python# backend/app/models/driver_time_log.py
+
+from sqlalchemy import Column, String, Integer, Date, DateTime, ForeignKey
+from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy.orm import relationship
+from sqlalchemy.sql import func
+import uuid
+from datetime import datetime, timezone
+
+from app.db.base_class import Base
+
+class DriverTimeLog(Base):
+    """
+    Log de tempo dos entregadores por status.
+    Cada mudança de status cria um novo registro.
+    """
+    __tablename__ = "driver_time_logs"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    driver_id = Column(UUID(as_uuid=True), ForeignKey("drivers.id", ondelete="CASCADE"), nullable=False)
+    
+    # Status do período
+    status = Column(String(20), nullable=False)  # available, offline, busy, break
+    
+    # Timestamps
+    started_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+    ended_at = Column(DateTime(timezone=True), nullable=True)
+    
+    # Duração calculada (em minutos)
+    duration_minutes = Column(Integer, nullable=True)
+    
+    # Data do log (para facilitar queries)
+    date = Column(Date, nullable=False, index=True)
+    
+    # Metadados extras
+    metadata = Column(JSONB, nullable=True)
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    
+    # Relacionamento
+    driver = relationship("Driver", back_populates="time_logs")
+    
+    def finalize(self):
+        """Finaliza o log calculando a duração."""
+        if not self.ended_at:
+            self.ended_at = datetime.now(timezone.utc)
+        
+        delta = self.ended_at - self.started_at
+        self.duration_minutes = int(delta.total_seconds() / 60)
+    
+    def __repr__(self):
+        return f"<DriverTimeLog {self.driver_id} {self.status} {self.date}>"
+
+1.3 - Atualizar Modelo Driver
+python# backend/app/models/driver.py
+
+# ADICIONAR no final da classe Driver, antes do __repr__:
+
+from sqlalchemy.orm import relationship
+
+# Adicionar essa linha:
+time_logs = relationship(
+    "DriverTimeLog", 
+    back_populates="driver",
+    cascade="all, delete-orphan",
+    order_by="desc(DriverTimeLog.started_at)"
+)
+
+1.4 - Atualizar init.py dos models
+python# backend/app/models/__init__.py
+
+# ADICIONAR import:
+from app.models.driver_time_log import DriverTimeLog
+
+1.5 - Service: DriverTimeTrackingService
+python# backend/app/services/driver_time_tracking_service.py
+
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func, and_, desc
+from datetime import datetime, date, timedelta, timezone
+from typing import Optional, List, Dict
+import uuid
+
+from app.models.driver_time_log import DriverTimeLog
+from app.models.driver import Driver
+from app.models.delivery import Delivery
+
+class DriverTimeTrackingService:
+    """Service para tracking de tempo dos drivers."""
+    
+    @staticmethod
+    async def start_time_log(
+        db: AsyncSession,
+        driver_id: uuid.UUID,
+        status: str
+    ) -> DriverTimeLog:
+        """
+        Inicia um novo log de tempo.
+        Finaliza o log anterior se houver um em aberto.
+        """
+        # Finalizar log anterior se existir
+        await DriverTimeTrackingService.end_current_time_log(db, driver_id)
+        
+        # Criar novo log
+        log = DriverTimeLog(
+            driver_id=driver_id,
+            status=status,
+            started_at=datetime.now(timezone.utc),
+            date=date.today()
+        )
+        
+        db.add(log)
+        await db.commit()
+        await db.refresh(log)
+        
+        return log
+    
+    @staticmethod
+    async def end_current_time_log(
+        db: AsyncSession,
+        driver_id: uuid.UUID
+    ) -> Optional[DriverTimeLog]:
+        """Finaliza o log de tempo atual do driver."""
+        result = await db.execute(
+            select(DriverTimeLog)
+            .where(
+                and_(
+                    DriverTimeLog.driver_id == driver_id,
+                    DriverTimeLog.ended_at.is_(None)
+                )
+            )
+        )
+        log = result.scalar_one_or_none()
+        
+        if log:
+            log.finalize()
+            await db.commit()
+            await db.refresh(log)
+        
+        return log
+    
+    @staticmethod
+    async def get_driver_time_summary(
+        db: AsyncSession,
+        driver_id: uuid.UUID,
+        start_date: date,
+        end_date: date
+    ) -> Dict:
+        """
+        Retorna resumo de tempo trabalhado por status.
+        """
+        result = await db.execute(
+            select(
+                DriverTimeLog.status,
+                func.sum(DriverTimeLog.duration_minutes).label('total_minutes'),
+                func.count(DriverTimeLog.id).label('count')
+            )
+            .where(
+                and_(
+                    DriverTimeLog.driver_id == driver_id,
+                    DriverTimeLog.date >= start_date,
+                    DriverTimeLog.date <= end_date,
+                    DriverTimeLog.duration_minutes.isnot(None)
+                )
+            )
+            .group_by(DriverTimeLog.status)
+        )
+        
+        rows = result.all()
+        
+        summary = {
+            'driver_id': str(driver_id),
+            'period': {
+                'start': start_date.isoformat(),
+                'end': end_date.isoformat()
+            },
+            'by_status': {},
+            'total_minutes': 0
+        }
+        
+        for row in rows:
+            status = row.status
+            minutes = int(row.total_minutes or 0)
+            summary['by_status'][status] = {
+                'minutes': minutes,
+                'hours': round(minutes / 60, 2),
+                'count': row.count
+            }
+            summary['total_minutes'] += minutes
+        
+        summary['total_hours'] = round(summary['total_minutes'] / 60, 2)
+        
+        return summary
+    
+    @staticmethod
+    async def get_daily_ranking(
+        db: AsyncSession,
+        target_date: date = None
+    ) -> List[Dict]:
+        """
+        Retorna ranking de entregas do dia.
+        """
+        if not target_date:
+            target_date = date.today()
+        
+        # Query para contar entregas entregues no dia
+        result = await db.execute(
+            select(
+                Driver.id,
+                Driver.name,
+                Driver.rating,
+                Driver.vehicle_type,
+                func.count(Delivery.id).label('deliveries_count')
+            )
+            .join(Delivery, Driver.id == Delivery.driver_id)
+            .where(
+                and_(
+                    func.date(Delivery.delivered_at) == target_date,
+                    Delivery.status == 'delivered'
+                )
+            )
+            .group_by(Driver.id, Driver.name, Driver.rating, Driver.vehicle_type)
+            .order_by(desc('deliveries_count'))
+        )
+        
+        rows = result.all()
+        
+        ranking = []
+        for idx, row in enumerate(rows, start=1):
+            ranking.append({
+                'position': idx,
+                'driver_id': str(row.id),
+                'driver_name': row.name,
+                'rating': float(row.rating),
+                'vehicle_type': row.vehicle_type,
+                'deliveries_count': row.deliveries_count
+            })
+        
+        return ranking
+    
+    @staticmethod
+    async def get_all_drivers_time_summary(
+        db: AsyncSession,
+        start_date: date,
+        end_date: date
+    ) -> List[Dict]:
+        """
+        Retorna resumo de tempo de todos os drivers.
+        """
+        result = await db.execute(
+            select(Driver.id, Driver.name, Driver.status, Driver.rating)
+            .where(Driver.is_active == True)
+            .order_by(Driver.name)
+        )
+        
+        drivers = result.all()
+        
+        summaries = []
+        for driver in drivers:
+            summary = await DriverTimeTrackingService.get_driver_time_summary(
+                db, driver.id, start_date, end_date
+            )
+            summary['driver_name'] = driver.name
+            summary['current_status'] = driver.status
+            summary['rating'] = float(driver.rating)
+            summaries.append(summary)
+        
+        return summaries
+
+1.6 - Schemas Pydantic
+python# backend/app/schemas/driver.py
+
+# ADICIONAR no final do arquivo:
+
+from pydantic import BaseModel
+from typing import Dict, Optional
+from datetime import date
+
+class DriverTimeSummary(BaseModel):
+    """Resumo de tempo trabalhado do driver."""
+    driver_id: str
+    driver_name: Optional[str] = None
+    current_status: Optional[str] = None
+    rating: Optional[float] = None
+    period: Dict[str, str]  # {start: "2026-01-21", end: "2026-01-21"}
+    by_status: Dict[str, Dict]  # {available: {minutes: 120, hours: 2.0, count: 3}}
+    total_minutes: int
+    total_hours: float
+
+class DriverRankingItem(BaseModel):
+    """Item do ranking de entregas."""
+    position: int
+    driver_id: str
+    driver_name: str
+    rating: float
+    vehicle_type: Optional[str] = None
+    deliveries_count: int
+
+class DriversMetricsResponse(BaseModel):
+    """Resposta completa com métricas de drivers."""
+    ranking: list[DriverRankingItem]
+    time_summary: list[DriverTimeSummary]
+    period: Dict[str, str]
+    total_drivers: int
+
+1.7 - Atualizar Endpoint: PUT /api/drivers/me/status
+python# backend/app/api/drivers.py
+
+# IMPORTAR no topo:
+from app.services.driver_time_tracking_service import DriverTimeTrackingService
+
+# MODIFICAR endpoint existente (substituir a função completa):
+
+@router.put("/me/status", response_model=DriverResponse)
+async def update_my_status(
+    status_data: DriverStatusUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Atualiza status do driver e registra tempo automaticamente.
+    """
+    # Verificar se é driver
+    if current_user.role != UserRole.DRIVER:
+        raise HTTPException(status_code=403, detail="Acesso restrito a entregadores")
+    
+    # Buscar driver
+    driver = await driver_service.get_driver_by_user_id(db, current_user.id)
+    if not driver:
+        raise HTTPException(status_code=404, detail="Perfil de entregador não encontrado")
+    
+    # Atualizar status do driver
+    driver = await driver_service.update_status(db, driver.id, status_data.status)
+    
+    # Registrar mudança de status no time log
+    await DriverTimeTrackingService.start_time_log(db, driver.id, status_data.status)
+    
+    return driver
+
+1.8 - Novos Endpoints para Owner/Manager
+python# backend/app/api/drivers.py
+
+# ADICIONAR no final do arquivo, antes do último comentário:
+
+@router.get("/metrics/time-summary", response_model=list[DriverTimeSummary])
+async def get_drivers_time_summary(
+    start_date: date = None,
+    end_date: date = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Retorna resumo de tempo trabalhado de todos os drivers.
+    Apenas para Owner e Manager.
+    """
+    if current_user.role not in [UserRole.OWNER, UserRole.MANAGER, UserRole.ADMIN]:
+        raise HTTPException(status_code=403, detail="Acesso restrito")
+    
+    # Defaults
+    if not end_date:
+        end_date = date.today()
+    if not start_date:
+        start_date = end_date
+    
+    summaries = await DriverTimeTrackingService.get_all_drivers_time_summary(
+        db, start_date, end_date
+    )
+    
+    return summaries
+
+
+@router.get("/metrics/ranking", response_model=list[DriverRankingItem])
+async def get_drivers_ranking(
+    target_date: date = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Retorna ranking de entregas do dia.
+    Apenas para Owner e Manager.
+    """
+    if current_user.role not in [UserRole.OWNER, UserRole.MANAGER, UserRole.ADMIN]:
+        raise HTTPException(status_code=403, detail="Acesso restrito")
+    
+    if not target_date:
+        target_date = date.today()
+    
+    ranking = await DriverTimeTrackingService.get_daily_ranking(db, target_date)
+    
+    return ranking
+
+
+@router.get("/metrics/dashboard", response_model=DriversMetricsResponse)
+async def get_drivers_dashboard_metrics(
+    start_date: date = None,
+    end_date: date = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Retorna métricas completas para dashboard Owner/Manager.
+    Inclui ranking e resumo de tempo.
+    """
+    if current_user.role not in [UserRole.OWNER, UserRole.MANAGER, UserRole.ADMIN]:
+        raise HTTPException(status_code=403, detail="Acesso restrito")
+    
+    # Defaults
+    if not end_date:
+        end_date = date.today()
+    if not start_date:
+        start_date = end_date
+    
+    # Buscar dados
+    ranking = await DriverTimeTrackingService.get_daily_ranking(db, end_date)
+    time_summary = await DriverTimeTrackingService.get_all_drivers_time_summary(
+        db, start_date, end_date
+    )
+    
+    return {
+        'ranking': ranking,
+        'time_summary': time_summary,
+        'period': {
+            'start': start_date.isoformat(),
+            'end': end_date.isoformat()
+        },
+        'total_drivers': len(time_summary)
+    }
+
+
+@router.get("/me/time-summary", response_model=DriverTimeSummary)
+async def get_my_time_summary(
+    start_date: date = None,
+    end_date: date = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Retorna resumo de tempo trabalhado do driver logado.
+    """
+    if current_user.role != UserRole.DRIVER:
+        raise HTTPException(status_code=403, detail="Acesso restrito a entregadores")
+    
+    driver = await driver_service.get_driver_by_user_id(db, current_user.id)
+    if not driver:
+        raise HTTPException(status_code=404, detail="Perfil de entregador não encontrado")
+    
+    # Defaults
+    if not end_date:
+        end_date = date.today()
+    if not start_date:
+        start_date = end_date
+    
+    summary = await DriverTimeTrackingService.get_driver_time_summary(
+        db, driver.id, start_date, end_date
+    )
+    summary['driver_name'] = driver.name
+    summary['current_status'] = driver.status
+    summary['rating'] = float(driver.rating)
+    
+    return summary
+
+🎨 PARTE 2: FRONTEND - DASHBOARDS
+2.1 - Service API (adicionar ao arquivo existente)
+javascript// frontend/src/services/api.js
+
+// ADICIONAR ao objeto api existente:
+
+// Métricas de Drivers (Owner/Manager)
+getDriversTimeSummary: (startDate, endDate) => {
+  const params = {};
+  if (startDate) params.start_date = startDate;
+  if (endDate) params.end_date = endDate;
+  return api.get('/drivers/metrics/time-summary', { params });
+},
+
+getDriversRanking: (targetDate) => {
+  const params = targetDate ? { target_date: targetDate } : {};
+  return api.get('/drivers/metrics/ranking', { params });
+},
+
+getDriversDashboardMetrics: (startDate, endDate) => {
+  const params = {};
+  if (startDate) params.start_date = startDate;
+  if (endDate) params.end_date = endDate;
+  return api.get('/drivers/metrics/dashboard', { params });
+},
+
+// Para o Driver ver seu próprio tempo
+getMyTimeSummary: (startDate, endDate) => {
+  const params = {};
+  if (startDate) params.start_date = startDate;
+  if (endDate) params.end_date = endDate;
+  return api.get('/drivers/me/time-summary', { params });
+},
+
+2.2 - Componente: DriversMetricsPanel (Owner/Manager)
+jsx// frontend/src/components/owner/DriversMetricsPanel.jsx
+
+import React, { useState, useEffect } from 'react';
+import api from '../../services/api';
+import './DriversMetricsPanel.css';
+
+const DriversMetricsPanel = () => {
+  const [metrics, setMetrics] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [period, setPeriod] = useState('today'); // today, week, month
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    fetchMetrics();
+  }, [period]);
+
+  const fetchMetrics = async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const { startDate, endDate } = getPeriodDates(period);
+      const response = await api.getDriversDashboardMetrics(startDate, endDate);
+      setMetrics(response.data);
+    } catch (err) {
+      console.error('Erro ao buscar métricas:', err);
+      setError('Erro ao carregar métricas dos entregadores');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getPeriodDates = (period) => {
+    const today = new Date();
+    const endDate = today.toISOString().split('T')[0];
+    
+    let startDate;
+    if (period === 'today') {
+      startDate = endDate;
+    } else if (period === 'week') {
+      const weekAgo = new Date(today);
+      weekAgo.setDate(weekAgo.getDate() - 7);
+      startDate = weekAgo.toISOString().split('T')[0];
+    } else if (period === 'month') {
+      const monthAgo = new Date(today);
+      monthAgo.setMonth(monthAgo.getMonth() - 1);
+      startDate = monthAgo.toISOString().split('T')[0];
+    }
+    
+    return { startDate, endDate };
+  };
+
+  const formatMinutes = (minutes) => {
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    return `${hours}h ${mins}m`;
+  };
+
+  const getStatusLabel = (status) => {
+    const labels = {
+      available: '🟢 Disponível',
+      busy: '🔵 Ocupado',
+      break: '🟠 Pausa',
+      offline: '⚫ Offline'
+    };
+    return labels[status] || status;
+  };
+
+  if (loading) {
+    return <div className="metrics-loading">Carregando métricas...</div>;
+  }
+
+  if (error) {
+    return <div className="metrics-error">{error}</div>;
+  }
+
+  if (!metrics) {
+    return null;
+  }
+
+  return (
+    <div className="drivers-metrics-panel">
+      {/* Header com Filtros */}
+      <div className="metrics-header">
+        <h2>📊 Métricas dos Entregadores</h2>
+        <div className="period-selector">
+          <button 
+            className={period === 'today' ? 'active' : ''}
+            onClick={() => setPeriod('today')}
+          >
+            Hoje
+          </button>
+          <button 
+            className={period === 'week' ? 'active' : ''}
+            onClick={() => setPeriod('week')}
+          >
+            Última Semana
+          </button>
+          <button 
+            className={period === 'month' ? 'active' : ''}
+            onClick={() => setPeriod('month')}
+          >
+            Último Mês
+          </button>
+        </div>
+      </div>
+
+      {/* Ranking de Entregas */}
+      <div className="metrics-section">
+        <h3>🏆 Ranking de Entregas {period === 'today' ? '(Hoje)' : ''}</h3>
+        {metrics.ranking.length === 0 ? (
+          <p className="no-data">Nenhuma entrega registrada no período</p>
+        ) : (
+          <div className="ranking-table">
+            <table>
+              <thead>
+                <tr>
+                  <th>Posição</th>
+                  <th>Entregador</th>
+                  <th>Veículo</th>
+                  <th>Entregas</th>
+                  <th>Avaliação</th>
+                </tr>
+              </thead>
+              <tbody>
+                {metrics.ranking.map((item) => (
+                  <tr key={item.driver_id} className={item.position <= 3 ? 'top-three' : ''}>
+                    <td className="position">
+                      {item.position === 1 && '🥇'}
+                      {item.position === 2 && '🥈'}
+                      {item.position === 3 && '🥉'}
+                      {item.position > 3 && item.position}
+                    </td>
+                    <td className="driver-name">{item.driver_name}</td>
+                    <td>{item.vehicle_type || '-'}</td>
+                    <td className="deliveries-count">{item.deliveries_count}</td>
+                    <td className="rating">⭐ {item.rating.toFixed(1)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Resumo de Tempo Trabalhado */}
+      <div className="metrics-section">
+        <h3>⏱️ Tempo Trabalhado</h3>
+        {metrics.time_summary.length === 0 ? (
+          <p className="no-data">Nenhum registro de tempo no período</p>
+        ) : (
+          <div className="time-summary-grid">
+            {metrics.time_summary.map((driver) => (
+              <div key={driver.driver_id} className="driver-time-card">
+                <div className="card-header">
+                  <h4>{driver.driver_name}</h4>
+                  <span className="current-status">
+                    {getStatusLabel(driver.current_status)}
+                  </span>
+                </div>
+                
+                <div className="card-body">
+                  <div className="total-time">
+                    <span className="label">Tempo Total:</span>
+                    <span className="value">{formatMinutes(driver.total_minutes)}</span>
+                  </div>
+                  
+                  <div className="time-breakdown">
+                    {Object.entries(driver.by_status).map(([status, data]) => (
+                      <div key={status} className="status-time">
+                        <span className="status-label">{getStatusLabel(status)}:</span>
+                        <span className="status-value">{formatMinutes(data.minutes)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Resumo Geral */}
+      <div className="metrics-summary">
+        <div className="summary-card">
+          <span className="summary-label">Total de Entregadores</span>
+          <span className="summary-value">{metrics.total_drivers}</span>
+        </div>
+        <div className="summary-card">
+          <span className="summary-label">Entregas no Período</span>
+          <span className="summary-value">
+            {metrics.ranking.reduce((sum, item) => sum + item.deliveries_count, 0)}
+          </span>
+        </div>
+        <div className="summary-card">
+          <span className="summary-label">Período</span>
+          <span className="summary-value">
+            {new Date(metrics.period.start).toLocaleDateString('pt-BR')}
+            {metrics.period.start !== metrics.period.end && 
+              ` - ${new Date(metrics.period.end).toLocaleDateString('pt-BR')}`
+            }
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default DriversMetricsPanel;
+
+2.3 - CSS do Componente
+css/* frontend/src/components/owner/DriversMetricsPanel.css */
+
+.drivers-metrics-panel {
+  padding: 20px;
+  background: #f5f5f5;
+}
+
+.metrics-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30px;
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.metrics-header h2 {
+  margin: 0;
+  color: #333;
+}
+
+.period-selector {
+  display: flex;
+  gap: 10px;
+}
+
+.period-selector button {
+  padding: 10px 20px;
+  border: 1px solid #ddd;
+  background: white;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.period-selector button:hover {
+  background: #f0f0f0;
+}
+
+.period-selector button.active {
+  background: #4CAF50;
+  color: white;
+  border-color: #4CAF50;
+}
+
+.metrics-section {
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.metrics-section h3 {
+  margin-top: 0;
+  margin-bottom: 20px;
+  color: #333;
+  border-bottom: 2px solid #4CAF50;
+  padding-bottom: 10px;
+}
+
+.no-data {
+  text-align: center;
+  color: #999;
+  padding: 40px 0;
+}
+
+/* Ranking Table */
+.ranking-table {
+  overflow-x: auto;
+}
+
+.ranking-table table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.ranking-table th {
+  background: #f8f8Continue03:06f8;
+padding: 12px;
+text-align: left;
+font-weight: 600;
+color: #666;
+border-bottom: 2px solid #ddd;
+}
+.ranking-table td {
+padding: 12px;
+border-bottom: 1px solid #eee;
+}
+.ranking-table tr:hover {
+background: #f9f9f9;
+}
+.ranking-table .top-three {
+background: #fffef0;
+}
+.ranking-table .position {
+font-size: 1.2em;
+font-weight: bold;
+text-align: center;
+width: 80px;
+}
+.ranking-table .driver-name {
+font-weight: 500;
+color: #333;
+}
+.ranking-table .deliveries-count {
+font-weight: 600;
+color: #4CAF50;
+text-align: center;
+}
+.ranking-table .rating {
+text-align: center;
+}
+/* Time Summary Grid */
+.time-summary-grid {
+display: grid;
+grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+gap: 20px;
+}
+.driver-time-card {
+border: 1px solid #e0e0e0;
+border-radius: 8px;
+overflow: hidden;
+transition: box-shadow 0.3s;
+}
+.driver-time-card:hover {
+box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+.driver-time-card .card-header {
+background: #f8f8f8;
+padding: 15px;
+display: flex;
+justify-content: space-between;
+align-items: center;
+border-bottom: 1px solid #e0e0e0;
+}
+.driver-time-card h4 {
+margin: 0;
+color: #333;
+font-size: 1.1em;
+}
+.current-status {
+font-size: 0.9em;
+padding: 4px 12px;
+border-radius: 12px;
+background: white;
+border: 1px solid #ddd;
+}
+.driver-time-card .card-body {
+padding: 15px;
+}
+.total-time {
+display: flex;
+justify-content: space-between;
+align-items: center;
+margin-bottom: 15px;
+padding-bottom: 15px;
+border-bottom: 2px solid #e0e0e0;
+}
+.total-time .label {
+font-weight: 600;
+color: #666;
+}
+.total-time .value {
+font-size: 1.3em;
+font-weight: bold;
+color: #4CAF50;
+}
+.time-breakdown {
+display: flex;
+flex-direction: column;
+gap: 10px;
+}
+.status-time {
+display: flex;
+justify-content: space-between;
+align-items: center;
+padding: 8px 12px;
+background: #f9f9f9;
+border-radius: 6px;
+}
+.status-label {
+font-size: 0.9em;
+color: #666;
+}
+.status-value {
+font-weight: 600;
+color: #333;
+}
+/* Summary Cards */
+.metrics-summary {
+display: grid;
+grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+gap: 20px;
+}
+.summary-card {
+background: white;
+padding: 20px;
+border-radius: 8px;
+box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+display: flex;
+flex-direction: column;
+gap: 10px;
+}
+.summary-label {
+font-size: 0.9em;
+color: #666;
+text-transform: uppercase;
+letter-spacing: 0.5px;
+}
+.summary-value {
+font-size: 1.8em;
+font-weight: bold;
+color: #4CAF50;
+}
+/* Loading/Error States */
+.metrics-loading,
+.metrics-error {
+text-align: center;
+padding: 60px 20px;
+font-size: 1.1em;
+}
+.metrics-error {
+color: #F44336;
+}
+/* Responsive */
+@media (max-width: 768px) {
+.metrics-header {
+flex-direction: column;
+gap: 20px;
+align-items: stretch;
+}
+.period-selector {
+flex-wrap: wrap;
+}
+.period-selector button {
+flex: 1;
+min-width: 100px;
+}
+.time-summary-grid {
+grid-template-columns: 1fr;
+}
+.ranking-table {
+font-size: 0.9em;
+}
+}
+
+---
+
+### **2.4 - Integrar no Dashboard Owner/Manager**
+```jsx
+// frontend/src/pages/owner/OwnerDashboard.jsx (ou ManagerDashboard.jsx)
+
+// ADICIONAR import:
+import DriversMetricsPanel from '../../components/owner/DriversMetricsPanel';
+
+// ADICIONAR dentro do componente, em uma nova seção:
+
+<div className="dashboard-section">
+  <DriversMetricsPanel />
+</div>
+```
+
+---
+
+### **2.5 - Componente Driver: MyTimePanel (para painel do driver)**
+```jsx
+// frontend/src/components/driver/MyTimePanel.jsx
+
+import React, { useState, useEffect } from 'react';
+import api from '../../services/api';
+import './MyTimePanel.css';
+
+const MyTimePanel = () => {
+  const [timeSummary, setTimeSummary] = useState(null);
+  const [period, setPeriod] = useState('today');
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchTimeSummary();
+  }, [period]);
+
+  const fetchTimeSummary = async () => {
+    setLoading(true);
+    try {
+      const { startDate, endDate } = getPeriodDates(period);
+      const response = await api.getMyTimeSummary(startDate, endDate);
+      setTimeSummary(response.data);
+    } catch (err) {
+      console.error('Erro ao buscar tempo trabalhado:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getPeriodDates = (period) => {
+    const today = new Date();
+    const endDate = today.toISOString().split('T')[0];
+    
+    let startDate;
+    if (period === 'today') {
+      startDate = endDate;
+    } else if (period === 'week') {
+      const weekAgo = new Date(today);
+      weekAgo.setDate(weekAgo.getDate() - 7);
+      startDate = weekAgo.toISOString().split('T')[0];
+    } else if (period === 'month') {
+      const monthAgo = new Date(today);
+      monthAgo.setMonth(monthAgo.getMonth() - 1);
+      startDate = monthAgo.toISOString().split('T')[0];
+    }
+    
+    return { startDate, endDate };
+  };
+
+  const formatMinutes = (minutes) => {
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    return `${hours}h ${mins}m`;
+  };
+
+  const getStatusLabel = (status) => {
+    const labels = {
+      available: 'Disponível',
+      busy: 'Ocupado',
+      break: 'Pausa',
+      offline: 'Offline'
+    };
+    return labels[status] || status;
+  };
+
+  if (loading) return <div>Carregando...</div>;
+  if (!timeSummary) return null;
+
+  return (
+    <div className="my-time-panel">
+      <div className="time-header">
+        <h3>⏱️ Meu Tempo Trabalhado</h3>
+        <div className="period-selector">
+          <button 
+            className={period === 'today' ? 'active' : ''}
+            onClick={() => setPeriod('today')}
+          >
+            Hoje
+          </button>
+          <button 
+            className={period === 'week' ? 'active' : ''}
+            onClick={() => setPeriod('week')}
+          >
+            Semana
+          </button>
+          <button 
+            className={period === 'month' ? 'active' : ''}
+            onClick={() => setPeriod('month')}
+          >
+            Mês
+          </button>
+        </div>
+      </div>
+
+      <div className="total-time-display">
+        <span className="label">Tempo Total:</span>
+        <span className="value">{formatMinutes(timeSummary.total_minutes)}</span>
+      </div>
+
+      <div className="time-breakdown">
+        {Object.entries(timeSummary.by_status).map(([status, data]) => (
+          <div key={status} className="status-row">
+            <span className="status-name">{getStatusLabel(status)}</span>
+            <div className="status-bar">
+              <div 
+                className={`bar-fill ${status}`}
+                style={{
+                  width: `${(data.minutes / timeSummary.total_minutes) * 100}%`
+                }}
+              ></div>
+            </div>
+            <span className="status-time">{formatMinutes(data.minutes)}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+export default MyTimePanel;
+```
+
+---
+
+### **2.6 - CSS do MyTimePanel**
+```css
+/* frontend/src/components/driver/MyTimePanel.css */
+
+.my-time-panel {
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  margin: 20px 0;
+}
+
+.time-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.time-header h3 {
+  margin: 0;
+  color: #333;
+}
+
+.period-selector {
+  display: flex;
+  gap: 8px;
+}
+
+.period-selector button {
+  padding: 8px 16px;
+  border: 1px solid #ddd;
+  background: white;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9em;
+}
+
+.period-selector button.active {
+  background: #4CAF50;
+  color: white;
+  border-color: #4CAF50;
+}
+
+.total-time-display {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+  background: #f8f8f8;
+  border-radius: 8px;
+  margin-bottom: 20px;
+}
+
+.total-time-display .label {
+  font-size: 1.1em;
+  color: #666;
+  font-weight: 600;
+}
+
+.total-time-display .value {
+  font-size: 1.5em;
+  font-weight: bold;
+  color: #4CAF50;
+}
+
+.time-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.status-row {
+  display: grid;
+  grid-template-columns: 100px 1fr 80px;
+  align-items: center;
+  gap: 15px;
+}
+
+.status-name {
+  font-size: 0.9em;
+  color: #666;
+  font-weight: 500;
+}
+
+.status-bar {
+  height: 24px;
+  background: #e0e0e0;
+  border-radius: 12px;
+  overflow: hidden;
+  position: relative;
+}
+
+.bar-fill {
+  height: 100%;
+  transition: width 0.5s ease;
+}
+
+.bar-fill.available {
+  background: #4CAF50;
+}
+
+.bar-fill.busy {
+  background: #2196F3;
+}
+
+.bar-fill.break {
+  background: #FF9800;
+}
+
+.bar-fill.offline {
+  background: #9E9E9E;
+}
+
+.status-time {
+  font-weight: 600;
+  color: #333;
+  text-align: right;
+  font-size: 0.95em;
+}
+
+@media (max-width: 600px) {
+  .time-header {
+    flex-direction: column;
+    gap: 15px;
+    align-items: stretch;
+  }
+  
+  .period-selector button {
+    flex: 1;
+  }
+  
+  .status-row {
+    grid-template-columns: 80px 1fr 70px;
+    gap: 10px;
+  }
+}
+```
+
+---
+
+### **2.7 - Integrar no Dashboard do Driver**
+```jsx
+// frontend/src/pages/driver/Dashboard.jsx (ou onde você quiser)
+
+// ADICIONAR import:
+import MyTimePanel from '../../components/driver/MyTimePanel';
+
+// ADICIONAR dentro do componente:
+
+<MyTimePanel />
+```
+
+---
+
+## ✅ **CHECKLIST DE IMPLEMENTAÇÃO**
+
+### **Backend:**
+- [ ] Criar migration `add_driver_time_logs`
+- [ ] Rodar `alembic upgrade head`
+- [ ] Criar `backend/app/models/driver_time_log.py`
+- [ ] Atualizar `backend/app/models/driver.py` (adicionar relationship)
+- [ ] Atualizar `backend/app/models/__init__.py` (import)
+- [ ] Criar `backend/app/services/driver_time_tracking_service.py`
+- [ ] Adicionar schemas em `backend/app/schemas/driver.py`
+- [ ] Modificar endpoint `PUT /api/drivers/me/status` em `backend/app/api/drivers.py`
+- [ ] Adicionar novos endpoints em `backend/app/api/drivers.py`
+- [ ] Testar endpoints com Postman/Thunder Client
+
+### **Frontend Owner/Manager:**
+- [ ] Criar `frontend/src/components/owner/DriversMetricsPanel.jsx`
+- [ ] Criar `frontend/src/components/owner/DriversMetricsPanel.css`
+- [ ] Adicionar métodos em `frontend/src/services/api.js`
+- [ ] Integrar componente em `OwnerDashboard.jsx` ou `ManagerDashboard.jsx`
+- [ ] Testar visualização e filtros
+
+### **Frontend Driver:**
+- [ ] Criar `frontend/src/components/driver/MyTimePanel.jsx`
+- [ ] Criar `frontend/src/components/driver/MyTimePanel.css`
+- [ ] Integrar componente no dashboard do driver
+- [ ] Testar visualização
+
+---
+
+## 🧪 **COMO TESTAR**
+
+### **1. Teste Backend (Postman/Thunder Client)**
+```bash
+# 1. Login como driver
+POST http://localhost:8000/api/auth/login
+Body: {"username":"joao.driver","email":"joao.driver@gasautomation.com","password":"driver123"}
+# Copiar token
+
+# 2. Mudar status para available (cria time log)
+PUT http://localhost:8000/api/drivers/me/status
+Headers: Authorization: Bearer {token}
+Body: {"status":"available"}
+
+# 3. Esperar alguns minutos...
+
+# 4. Mudar status para break
+PUT http://localhost:8000/api/drivers/me/status
+Headers: Authorization: Bearer {token}
+Body: {"status":"break"}
+
+# 5. Ver meu tempo trabalhado
+GET http://localhost:8000/api/drivers/me/time-summary
+Headers: Authorization: Bearer {token}
+
+# 6. Login como owner/manager
+POST http://localhost:8000/api/auth/login
+Body: {"username":"owner","email":"owner@gas.com","password":"senha"}
+
+# 7. Ver métricas de todos os drivers
+GET http://localhost:8000/api/drivers/metrics/dashboard
+Headers: Authorization: Bearer {token_owner}
+```
+
+### **2. Teste Frontend**
+
+1. Faça login como driver
+2. Mude o status para "Disponível"
+3. Veja o painel "Meu Tempo Trabalhado"
+4. Faça logout e login como owner/manager
+5. Veja o painel "Métricas dos Entregadores"
+6. Teste os filtros (Hoje, Semana, Mês)
+7. Verifique ranking e tempo trabalhado
+
+---
+
+## 📝 **RESUMO DO QUE FOI IMPLEMENTADO**
+
+### **✅ Para Drivers:**
+- Tracking automático de tempo ao mudar status
+- Painel mostrando tempo trabalhado (hoje/semana/mês)
+- Breakdown por status (disponível, ocupado, pausa, offline)
+- Visualização com barras de progresso
+
+### **✅ Para Owner/Manager:**
+- Dashboard completo com métricas de equipe
+- Ranking de entregas do dia (quem fez mais)
+- Tempo trabalhado de cada driver
+- Breakdown de tempo por status
+- Filtros por período (hoje, semana, mês)
+- Visualização com cards e tabelas
+- Resumo geral (total drivers, total entregas)
+
+### **✅ Backend:**
+- Nova tabela `driver_time_logs`
+- Service `DriverTimeTrackingService`
+- 4 novos endpoints
+- Tracking automático ao mudar status
+- Queries otimizadas com índices
+
+---
+
+**PROMPT COMPLETO! Copie e cole no Cursor para implementar todas as funcionalidades de métricas de tempo e ranking dos entregadores.** 🚀

@@ -27,6 +27,7 @@ export default function ProtectedRoute({ children, requiredRole = null }) {
       admin: '/admin',
       operator: '/operador',
       owner: '/owner',
+      driver: '/driver/dashboard',
       user: '/operador'
     }
     const targetRoute = roleRoutes[user?.role] || '/operador'

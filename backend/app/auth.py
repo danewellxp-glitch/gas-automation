@@ -88,4 +88,25 @@ async def get_current_user(token: str = Depends(oauth2_scheme), session: AsyncSe
         raise credentials_exception()
     return user
 
+
+async def get_current_user_ws(token: str, session: AsyncSession) -> Optional[User]:
+    """
+    Get current user from JWT token for WebSocket connections.
+    Returns None if token is invalid instead of raising exception.
+    """
+    try:
+        payload = jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
+        username: str = payload.get("sub")
+        if username is None:
+            return None
+    except JWTError:
+        return None
+
+    result = await session.execute(
+        select(User).where(User.username == username)
+    )
+    user = result.scalar_one_or_none()
+    return user
+
+
 # Import get_db from database module

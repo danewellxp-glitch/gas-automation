@@ -66,7 +66,9 @@ class Settings(BaseSettings):
     cors_origins: list[str] = [
         "http://localhost:3001",
         "http://localhost:3000",
+        "http://localhost:3003",
         "http://192.168.10.156:3001",
+        "http://192.168.10.156:3003",
         "http://192.168.10.156:8000",
         "http://192.168.10.156",
         "*"  # Permitir todas as origens durante desenvolvimento

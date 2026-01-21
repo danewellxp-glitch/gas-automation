@@ -1,0 +1,192 @@
+groups:
+  - name: websocket_alerts
+    interval: 30s
+    rules:
+      # ==================== Conexões ====================
+      
+      - alert: HighWebSocketConnections
+        expr: websocket_connections_total{role="all"} > 100
+        for: 5m
+        labels:
+          severity: warning
+          component: websocket
+        annotations:
+          summary: "Alto número de conexões WebSocket"
+          description: "Instância {{ $labels.instance_id }} tem {{ $value }} conexões ativas (limite: 100)"
+      
+      - alert: CriticalWebSocketConnections
+        expr: websocket_connections_total{role="all"} > 200
+        for: 5m
+        labels:
+          severity: critical
+          component: websocket
+        annotations:
+          summary: "⚠️ CRÍTICO: Número excessivo de conexões WebSocket"
+          description: "Instância {{ $labels.instance_id }} tem {{ $value }} conexões ativas (limite crítico: 200)"
+      
+      # ==================== Erros ====================
+      
+      - alert: HighWebSocketErrorRate
+        expr: |
+          (
+            rate(websocket_errors_total[5m]) / 
+            (rate(websocket_messages_sent_total[5m]) + rate(websocket_messages_received_total[5m]))
+          ) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          component: websocket
+        annotations:
+          summary: "Alta taxa de erros WebSocket"
+          description: "Instância {{ $labels.instance_id }} tem {{ $value | humanizePercentage }} de taxa de erro (limite: 5%)"
+      
+      - alert: CriticalWebSocketErrorRate
+        expr: |
+          (
+            rate(websocket_errors_total[5m]) / 
+            (rate(websocket_messages_sent_total[5m]) + rate(websocket_messages_received_total[5m]))
+          ) > 0.10
+        for: 5m
+        labels:
+          severity: critical
+          component: websocket
+        annotations:
+          summary: "⚠️ CRÍTICO: Taxa de erros WebSocket muito alta"
+          description: "Instância {{ $labels.instance_id }} tem {{ $value | humanizePercentage }} de taxa de erro (limite crítico: 10%)"
+      
+      # ==================== Latência ====================
+      
+      - alert: HighWebSocketLatency
+        expr: |
+          histogram_quantile(0.95, rate(websocket_broadcast_duration_seconds_bucket[5m])) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          component: websocket
+        annotations:
+          summary: "Alta latência de broadcast WebSocket"
+          description: "Instância {{ $labels.instance_id }} tem latência p95 de {{ $value }}s (limite: 500ms)"
+      
+      - alert: CriticalWebSocketLatency
+        expr: |
+          histogram_quantile(0.95, rate(websocket_broadcast_duration_seconds_bucket[5m])) > 1.0
+        for: 5m
+        labels:
+          severity: critical
+          component: websocket
+        annotations:
+          summary: "⚠️ CRÍTICO: Latência de broadcast WebSocket muito alta"
+          description: "Instância {{ $labels.instance_id }} tem latência p95 de {{ $value }}s (limite crítico: 1s)"
+      
+      # ==================== Desconexões ====================
+      
+      - alert: HighWebSocketDisconnectRate
+        expr: rate(websocket_disconnects_total[5m]) > 5
+        for: 5m
+        labels:
+          severity: warning
+          component: websocket
+        annotations:
+          summary: "Alta taxa de desconexões WebSocket"
+          description: "Instância {{ $labels.instance_id }} tem {{ $value }} desconexões/s (limite: 5/s)"
+      
+      - alert: FrequentDeadConnections
+        expr: rate(websocket_dead_connections_cleaned[5m]) > 2
+        for: 5m
+        labels:
+          severity: warning
+          component: websocket
+        annotations:
+          summary: "Muitas conexões mortas sendo limpas"
+          description: "Instância {{ $labels.instance_id }} está limpando {{ $value }} conexões mortas/s"
+      
+      # ==================== Redis Pub/Sub ====================
+      
+      - alert: RedisPublishFailures
+        expr: rate(redis_pubsub_messages_published[5m]) == 0 AND rate(websocket_messages_sent_total[5m]) > 0
+        for: 5m
+        labels:
+          severity: critical
+          component: redis
+        annotations:
+          summary: "⚠️ CRÍTICO: Redis Pub/Sub não está publicando"
+          description: "Instância {{ $labels.instance_id }} está enviando mensagens mas não está publicando no Redis"
+      
+      - alert: LowRedisSubscriberRate
+        expr: |
+          rate(redis_pubsub_messages_received[5m]) / 
+          rate(redis_pubsub_messages_published[5m]) < 0.8
+        for: 5m
+        labels:
+          severity: warning
+          component: redis
+        annotations:
+          summary: "Baixa taxa de recepção Redis Pub/Sub"
+          description: "Instância {{ $labels.instance_id }} está recebendo apenas {{ $value | humanizePercentage }} das mensagens publicadas"
+      
+      # ==================== Event Batcher ====================
+      
+      - alert: HighEventBatcherBufferSize
+        expr: event_batcher_buffer_size > 40
+        for: 5m
+        labels:
+          severity: warning
+          component: event_batcher
+        annotations:
+          summary: "Buffer do Event Batcher está alto"
+          description: "Instância {{ $labels.instance_id }} tem {{ $value }} eventos no buffer (limite: 40)"
+      
+      - alert: EventBatcherStuck
+        expr: event_batcher_buffer_size > 0 AND rate(event_batcher_batches_sent[5m]) == 0
+        for: 10m
+        labels:
+          severity: critical
+          component: event_batcher
+        annotations:
+          summary: "⚠️ CRÍTICO: Event Batcher parece travado"
+          description: "Instância {{ $labels.instance_id }} tem eventos no buffer mas não está enviando batches há 10 minutos"
+      
+      # ==================== Sistema ====================
+      
+      - alert: BackendInstanceDown
+        expr: up{job="backend"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: backend
+        annotations:
+          summary: "⚠️ CRÍTICO: Instância do backend está down"
+          description: "Instância {{ $labels.instance }} não está respondendo há 1 minuto"
+      
+      - alert: LongSystemDowntime
+        expr: system_uptime_seconds < 300
+        for: 1m
+        labels:
+          severity: info
+          component: system
+        annotations:
+          summary: "Sistema foi reiniciado recentemente"
+          description: "Instância {{ $labels.instance_id }} tem uptime de apenas {{ $value }}s"
+      
+      # ==================== Message Store ====================
+      
+      - alert: HighMessageReplayRequests
+        expr: rate(message_store_replay_requests[5m]) > 5
+        for: 5m
+        labels:
+          severity: warning
+          component: message_store
+        annotations:
+          summary: "Muitas requisições de replay de mensagens"
+          description: "Instância {{ $labels.instance_id }} tem {{ $value }} replays/s - possível instabilidade de rede"
+      
+      - alert: LargeMessageReplays
+        expr: |
+          histogram_quantile(0.95, rate(message_store_replay_messages_sent_bucket[5m])) > 50
+        for: 5m
+        labels:
+          severity: warning
+          component: message_store
+        annotations:
+          summary: "Replays grandes de mensagens"
+          description: "Instância {{ $labels.instance_id }} está enviando p95 de {{ $value }} mensagens por replay"

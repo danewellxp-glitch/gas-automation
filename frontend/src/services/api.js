@@ -35,6 +35,13 @@ api.interceptors.response.use(
 
 // ==================== Orders ====================
 export const getOrders = async (params = {}) => {
+  // Suporta paginação: { page, page_size, status, bairro, etc }
+  const response = await api.get('/orders', { params })
+  return response.data
+}
+
+export const getOrdersPaginated = async (page = 1, pageSize = 30, filters = {}) => {
+  const params = { page, page_size: pageSize, ...filters }
   const response = await api.get('/orders', { params })
   return response.data
 }

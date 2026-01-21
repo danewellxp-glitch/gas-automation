@@ -9,7 +9,7 @@ from uuid import UUID
 
 from pydantic import Field, field_validator
 
-from app.schemas.base import AddressSchema, BaseSchema, TimestampSchema
+from app.schemas.base import AddressSchema, BaseSchema, TimestampSchema, PaginatedResponse
 from app.schemas.customer import CustomerBrief
 
 
@@ -146,3 +146,28 @@ class OrderStatusUpdate(BaseSchema):
 
     status: str
     reason: Optional[str] = Field(None, max_length=500, description="Motivo (para cancelamento)")
+
+
+class PaginatedOrdersResponse(BaseSchema):
+    """Resposta paginada de pedidos."""
+    
+    items: list[OrderBrief]
+    total: int
+    page: int
+    page_size: int
+    total_pages: int
+    has_next: bool
+    has_prev: bool
+    
+    @classmethod
+    def create(cls, items: list[OrderBrief], total: int, page: int, page_size: int):
+        total_pages = (total + page_size - 1) // page_size if total > 0 else 0
+        return cls(
+            items=items,
+            total=total,
+            page=page,
+            page_size=page_size,
+            total_pages=total_pages,
+            has_next=page < total_pages,
+            has_prev=page > 1,
+        )

@@ -1,0 +1,583 @@
+/**
+ * Painel para Criar Pedidos Manualmente
+ * Para operadores que recebem pedidos por telefone
+ */
+
+import { useState, useEffect } from 'react'
+
+export default function CreateOrderPanel() {
+  // Estados do formulário
+  const [products, setProducts] = useState([])
+  const [customers, setCustomers] = useState([])
+  
+  // Dados do pedido
+  const [customerData, setCustomerData] = useState({
+    name: '',
+    phone: '',
+    cpf: '',
+    address: '',
+    bairro: '',
+    numero: '',
+    complemento: '',
+    pontoReferencia: ''
+  })
+  
+  const [orderItems, setOrderItems] = useState([])
+  const [paymentMethod, setPaymentMethod] = useState('dinheiro')
+  const [notes, setNotes] = useState('')
+  const [searchingCustomer, setSearchingCustomer] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetchProducts()
+  }, [])
+
+  const fetchProducts = async () => {
+    try {
+      setLoading(true)
+      const response = await fetch('http://192.168.10.156:8000/api/products', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      })
+      
+      if (response.ok) {
+        const data = await response.json()
+        setProducts(data)
+      }
+    } catch (error) {
+      console.error('Erro ao buscar produtos:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const searchCustomer = async (phone) => {
+    if (phone.length < 10) return
+    
+    try {
+      setSearchingCustomer(true)
+      const response = await fetch(`http://192.168.10.156:8000/api/customers?phone=${phone}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      })
+      
+      if (response.ok) {
+        const data = await response.json()
+        if (data && data.length > 0) {
+          const customer = data[0]
+          setCustomerData({
+            name: customer.name || '',
+            phone: customer.phone || '',
+            cpf: customer.cpf || '',
+            address: customer.address || '',
+            bairro: customer.bairro || '',
+            numero: customer.numero || '',
+            complemento: customer.complemento || '',
+            pontoReferencia: customer.ponto_referencia || ''
+          })
+        }
+      }
+    } catch (error) {
+      console.error('Erro ao buscar cliente:', error)
+    } finally {
+      setSearchingCustomer(false)
+    }
+  }
+
+  const addProduct = (product) => {
+    const existing = orderItems.find(item => item.product_id === product.id)
+    
+    if (existing) {
+      setOrderItems(orderItems.map(item =>
+        item.product_id === product.id
+          ? { ...item, quantity: item.quantity + 1 }
+          : item
+      ))
+    } else {
+      setOrderItems([...orderItems, {
+        product_id: product.id,
+        product_name: product.name,
+        price: product.price,
+        quantity: 1
+      }])
+    }
+  }
+
+  const updateQuantity = (productId, newQuantity) => {
+    if (newQuantity <= 0) {
+      removeProduct(productId)
+    } else {
+      setOrderItems(orderItems.map(item =>
+        item.product_id === productId
+          ? { ...item, quantity: newQuantity }
+          : item
+      ))
+    }
+  }
+
+  const removeProduct = (productId) => {
+    setOrderItems(orderItems.filter(item => item.product_id !== productId))
+  }
+
+  const calculateTotal = () => {
+    return orderItems.reduce((sum, item) => sum + (item.price * item.quantity), 0)
+  }
+
+  const formatCurrency = (value) => {
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL'
+    }).format(value)
+  }
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    
+    // Validações
+    if (!customerData.name || !customerData.phone) {
+      alert('❌ Nome e telefone são obrigatórios')
+      return
+    }
+    
+    if (orderItems.length === 0) {
+      alert('❌ Adicione pelo menos um produto')
+      return
+    }
+    
+    if (!customerData.address) {
+      alert('❌ Endereço é obrigatório')
+      return
+    }
+
+    try {
+      setSubmitting(true)
+      
+      // PASSO 1: Criar/Buscar cliente
+      let customerId = null
+      
+      // Tentar buscar cliente existente pelo telefone
+      const searchResponse = await fetch(
+        `http://192.168.10.156:8000/api/customers?phone=${encodeURIComponent(customerData.phone)}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          }
+        }
+      )
+      
+      if (searchResponse.ok) {
+        const existingCustomers = await searchResponse.json()
+        if (existingCustomers && existingCustomers.length > 0) {
+          customerId = existingCustomers[0].id
+        }
+      }
+      
+      // Se não existe, criar novo cliente
+      if (!customerId) {
+        const customerPayload = {
+          phone: customerData.phone,
+          name: customerData.name,
+          cpf_cnpj: customerData.cpf || null,
+          address: {
+            street: customerData.address,
+            number: customerData.numero || '',
+            complement: customerData.complemento || '',
+            bairro: customerData.bairro || '',
+            reference: customerData.pontoReferencia || ''
+          }
+        }
+        
+        const createCustomerResponse = await fetch('http://192.168.10.156:8000/api/customers', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(customerPayload)
+        })
+        
+        if (createCustomerResponse.ok) {
+          const newCustomer = await createCustomerResponse.json()
+          customerId = newCustomer.id
+        } else {
+          const error = await createCustomerResponse.json()
+          alert(`❌ Erro ao criar cliente: ${error.detail || 'Erro desconhecido'}`)
+          return
+        }
+      }
+      
+      // PASSO 2: Buscar códigos dos produtos (product_code ao invés de product_id)
+      const itemsWithCodes = []
+      for (const item of orderItems) {
+        const product = products.find(p => p.id === item.product_id)
+        if (product) {
+          itemsWithCodes.push({
+            product_code: product.code,
+            quantity: item.quantity
+          })
+        }
+      }
+      
+      // PASSO 3: Criar pedido com formato correto
+      const orderPayload = {
+        customer_id: customerId,
+        items: itemsWithCodes,
+        payment_method: paymentMethod,
+        delivery_address: {
+          street: customerData.address,
+          number: customerData.numero || '',
+          complement: customerData.complemento || '',
+          bairro: customerData.bairro || '',
+          city: 'São Paulo',
+          state: 'SP',
+          zipcode: ''
+        },
+        delivery_bairro: customerData.bairro || null,
+        notes: notes || null
+      }
+
+      const response = await fetch('http://192.168.10.156:8000/api/orders', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(orderPayload)
+      })
+
+      if (response.ok) {
+        const order = await response.json()
+        alert(`✅ Pedido #${order.order_number || order.id} criado com sucesso!`)
+        
+        // Limpar formulário
+        setCustomerData({
+          name: '',
+          phone: '',
+          cpf: '',
+          address: '',
+          bairro: '',
+          numero: '',
+          complemento: '',
+          pontoReferencia: ''
+        })
+        setOrderItems([])
+        setPaymentMethod('dinheiro')
+        setNotes('')
+      } else {
+        const error = await response.json()
+        alert(`❌ Erro ao criar pedido: ${error.detail || 'Erro desconhecido'}`)
+      }
+    } catch (error) {
+      console.error('Erro ao criar pedido:', error)
+      alert('❌ Erro ao criar pedido: ' + error.message)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="text-gray-600 mt-4">Carregando...</p>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div>
+        <h2 className="text-2xl font-bold text-gray-800">📞 Criar Pedido Manual</h2>
+        <p className="text-gray-600">Registrar pedidos recebidos por telefone ou presencialmente</p>
+      </div>
+
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Dados do Cliente */}
+        <div className="bg-white rounded-lg shadow p-6">
+          <h3 className="text-lg font-bold text-gray-800 mb-4">👤 Dados do Cliente</h3>
+          
+          <div className="grid grid-cols-2 gap-4">
+            {/* Telefone com busca */}
+            <div className="col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Telefone *
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="tel"
+                  value={customerData.phone}
+                  onChange={(e) => setCustomerData({...customerData, phone: e.target.value})}
+                  onBlur={(e) => searchCustomer(e.target.value)}
+                  className="flex-1 px-4 py-2 border rounded-lg focus:outline-none focus:border-blue-500"
+                  placeholder="(11) 99999-9999"
+                  required
+                />
+                {searchingCustomer && (
+                  <div className="flex items-center px-4 bg-gray-100 rounded-lg">
+                    <span className="text-sm text-gray-600">Buscando...</span>
+                  </div>
+                )}
+              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                Digite o telefone para buscar cliente cadastrado
+              </p>
+            </div>
+
+            {/* Nome */}
+            <div className="col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Nome Completo *
+              </label>
+              <input
+                type="text"
+                value={customerData.name}
+                onChange={(e) => setCustomerData({...customerData, name: e.target.value})}
+                className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:border-blue-500"
+                placeholder="João da Silva"
+                required
+              />
+            </div>
+
+            {/* CPF */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                CPF
+              </label>
+              <input
+                type="text"
+                value={customerData.cpf}
+                onChange={(e) => setCustomerData({...customerData, cpf: e.target.value})}
+                className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:border-blue-500"
+                placeholder="000.000.000-00"
+              />
+            </div>
+
+            {/* Bairro */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Bairro
+              </label>
+              <input
+                type="text"
+                value={customerData.bairro}
+                onChange={(e) => setCustomerData({...customerData, bairro: e.target.value})}
+                className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:border-blue-500"
+                placeholder="Centro"
+              />
+            </div>
+
+            {/* Endereço */}
+            <div className="col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Endereço *
+              </label>
+              <input
+                type="text"
+                value={customerData.address}
+                onChange={(e) => setCustomerData({...customerData, address: e.target.value})}
+                className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:border-blue-500"
+                placeholder="Rua Exemplo"
+                required
+              />
+            </div>
+
+            {/* Número */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Número
+              </label>
+              <input
+                type="text"
+                value={customerData.numero}
+                onChange={(e) => setCustomerData({...customerData, numero: e.target.value})}
+                className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:border-blue-500"
+                placeholder="123"
+              />
+            </div>
+
+            {/* Complemento */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Complemento
+              </label>
+              <input
+                type="text"
+                value={customerData.complemento}
+                onChange={(e) => setCustomerData({...customerData, complemento: e.target.value})}
+                className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:border-blue-500"
+                placeholder="Apto 101"
+              />
+            </div>
+
+            {/* Ponto de Referência */}
+            <div className="col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Ponto de Referência
+              </label>
+              <input
+                type="text"
+                value={customerData.pontoReferencia}
+                onChange={(e) => setCustomerData({...customerData, pontoReferencia: e.target.value})}
+                className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:border-blue-500"
+                placeholder="Próximo ao mercado"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Produtos */}
+        <div className="bg-white rounded-lg shadow p-6">
+          <h3 className="text-lg font-bold text-gray-800 mb-4">📦 Produtos</h3>
+          
+          {/* Lista de Produtos Disponíveis */}
+          <div className="grid grid-cols-3 gap-4 mb-6">
+            {products.map((product) => (
+              <button
+                key={product.id}
+                type="button"
+                onClick={() => addProduct(product)}
+                className="p-6 bg-gradient-to-br from-blue-50 to-blue-100 hover:from-blue-100 hover:to-blue-200 rounded-lg transition text-center border-2 border-blue-200 hover:border-blue-400"
+              >
+                <div className="text-4xl mb-2">🔥</div>
+                <p className="font-bold text-gray-800 mb-1">{product.name}</p>
+                <p className="text-xs text-gray-600 mb-2">{product.description}</p>
+                <p className="text-2xl font-bold text-blue-600">{formatCurrency(product.price)}</p>
+                <p className="text-xs text-gray-500 mt-2">Clique para adicionar</p>
+              </button>
+            ))}
+          </div>
+          
+          {products.length === 0 && (
+            <div className="text-center py-8 bg-gray-50 rounded-lg">
+              <p className="text-gray-500">📦 Nenhum produto disponível</p>
+              <p className="text-sm text-gray-400 mt-2">Entre em contato com o administrador</p>
+            </div>
+          )}
+
+          {/* Itens do Pedido */}
+          {orderItems.length > 0 && (
+            <div className="border-t pt-4">
+              <h4 className="font-semibold text-gray-700 mb-3">Itens do Pedido:</h4>
+              <div className="space-y-2">
+                {orderItems.map((item) => (
+                  <div key={item.product_id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <div className="flex-1">
+                      <p className="font-medium">{item.product_name}</p>
+                      <p className="text-sm text-gray-600">{formatCurrency(item.price)} x {item.quantity}</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => updateQuantity(item.product_id, item.quantity - 1)}
+                          className="w-8 h-8 bg-red-500 text-white rounded hover:bg-red-600"
+                        >
+                          -
+                        </button>
+                        <span className="w-8 text-center font-bold">{item.quantity}</span>
+                        <button
+                          type="button"
+                          onClick={() => updateQuantity(item.product_id, item.quantity + 1)}
+                          className="w-8 h-8 bg-green-500 text-white rounded hover:bg-green-600"
+                        >
+                          +
+                        </button>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeProduct(item.product_id)}
+                        className="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600 text-sm"
+                      >
+                        Remover
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Pagamento e Observações */}
+        <div className="bg-white rounded-lg shadow p-6">
+          <h3 className="text-lg font-bold text-gray-800 mb-4">💳 Pagamento e Observações</h3>
+          
+          <div className="space-y-4">
+            {/* Forma de Pagamento */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Forma de Pagamento *
+              </label>
+              <select
+                value={paymentMethod}
+                onChange={(e) => setPaymentMethod(e.target.value)}
+                className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:border-blue-500"
+                required
+              >
+                <option value="dinheiro">💵 Dinheiro</option>
+                <option value="pix">📱 PIX</option>
+                <option value="cartao_credito">💳 Cartão de Crédito</option>
+                <option value="cartao_debito">💳 Cartão de Débito</option>
+              </select>
+            </div>
+
+            {/* Observações */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Observações
+              </label>
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:border-blue-500"
+                rows="3"
+                placeholder="Troco para R$ 100,00, entregar antes das 18h, etc."
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Total e Botões */}
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex items-center justify-between mb-6">
+            <span className="text-2xl font-bold text-gray-700">Total:</span>
+            <span className="text-3xl font-bold text-green-600">
+              {formatCurrency(calculateTotal())}
+            </span>
+          </div>
+
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                setCustomerData({
+                  name: '', phone: '', cpf: '', address: '',
+                  bairro: '', numero: '', complemento: '', pontoReferencia: ''
+                })
+                setOrderItems([])
+                setPaymentMethod('dinheiro')
+                setNotes('')
+              }}
+              className="flex-1 px-6 py-3 bg-gray-300 text-gray-800 rounded-lg hover:bg-gray-400 transition font-medium"
+            >
+              🔄 Limpar
+            </button>
+            <button
+              type="submit"
+              disabled={submitting || orderItems.length === 0}
+              className="flex-1 px-6 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {submitting ? '⏳ Criando...' : '✅ Criar Pedido'}
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+  )
+}

@@ -1,268 +1,300 @@
 """
-Métricas Prometheus para o backend.
+Métricas Prometheus customizadas para WebSocket e sistema.
 
-Expõe métricas de:
-- Requisições HTTP
-- Latência
-- Pedidos
-- Pagamentos
-- Entregas
+Coleta métricas de:
+- Conexões WebSocket ativas
+- Mensagens enviadas/recebidas
+- Latência de broadcasts
+- Redis Pub/Sub
+- Event batching
+- Erros e problemas
+
+Métricas são expostas no endpoint /metrics para coleta pelo Prometheus.
 """
 
+import logging
 import time
+from functools import wraps
 from typing import Callable
 
-from fastapi import Request, Response
-from starlette.middleware.base import BaseHTTPMiddleware
+from prometheus_client import Counter, Gauge, Histogram, Info
 
-from prometheus_client import (
-    Counter,
-    Histogram,
-    Gauge,
-    Info,
-    generate_latest,
-    CONTENT_TYPE_LATEST,
-    REGISTRY,
+logger = logging.getLogger(__name__)
+
+# ==================== Métricas WebSocket ====================
+
+# Conexões ativas
+websocket_connections_total = Gauge(
+    'websocket_connections_total',
+    'Total de conexões WebSocket ativas',
+    ['role', 'instance_id']
 )
 
-
-# ==================== Métricas de Requisições ====================
-
-# Contador de requisições HTTP
-http_requests_total = Counter(
-    "http_requests_total",
-    "Total de requisições HTTP",
-    ["method", "endpoint", "status"],
+websocket_users_total = Gauge(
+    'websocket_users_total',
+    'Total de usuários únicos conectados',
+    ['instance_id']
 )
 
-# Histograma de latência das requisições
-http_request_duration_seconds = Histogram(
-    "http_request_duration_seconds",
-    "Duração das requisições HTTP em segundos",
-    ["method", "endpoint"],
-    buckets=[0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0],
+# Mensagens
+websocket_messages_sent_total = Counter(
+    'websocket_messages_sent_total',
+    'Total de mensagens WebSocket enviadas',
+    ['type', 'instance_id']
 )
 
-# Requisições em andamento
-http_requests_in_progress = Gauge(
-    "http_requests_in_progress",
-    "Número de requisições HTTP em andamento",
-    ["method"],
+websocket_messages_received_total = Counter(
+    'websocket_messages_received_total',
+    'Total de mensagens WebSocket recebidas',
+    ['type', 'instance_id']
 )
 
-
-# ==================== Métricas de Negócio ====================
-
-# Pedidos
-orders_total = Counter(
-    "orders_total",
-    "Total de pedidos criados",
-    ["status", "payment_method"],
+websocket_messages_stored_total = Counter(
+    'websocket_messages_stored_total',
+    'Total de mensagens armazenadas no MessageStore',
+    ['instance_id']
 )
 
-orders_current = Gauge(
-    "orders_current",
-    "Pedidos por status",
-    ["status"],
+# Broadcast
+websocket_broadcast_duration_seconds = Histogram(
+    'websocket_broadcast_duration_seconds',
+    'Tempo de duração de broadcasts WebSocket',
+    ['filter_type', 'instance_id'],
+    buckets=[0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0]
 )
 
-# Pagamentos
-payments_total = Counter(
-    "payments_total",
-    "Total de pagamentos processados",
-    ["method", "status"],
+websocket_broadcast_recipients = Histogram(
+    'websocket_broadcast_recipients',
+    'Número de destinatários por broadcast',
+    ['filter_type', 'instance_id'],
+    buckets=[1, 2, 5, 10, 20, 50, 100, 200, 500, 1000]
 )
 
-payment_amount_total = Counter(
-    "payment_amount_total",
-    "Valor total de pagamentos",
-    ["method"],
+# Erros
+websocket_errors_total = Counter(
+    'websocket_errors_total',
+    'Total de erros WebSocket',
+    ['error_type', 'instance_id']
 )
 
-# Entregas
-deliveries_total = Counter(
-    "deliveries_total",
-    "Total de entregas",
-    ["status"],
+websocket_disconnects_total = Counter(
+    'websocket_disconnects_total',
+    'Total de desconexões WebSocket',
+    ['reason', 'instance_id']
 )
 
-delivery_duration_seconds = Histogram(
-    "delivery_duration_seconds",
-    "Tempo de entrega em segundos",
-    buckets=[300, 600, 1200, 1800, 2400, 3000, 3600],  # 5min a 1h
+# Heartbeat
+websocket_dead_connections_cleaned = Counter(
+    'websocket_dead_connections_cleaned',
+    'Conexões mortas limpas pelo heartbeat monitor',
+    ['instance_id']
 )
 
-# WhatsApp
-whatsapp_messages_total = Counter(
-    "whatsapp_messages_total",
-    "Total de mensagens WhatsApp",
-    ["direction", "type"],  # direction: in/out, type: text/image/button
+# ==================== Métricas Redis Pub/Sub ====================
+
+redis_pubsub_messages_published = Counter(
+    'redis_pubsub_messages_published',
+    'Mensagens publicadas no Redis Pub/Sub',
+    ['channel', 'instance_id']
 )
 
-# IA/Ollama
-ai_requests_total = Counter(
-    "ai_requests_total",
-    "Total de requisições ao Ollama",
-    ["model", "status"],
+redis_pubsub_messages_received = Counter(
+    'redis_pubsub_messages_received',
+    'Mensagens recebidas do Redis Pub/Sub',
+    ['channel', 'from_instance', 'instance_id']
 )
 
-ai_request_duration_seconds = Histogram(
-    "ai_request_duration_seconds",
-    "Tempo de resposta do Ollama",
-    buckets=[0.1, 0.5, 1.0, 2.0, 5.0, 10.0, 30.0],
+# ==================== Métricas Event Batcher ====================
+
+event_batcher_events_received = Counter(
+    'event_batcher_events_received',
+    'Eventos adicionados ao batcher',
+    ['event_type', 'instance_id']
 )
 
-# Asaas
-asaas_requests_total = Counter(
-    "asaas_requests_total",
-    "Total de requisições à API Asaas",
-    ["endpoint", "status"],
+event_batcher_batches_sent = Counter(
+    'event_batcher_batches_sent',
+    'Batches enviados pelo batcher',
+    ['instance_id']
 )
 
-# ==================== Info da aplicação ====================
-
-app_info = Info(
-    "gas_automation_app",
-    "Informações da aplicação Gas Automation",
+event_batcher_batch_size = Histogram(
+    'event_batcher_batch_size',
+    'Tamanho dos batches enviados',
+    ['instance_id'],
+    buckets=[1, 2, 5, 10, 20, 30, 40, 50, 75, 100, 150, 200]
 )
-app_info.info({
-    "version": "1.0.0",
-    "environment": "development",
-})
 
+event_batcher_buffer_size = Gauge(
+    'event_batcher_buffer_size',
+    'Tamanho atual do buffer do batcher',
+    ['instance_id']
+)
 
-# ==================== Middleware de Métricas ====================
+# ==================== Métricas Message Store ====================
 
-class MetricsMiddleware(BaseHTTPMiddleware):
-    """Middleware para coletar métricas de requisições HTTP."""
+message_store_messages_stored = Counter(
+    'message_store_messages_stored',
+    'Mensagens armazenadas no MessageStore',
+    ['user_id', 'instance_id']
+)
 
-    async def dispatch(self, request: Request, call_next: Callable) -> Response:
-        method = request.method
-        path = request.url.path
+message_store_replay_requests = Counter(
+    'message_store_replay_requests',
+    'Requisições de replay de mensagens',
+    ['instance_id']
+)
 
-        # Simplificar path para evitar cardinalidade alta
-        endpoint = self._normalize_path(path)
+message_store_replay_messages_sent = Histogram(
+    'message_store_replay_messages_sent',
+    'Número de mensagens enviadas em replay',
+    ['instance_id'],
+    buckets=[0, 1, 5, 10, 20, 50, 100, 200]
+)
 
-        # Incrementar requisições em andamento
-        http_requests_in_progress.labels(method=method).inc()
+# ==================== Métricas de Sistema ====================
 
-        # Medir tempo de resposta
-        start_time = time.perf_counter()
+system_info = Info(
+    'gas_automation_system',
+    'Informações sobre o sistema Gas Automation'
+)
 
-        try:
-            response = await call_next(request)
-            status = str(response.status_code)
-        except Exception:
-            status = "500"
-            raise
-        finally:
-            # Calcular duração
-            duration = time.perf_counter() - start_time
+system_uptime_seconds = Gauge(
+    'system_uptime_seconds',
+    'Tempo de atividade do sistema em segundos',
+    ['instance_id']
+)
 
-            # Registrar métricas
-            http_requests_total.labels(
-                method=method,
-                endpoint=endpoint,
-                status=status,
-            ).inc()
+# ==================== Decoradores para Instrumentação ====================
 
-            http_request_duration_seconds.labels(
-                method=method,
-                endpoint=endpoint,
+def track_websocket_broadcast(filter_type: str = "all"):
+    """
+    Decorator para rastrear duração e destinatários de broadcasts.
+    
+    Uso:
+        @track_websocket_broadcast(filter_type="role")
+        async def broadcast_to_role(self, ...):
+            ...
+    """
+    def decorator(func: Callable):
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            start_time = time.time()
+            
+            # Executar função
+            result = await func(*args, **kwargs)
+            
+            # Registrar duração
+            duration = time.time() - start_time
+            instance_id = getattr(args[0], 'instance_id', 'unknown') if args else 'unknown'
+            
+            websocket_broadcast_duration_seconds.labels(
+                filter_type=filter_type,
+                instance_id=instance_id
             ).observe(duration)
-
-            # Decrementar requisições em andamento
-            http_requests_in_progress.labels(method=method).dec()
-
-        return response
-
-    def _normalize_path(self, path: str) -> str:
-        """
-        Normaliza path para evitar cardinalidade alta.
-
-        Exemplo: /api/orders/123 -> /api/orders/{id}
-        """
-        parts = path.split("/")
-        normalized = []
-
-        for part in parts:
-            # Detectar UUIDs ou IDs numéricos
-            if self._is_id(part):
-                normalized.append("{id}")
-            else:
-                normalized.append(part)
-
-        return "/".join(normalized)
-
-    def _is_id(self, part: str) -> bool:
-        """Verifica se parte do path parece ser um ID."""
-        if not part:
-            return False
-
-        # UUID
-        if len(part) == 36 and part.count("-") == 4:
-            return True
-
-        # Numérico
-        if part.isdigit():
-            return True
-
-        # UUID sem hífens
-        if len(part) == 32 and all(c in "0123456789abcdef" for c in part.lower()):
-            return True
-
-        return False
+            
+            return result
+        return wrapper
+    return decorator
 
 
-# ==================== Endpoint de Métricas ====================
-
-async def metrics_endpoint():
-    """Endpoint que expõe métricas para o Prometheus."""
-    return Response(
-        content=generate_latest(REGISTRY),
-        media_type=CONTENT_TYPE_LATEST,
-    )
-
-
-# ==================== Funções de Registro ====================
-
-def record_order_created(status: str, payment_method: str):
-    """Registra criação de pedido."""
-    orders_total.labels(status=status, payment_method=payment_method).inc()
-
-
-def record_payment_processed(method: str, status: str, amount: float):
-    """Registra processamento de pagamento."""
-    payments_total.labels(method=method, status=status).inc()
-    if status == "confirmed":
-        payment_amount_total.labels(method=method).inc(amount)
-
-
-def record_delivery_completed(duration_seconds: float):
-    """Registra entrega concluída."""
-    deliveries_total.labels(status="completed").inc()
-    delivery_duration_seconds.observe(duration_seconds)
+def track_redis_publish():
+    """
+    Decorator para rastrear publicações no Redis.
+    """
+    def decorator(func: Callable):
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            result = await func(*args, **kwargs)
+            
+            # Obter instance_id se disponível
+            instance_id = getattr(args[0], 'instance_id', 'unknown') if args else 'unknown'
+            channel = args[1] if len(args) > 1 else 'unknown'
+            
+            redis_pubsub_messages_published.labels(
+                channel=channel,
+                instance_id=instance_id
+            ).inc()
+            
+            return result
+        return wrapper
+    return decorator
 
 
-def record_whatsapp_message(direction: str, msg_type: str = "text"):
-    """Registra mensagem WhatsApp."""
-    whatsapp_messages_total.labels(direction=direction, type=msg_type).inc()
+# ==================== Funções Helper ====================
+
+def update_websocket_metrics(manager, instance_id: str = "unknown"):
+    """
+    Atualiza métricas de WebSocket baseado no estado atual do ConnectionManager.
+    
+    Deve ser chamado periodicamente (ex: a cada 30s).
+    """
+    try:
+        # Total de conexões
+        total_connections = sum(len(conns) for conns in manager.connections.values())
+        websocket_connections_total.labels(role='all', instance_id=instance_id).set(total_connections)
+        
+        # Total de usuários únicos
+        websocket_users_total.labels(instance_id=instance_id).set(len(manager.connections))
+        
+        # Conexões por role
+        role_counts = {}
+        for user_conns in manager.connections.values():
+            for metadata in user_conns:
+                role = metadata.user_role.value
+                role_counts[role] = role_counts.get(role, 0) + 1
+        
+        for role, count in role_counts.items():
+            websocket_connections_total.labels(role=role, instance_id=instance_id).set(count)
+    
+    except Exception as e:
+        logger.error(f"❌ Erro ao atualizar métricas WebSocket: {e}")
 
 
-def record_ai_request(model: str, status: str, duration: float):
-    """Registra requisição ao Ollama."""
-    ai_requests_total.labels(model=model, status=status).inc()
-    ai_request_duration_seconds.observe(duration)
+def update_event_batcher_metrics(batcher, instance_id: str = "unknown"):
+    """
+    Atualiza métricas de Event Batcher.
+    
+    Deve ser chamado periodicamente (ex: a cada 30s).
+    """
+    try:
+        stats = batcher.get_stats()
+        
+        # Buffer size atual
+        event_batcher_buffer_size.labels(instance_id=instance_id).set(stats.get('buffer_size', 0))
+        
+        # Nota: Contadores já são atualizados em tempo real pelo batcher
+    
+    except Exception as e:
+        logger.error(f"❌ Erro ao atualizar métricas Event Batcher: {e}")
 
 
-def record_asaas_request(endpoint: str, status: str):
-    """Registra requisição à API Asaas."""
-    asaas_requests_total.labels(endpoint=endpoint, status=status).inc()
+def update_redis_bridge_metrics(bridge, instance_id: str = "unknown"):
+    """
+    Atualiza métricas de Redis Bridge.
+    
+    Deve ser chamado periodicamente (ex: a cada 30s).
+    """
+    try:
+        stats = bridge.get_stats()
+        # Métricas já são atualizadas em tempo real
+        pass
+    
+    except Exception as e:
+        logger.error(f"❌ Erro ao atualizar métricas Redis Bridge: {e}")
 
 
-def update_orders_gauge(pending: int, paid: int, delivered: int, cancelled: int):
-    """Atualiza gauge de pedidos por status."""
-    orders_current.labels(status="pending").set(pending)
-    orders_current.labels(status="paid").set(paid)
-    orders_current.labels(status="delivered").set(delivered)
-    orders_current.labels(status="cancelled").set(cancelled)
+def init_system_info(version: str = "1.0.0", environment: str = "production"):
+    """
+    Inicializa informações do sistema.
+    """
+    system_info.info({
+        'version': version,
+        'environment': environment,
+        'service': 'gas-automation-backend',
+    })
+
+
+# ==================== Logger de Métricas ====================
+
+logger.info("📊 Métricas Prometheus customizadas inicializadas")
