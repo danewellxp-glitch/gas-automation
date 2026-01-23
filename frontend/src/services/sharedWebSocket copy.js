@@ -1,14 +1,15 @@
 /**
  * Serviço WebSocket Compartilhado com Deduplicação de Abas
- * 
+ *
  * Usa BroadcastChannel API para compartilhar UMA única conexão WebSocket
  * entre TODAS as abas abertas do mesmo origin.
- * 
+ *
  * Benefícios:
  * - Reduz tráfego em 80-90% (5 abas = 1 conexão ao invés de 5)
  * - Economia de recursos do servidor
  * - Mensagens sincronizadas entre abas
  */
+import logger from '../utils/logger'
 
 const WS_URL = import.meta.env.VITE_WS_URL || 'ws://192.168.10.156:8000/ws'
 const RECONNECT_DELAY = 3000
@@ -44,7 +45,7 @@ class SharedWebSocketService {
   init() {
     // Verificar suporte a BroadcastChannel
     if (typeof BroadcastChannel === 'undefined') {
-      console.warn('BroadcastChannel não suportado. Cada aba terá sua própria conexão.')
+      logger.warn('BroadcastChannel não suportado. Cada aba terá sua própria conexão.')
       this.isLeader = true
       this.connect()
       return
@@ -107,7 +108,7 @@ class SharedWebSocketService {
   }
 
   becomeLeader() {
-    console.log(`[Tab ${this.tabId}] Tornando-se líder`)
+    logger.log(`[Tab ${this.tabId}] Tornando-se líder`)
     this.isLeader = true
     this.announceLeader()
     this.startLeaderHeartbeat()
@@ -146,7 +147,7 @@ class SharedWebSocketService {
     // Se não receber heartbeat do líder em 10s, tornar-se líder
     this.leaderHeartbeatTimeout = setTimeout(() => {
       if (!this.isLeader) {
-        console.warn('[SharedWebSocket] Líder não responde. Tornando-se líder.')
+        logger.warn('[SharedWebSocket] Líder não responde. Tornando-se líder.')
         this.becomeLeader()
       }
     }, this.HEARTBEAT_TIMEOUT)
@@ -166,7 +167,7 @@ class SharedWebSocketService {
     
     // Se não houver token, não tentar conectar (será rejeitado pelo backend)
     if (!token) {
-      console.warn(`[Leader Tab ${this.tabId}] Sem token, não conectando WebSocket`)
+      logger.warn(`[Leader Tab ${this.tabId}] Sem token, não conectando WebSocket`)
       return
     }
     
@@ -174,13 +175,13 @@ class SharedWebSocketService {
     // Se WS_URL = 'ws://192.168.10.156:8000/ws', então url = 'ws://192.168.10.156:8000/ws/dashboard'
     const url = `${WS_URL}/dashboard?token=${token}`
     
-    console.log(`[Leader Tab ${this.tabId}] Conectando WebSocket:`, url.replace(token, 'TOKEN_HIDDEN'))
+    logger.log(`[Leader Tab ${this.tabId}] Conectando WebSocket:`, url.replace(token, 'TOKEN_HIDDEN'))
 
     try {
       this.ws = new WebSocket(url)
 
       this.ws.onopen = () => {
-        console.log(`[Leader Tab ${this.tabId}] WebSocket conectado`)
+        logger.log(`[Leader Tab ${this.tabId}] WebSocket conectado`)
         this.reconnectAttempts = 0
         this.emit('connected', { timestamp: new Date(), isLeader: true })
       }
@@ -201,19 +202,19 @@ class SharedWebSocketService {
             })
           }
         } catch (e) {
-          console.error('[SharedWebSocket] Erro ao processar mensagem:', e)
+          logger.error('[SharedWebSocket] Erro ao processar mensagem:', e)
         }
       }
 
       this.ws.onclose = (event) => {
-        console.log(`[Leader Tab ${this.tabId}] WebSocket fechado:`, event.code, event.reason || '')
+        logger.log(`[Leader Tab ${this.tabId}] WebSocket fechado:`, event.code, event.reason || '')
         this.ws = null
         this.emit('disconnected', { timestamp: new Date(), code: event.code })
         
         // Se foi 403 (Unauthorized) ou 1008 (Policy Violation), token pode estar expirado
         // Não tentar reconectar infinitamente - usuário precisa fazer login novamente
         if (event.code === 403 || event.code === 1008) {
-          console.warn(`[SharedWebSocket] Conexão rejeitada (${event.code}). Token pode estar expirado. Parando tentativas de reconexão.`)
+          logger.warn(`[SharedWebSocket] Conexão rejeitada (${event.code}). Token pode estar expirado. Parando tentativas de reconexão.`)
           this.emit('unauthorized', { code: event.code, reason: event.reason })
           return
         }
@@ -222,16 +223,16 @@ class SharedWebSocketService {
         if (event.code !== 1000 && this.reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
           this.tryReconnect()
         } else if (this.reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
-          console.error('[SharedWebSocket] Máximo de tentativas de reconexão atingido')
+          logger.error('[SharedWebSocket] Máximo de tentativas de reconexão atingido')
         }
       }
 
       this.ws.onerror = (error) => {
-        console.error(`[Leader Tab ${this.tabId}] Erro WebSocket:`, error)
+        logger.error(`[Leader Tab ${this.tabId}] Erro WebSocket:`, error)
         this.emit('error', { error })
       }
     } catch (error) {
-      console.error('[SharedWebSocket] Erro ao criar WebSocket:', error)
+      logger.error('[SharedWebSocket] Erro ao criar WebSocket:', error)
       this.tryReconnect()
     }
   }
@@ -242,7 +243,7 @@ class SharedWebSocketService {
     this.reconnectAttempts++
     const delay = RECONNECT_DELAY * Math.min(this.reconnectAttempts, 5)
     
-    console.log(`[SharedWebSocket] Tentando reconectar em ${delay}ms (tentativa ${this.reconnectAttempts})`)
+    logger.log(`[SharedWebSocket] Tentando reconectar em ${delay}ms (tentativa ${this.reconnectAttempts})`)
     
     if (this.reconnectTimeout) {
       clearTimeout(this.reconnectTimeout)
@@ -257,7 +258,7 @@ class SharedWebSocketService {
     if (this.isLeader && this.ws?.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(data))
     } else {
-      console.warn('[SharedWebSocket] Não é possível enviar: não é líder ou conexão fechada')
+      logger.warn('[SharedWebSocket] Não é possível enviar: não é líder ou conexão fechada')
     }
   }
 
@@ -286,14 +287,14 @@ class SharedWebSocketService {
         try {
           callback(data)
         } catch (e) {
-          console.error('[SharedWebSocket] Erro no listener:', e)
+          logger.error('[SharedWebSocket] Erro no listener:', e)
         }
       })
     }
   }
 
   disconnect() {
-    console.log(`[Tab ${this.tabId}] Desconectando`)
+    logger.log(`[Tab ${this.tabId}] Desconectando`)
     
     // Limpar heartbeat
     if (this.leaderHeartbeatInterval) {
@@ -322,17 +323,7 @@ class SharedWebSocketService {
   }
 }
 
-// Instância singleton - DESABILITADO TEMPORARIAMENTE
-// const sharedWebSocketService = new SharedWebSocketService()
-
-// Mock que não faz nada para evitar erros
-const sharedWebSocketService = {
-  on: () => () => {},
-  emit: () => {},
-  send: () => {},
-  disconnect: () => {},
-  isLeader: false,
-  ws: null
-}
+// Instância singleton
+const sharedWebSocketService = new SharedWebSocketService()
 
 export default sharedWebSocketService

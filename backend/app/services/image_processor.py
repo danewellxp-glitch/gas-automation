@@ -11,15 +11,25 @@ logger = logging.getLogger(__name__)
 from typing import Optional, Dict, Any
 from pathlib import Path
 from PIL import Image
-import pytesseract
-import cv2
-import numpy as np
 import io
 from fastapi import UploadFile, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.integrations.minio_client import MinIOClient
+
+# Importações opcionais para processamento de imagens
+try:
+    import cv2
+    import numpy as np
+    import pytesseract
+    CV2_AVAILABLE = True
+except ImportError as e:
+    logger.warning(f"OpenCV/PIL extras não disponíveis: {e}. Funcionalidades de processamento de imagem limitadas.")
+    CV2_AVAILABLE = False
+    cv2 = None
+    np = None
+    pytesseract = None
 
 
 class ImageProcessor:
@@ -133,29 +143,38 @@ class ImageProcessor:
             result["dimensions"] = image.size
             result["format"] = image.format
 
-            # Converter para OpenCV para processamento
-            cv_image = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+            # Converter para OpenCV para processamento (se disponível)
+            if CV2_AVAILABLE:
+                try:
+                    cv_image = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
 
-            # OCR
-            try:
-                ocr_text = pytesseract.image_to_string(cv_image, lang='por+eng')
-                result["ocr_text"] = ocr_text.strip()
-                result["has_text"] = len(ocr_text.strip()) > 0
-            except Exception as e:
-                logger.warning(f"Erro no OCR: {e}")
-                result["ocr_text"] = None
-                result["has_text"] = False
+                    # OCR
+                    try:
+                        ocr_text = pytesseract.image_to_string(cv_image, lang='por+eng')
+                        result["ocr_text"] = ocr_text.strip()
+                        result["has_text"] = len(ocr_text.strip()) > 0
+                    except Exception as e:
+                        logger.warning(f"Erro no OCR: {e}")
+                        result["ocr_text"] = None
+                        result["has_text"] = False
 
-            # Análise de qualidade básica
-            result["quality_score"] = self._calculate_image_quality(cv_image)
+                    # Análise de qualidade básica
+                    result["quality_score"] = self._calculate_image_quality(cv_image)
+                except Exception as e:
+                    logger.warning(f"Erro no processamento OpenCV: {e}")
+                    result["quality_score"] = 0.0
+            else:
+                result["quality_score"] = 0.0
 
         except Exception as e:
             logger.error(f"Erro no processamento da imagem: {e}")
 
         return result
 
-    def _calculate_image_quality(self, cv_image: np.ndarray) -> float:
+    def _calculate_image_quality(self, cv_image) -> float:
         """Calcula uma pontuação básica de qualidade da imagem"""
+        if not CV2_AVAILABLE:
+            return 0.0
         try:
             # Converter para grayscale
             gray = cv2.cvtColor(cv_image, cv2.COLOR_BGR2GRAY)
@@ -173,6 +192,9 @@ class ImageProcessor:
 
     async def extract_text_from_image(self, image_path_or_url: str) -> Optional[str]:
         """Extrai texto de uma imagem usando OCR"""
+        if not CV2_AVAILABLE:
+            logger.warning("OpenCV não disponível. OCR desabilitado.")
+            return None
         try:
             # Se for URL do MinIO, baixar primeiro
             if image_path_or_url.startswith("http"):
@@ -189,6 +211,8 @@ class ImageProcessor:
 
     async def detect_document_type(self, image_content: bytes) -> str:
         """Detecta o tipo de documento na imagem"""
+        if not CV2_AVAILABLE:
+            return "desconhecido"
         try:
             image = Image.open(io.BytesIO(image_content))
             cv_image = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)

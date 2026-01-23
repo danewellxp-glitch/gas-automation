@@ -37,8 +37,8 @@ prometheus-fastapi-instrumentator==7.1.0
 # Image Processing
 Pillow==10.4.0
 pytesseract==0.3.13
-opencv-python-headless==4.8.1.78
-numpy==1.26.4  # Versão compatível com opencv-python-headless 4.8.1.78
+numpy>=1.24.0,<2.0.0  # Versão compatível com opencv-python-headless
+opencv-python-headless==4.10.0.84  # Versão mais recente com melhor compatibilidade
 
 # Firebird (Sistema Legado)
 fdb==2.0.2

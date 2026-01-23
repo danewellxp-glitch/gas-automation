@@ -86,7 +86,13 @@ export default function Login() {
       const targetRoute = ROLE_ROUTES[userRole] || '/operador'
       navigate(targetRoute, { replace: true })
     } catch (err) {
-      setError(err.message || 'Erro ao fazer login')
+      console.error('Erro completo no login:', err)
+      // Melhorar mensagem de erro para "Failed to fetch"
+      if (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
+        setError('Não foi possível conectar ao servidor. Verifique se o backend está rodando.')
+      } else {
+        setError(err.message || 'Erro ao fazer login')
+      }
     } finally {
       setLoading(false)
     }
@@ -137,13 +143,27 @@ export default function Login() {
             {/* Error Message */}
             {error && (
               <div 
-                className="mb-6 p-4 rounded-lg flex items-center gap-3"
+                className="mb-6 p-4 rounded-lg"
                 style={{ background: '#FEE2E2', border: '1px solid #E31E24' }}
               >
-                <svg className="w-5 h-5 flex-shrink-0" style={{ color: '#E31E24' }} fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                </svg>
-                <span style={{ color: '#991B1B' }}>{error}</span>
+                <div className="flex items-start gap-3">
+                  <svg className="w-5 h-5 flex-shrink-0 mt-0.5" style={{ color: '#E31E24' }} fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                  </svg>
+                  <div className="flex-1">
+                    <p style={{ color: '#991B1B', fontWeight: '500' }}>{error}</p>
+                    {error.includes('conectar ao servidor') && (
+                      <div className="mt-2 text-sm" style={{ color: '#7F1D1D' }}>
+                        <p className="mb-1">Possíveis soluções:</p>
+                        <ul className="list-disc list-inside space-y-1 ml-2">
+                          <li>Verifique se o backend está rodando</li>
+                          <li>Confirme a URL da API: {import.meta.env.VITE_API_URL || 'http://192.168.10.156:8000/api'}</li>
+                          <li>Verifique a conexão de rede</li>
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
             )}
 

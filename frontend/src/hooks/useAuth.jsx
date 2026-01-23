@@ -26,6 +26,8 @@ export function AuthProvider({ children }) {
       const apiUrl = import.meta.env.VITE_API_URL || 'http://192.168.10.156:8000/api'
       const loginUrl = `${apiUrl}/auth/login`
       
+      console.log('[useAuth] Tentando login em:', loginUrl)
+      
       const response = await fetch(loginUrl, {
         method: 'POST',
         headers: {
@@ -35,8 +37,15 @@ export function AuthProvider({ children }) {
       })
 
       if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.detail || 'Erro ao fazer login')
+        let errorMessage = 'Erro ao fazer login'
+        try {
+          const error = await response.json()
+          errorMessage = error.detail || error.message || errorMessage
+        } catch (e) {
+          // Se não conseguir parsear JSON, usar status text
+          errorMessage = response.statusText || `Erro ${response.status}`
+        }
+        throw new Error(errorMessage)
       }
 
       const data = await response.json()
@@ -55,6 +64,15 @@ export function AuthProvider({ children }) {
       })
     } catch (error) {
       console.error('Login error:', error)
+      
+      // Tratar erros de rede/CORS
+      if (error.message === 'Failed to fetch' || error.name === 'TypeError') {
+        const apiUrl = import.meta.env.VITE_API_URL || 'http://192.168.10.156:8000/api'
+        throw new Error(
+          `Não foi possível conectar ao servidor. Verifique se o backend está rodando em ${apiUrl}`
+        )
+      }
+      
       throw error
     }
   }, [])
