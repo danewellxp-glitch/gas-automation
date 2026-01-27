@@ -31,37 +31,32 @@
 
 ---
 
-### 3. ⏳ **ESTOQUE** - PRECISA MAPEAR
-- **Tabela:** `ITEMSALDO` (descoberta)
-- **Status:** ⚠️ **PRECISA IMPLEMENTAR**
-- **Campos necessários:**
-  - ⏳ Código do produto (ITEM_ID → ITEM.REFERENCIA)
-  - ⏳ Quantidade atual (SALDO)
-  - ⏳ Estoque mínimo (verificar se existe)
-  - ⏳ Local de estoque (ESTLOCAL_ID)
-  - ⏳ Tipo de estoque (ESTTIPO_ID)
+### 3. ✅ **ESTOQUE** - JÁ IMPLEMENTADO
+- **Tabela:** `ITEMSALDO`
+- **Status:** ✅ Implementado
+- **Campos mapeados:**
+  - ✅ Código do produto (ITEM_ID → ITEM.REFERENCIA)
+  - ✅ Quantidade atual (SALDO)
+  - ✅ Local de estoque (ESTLOCAL_ID = 1 padrão)
+  - ✅ Tipo de estoque (ESTTIPO_ID = 1 padrão)
+  - ✅ Período (ANO, MES)
 
-**Query sugerida:**
+**Query implementada:**
 ```sql
-SELECT 
+SELECT
     I.REFERENCIA,
-    IS.SALDO,
-    IS.ESTLOCAL_ID,
-    IS.ESTTIPO_ID,
-    IS.ANO,
-    IS.MES
-FROM ITEMSALDO IS
-JOIN ITEM I ON IS.ITEM_ID = I.ID
-WHERE IS.ESTLOCAL_ID = 1  -- Estoque principal
-  AND IS.ESTTIPO_ID = 1   -- Tipo principal
-  AND IS.ANO = ?           -- Ano atual
-  AND IS.MES = ?           -- Mês atual
+    I.NOME,
+    ITS.SALDO
+FROM ITEMSALDO ITS
+JOIN ITEM I ON ITS.ITEM_ID = I.ID
+WHERE ITS.ESTLOCAL_ID = ?
+  AND ITS.ESTTIPO_ID = ?
+  AND ITS.ANO = ?
+  AND ITS.MES = ?
+ORDER BY I.REFERENCIA
 ```
 
-**⚠️ AÇÃO NECESSÁRIA:** Você precisa verificar no banco:
-- Qual `ESTLOCAL_ID` é o estoque principal?
-- Qual `ESTTIPO_ID` usar?
-- Como buscar o saldo mais recente (último mês/ano)?
+**Arquivo:** `backend/services/sync-service/app/sync/firebird_client.py` - método `get_stock_levels()`
 
 ---
 
@@ -89,13 +84,7 @@ WHERE IS.ESTLOCAL_ID = 1  -- Estoque principal
 
 ---
 
-## 🔍 Informações que Preciso de Você
-
-### Estoque (ITEMSALDO)
-1. Qual `ESTLOCAL_ID` representa o estoque principal?
-2. Qual `ESTTIPO_ID` usar para estoque disponível?
-3. Como buscar o saldo mais recente? (último mês/ano ou sempre atualiza?)
-4. Existe campo de estoque mínimo? (ou está em outra tabela?)
+## 🔍 Informações Pendentes (para exportação de pedidos)
 
 ### Pedidos/Vendas (TRADE)
 1. Qual tabela armazena os **itens** de uma venda? (`TRADEITEM`?)
@@ -104,30 +93,25 @@ WHERE IS.ESTLOCAL_ID = 1  -- Estoque principal
 4. Como relacionar com cliente? (PESSOA_ID já vi)
 5. Como relacionar com produtos? (ITEM_ID?)
 
-### Outras Tabelas
-1. Existe tabela de **bairros** para cálculo de frete? (vi `BAIRRO`)
-2. Existe tabela de **rotas** para entregas? (vi `ROTA`)
-3. Existe tabela de **transportadores/entregadores**? (vi `TRANSPORTADOR`)
-
 ---
 
 ## ✅ O que Já Está Pronto
 
-1. ✅ Conexão configurada
+1. ✅ Conexão configurada (.env com host 192.168.10.156)
 2. ✅ Produtos mapeados e implementados
 3. ✅ Clientes mapeados e implementados
 4. ✅ Pontos de venda mapeados e implementados
 5. ✅ Conversão de centavos para reais
 6. ✅ Busca de endereços
-7. ✅ Busca de telefones
+7. ✅ Busca de telefones (últimos 8 dígitos)
+8. ✅ Busca por CEP + número
+9. ✅ Estoque implementado (ITEMSALDO)
+10. ✅ Integração com bot WhatsApp
+11. ✅ Sync-service com schema correto
 
 ---
 
 ## 📝 Próximos Passos
 
-1. **Configurar `.env`** (fazer agora)
-2. **Reconstruir container** (fazer agora)
-3. **Testar produtos e clientes** (fazer agora)
-4. **Aguardar suas descobertas** sobre estoque e pedidos
-5. **Implementar estoque** (após suas descobertas)
-6. **Implementar exportação de pedidos** (após suas descobertas)
+1. ⏳ **Implementar exportação de pedidos** (tabela TRADE)
+2. ⏳ **Configurar sincronização automática** (opcional)
