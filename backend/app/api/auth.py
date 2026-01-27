@@ -1,0 +1,210 @@
+from datetime import timedelta
+from typing import Optional
+from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlmodel import select
+from pydantic import BaseModel
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+
+from app.database import get_db
+from app.auth import authenticate_user, create_access_token, get_current_user, create_user
+from app.models.auth_models import User
+from app.config import settings
+
+router = APIRouter()
+
+# Configurar limiter para este router
+limiter = Limiter(key_func=get_remote_address)
+
+class UserCreate(BaseModel):
+    username: str
+    email: str
+    full_name: str
+    password: str
+    role: Optional[str] = "user"
+
+class UserInfo(BaseModel):
+    id: int
+    username: str
+    email: str
+    full_name: str
+    role: str
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+    role: Optional[str] = "operator"
+    email: Optional[str] = None
+    user: Optional[UserInfo] = None
+
+class TokenData(BaseModel):
+    username: Optional[str] = None
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+@router.post("/login", response_model=Token)
+@limiter.limit("5/minute")  # 5 tentativas por minuto
+async def login_by_email(
+    request: Request,
+    credentials: LoginRequest,
+    session: AsyncSession = Depends(get_db)
+):
+    """Login endpoint using email and password"""
+    # Find user by email
+    stmt = select(User).where(User.email == credentials.email)
+    result = await session.execute(stmt)
+    user = result.scalar_one_or_none()
+    
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password",
+        )
+    
+    # Verify password
+    from app.auth import verify_password
+    if not verify_password(credentials.password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password",
+        )
+    
+    # Create token
+    access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
+    access_token = create_access_token(
+        data={"sub": user.username}, expires_delta=access_token_expires
+    )
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "role": user.role,
+        "email": user.email,
+        "user": {
+            "id": user.id,
+            "username": user.username,
+            "email": user.email,
+            "full_name": user.full_name,
+            "role": user.role
+        }
+    }
+
+@router.post("/register", response_model=Token)
+@limiter.limit("3/hour")  # 3 registros por hora
+async def register_user(
+    request: Request,
+    user_data: UserCreate,
+    session: AsyncSession = Depends(get_db)
+):
+    """Register a new user"""
+    # Check if user already exists
+    result = await session.execute(
+        select(User).where(User.username == user_data.username)
+    )
+    if result.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Username already registered"
+        )
+
+    # Create user
+    user = await create_user(
+        session=session,
+        username=user_data.username,
+        email=user_data.email,
+        full_name=user_data.full_name,
+        password=user_data.password,
+        role=user_data.role
+    )
+
+    # Create access token
+    access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
+    access_token = create_access_token(
+        data={"sub": user.username}, expires_delta=access_token_expires
+    )
+
+    return {"access_token": access_token, "token_type": "bearer"}
+
+@router.post("/token", response_model=Token)
+@limiter.limit("5/minute")  # 5 tentativas por minuto
+async def login_for_access_token(
+    request: Request,
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    session: AsyncSession = Depends(get_db)
+):
+    """Login endpoint"""
+    user = await authenticate_user(session, form_data.username, form_data.password)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
+    access_token = create_access_token(
+        data={"sub": user.username}, expires_delta=access_token_expires
+    )
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "role": user.role,
+        "email": user.email
+    }
+
+@router.get("/users/me", response_model=User)
+async def read_users_me(current_user: User = Depends(get_current_user)):
+    """Get current user information"""
+    return current_user
+
+@router.put("/users/me")
+async def update_user(
+    full_name: Optional[str] = None,
+    email: Optional[str] = None,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db)
+):
+    """Update current user information"""
+    if full_name:
+        current_user.full_name = full_name
+    if email:
+        current_user.email = email
+
+    session.add(current_user)
+    await session.commit()
+    await session.refresh(current_user)
+    return {"message": "User updated successfully"}
+
+
+@router.post("/refresh-token", response_model=Token)
+async def refresh_token(
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db)
+):
+    """
+    Gera novo access token para usuario autenticado.
+
+    O usuario deve enviar o token atual no header Authorization.
+    Se o token ainda for valido, um novo token e gerado.
+    """
+    if not current_user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Usuario desativado"
+        )
+
+    # Criar novo token
+    access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
+    new_access_token = create_access_token(
+        data={"sub": current_user.username},
+        expires_delta=access_token_expires
+    )
+
+    return {
+        "access_token": new_access_token,
+        "token_type": "bearer",
+        "role": current_user.role,
+        "email": current_user.email
+    }

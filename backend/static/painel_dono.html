@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel do Dono - Gas Automation</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>👑 Painel do Dono</h1>
+            <nav class="nav">
+                <a href="/static/dashboard.html" class="nav-link">← Voltar ao Dashboard</a>
+            </nav>
+        </header>
+
+        <main class="main-content">
+            <div class="owner-dashboard">
+                <!-- Overview Cards -->
+                <div class="overview-cards">
+                    <div class="metric-card">
+                        <div class="metric-icon">💰</div>
+                        <div class="metric-content">
+                            <h3>Receita Hoje</h3>
+                            <div class="metric-value" id="revenue-today">R$ 0,00</div>
+                            <div class="metric-change positive" id="revenue-change">+0%</div>
+                        </div>
+                    </div>
+
+                    <div class="metric-card">
+                        <div class="metric-icon">📦</div>
+                        <div class="metric-content">
+                            <h3>Pedidos Hoje</h3>
+                            <div class="metric-value" id="orders-today">0</div>
+                            <div class="metric-change positive" id="orders-change">+0%</div>
+                        </div>
+                    </div>
+
+                    <div class="metric-card">
+                        <div class="metric-icon">👥</div>
+                        <div class="metric-content">
+                            <h3>Novos Clientes</h3>
+                            <div class="metric-value" id="new-customers">0</div>
+                            <div class="metric-change positive" id="customers-change">+0%</div>
+                        </div>
+                    </div>
+
+                    <div class="metric-card">
+                        <div class="metric-icon">⭐</div>
+                        <div class="metric-content">
+                            <h3>Avaliação Média</h3>
+                            <div class="metric-value" id="avg-rating">0.0</div>
+                            <div class="metric-change positive" id="rating-change">+0%</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Charts Section -->
+                <div class="charts-section">
+                    <div class="chart-container">
+                        <h3>Vendas por Período</h3>
+                        <canvas id="sales-chart"></canvas>
+                    </div>
+
+                    <div class="chart-container">
+                        <h3>Pedidos por Status</h3>
+                        <canvas id="orders-status-chart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Recent Activity -->
+                <div class="activity-section">
+                    <h3>Atividades Recentes</h3>
+                    <div class="activity-list" id="recent-activity">
+                        <!-- Activity items will be loaded here -->
+                    </div>
+                </div>
+
+                <!-- Quick Actions -->
+                <div class="quick-actions">
+                    <h3>Ações Rápidas</h3>
+                    <div class="action-buttons">
+                        <button class="btn-primary action-btn" onclick="window.location.href='/static/cadastro.html'">
+                            ➕ Novo Cliente
+                        </button>
+                        <button class="btn-secondary action-btn" onclick="exportReport()">
+                            📊 Relatório
+                        </button>
+                        <button class="btn-secondary action-btn" onclick="window.location.href='/static/logs.html'">
+                            📋 Ver Logs
+                        </button>
+                        <button class="btn-warning action-btn" onclick="showSettings()">
+                            ⚙️ Configurações
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Top Products -->
+                <div class="top-products">
+                    <h3>Produtos Mais Vendidos</h3>
+                    <div class="products-list" id="top-products">
+                        <!-- Top products will be loaded here -->
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Configurações do Sistema</h3>
+                <span class="modal-close" onclick="closeSettings()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <form id="settings-form">
+                    <div class="form-group">
+                        <label for="business-hours">Horário de Funcionamento</label>
+                        <input type="text" id="business-hours" placeholder="Ex: 8:00-18:00">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="delivery-fee">Taxa de Entrega (R$)</label>
+                        <input type="number" id="delivery-fee" step="0.01" placeholder="0.00">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="min-order">Pedido Mínimo (R$)</label>
+                        <input type="number" id="min-order" step="0.01" placeholder="0.00">
+                    </div>
+
+                    <div class="form-group checkbox-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="auto-accept-orders">
+                            Aceitar pedidos automaticamente
+                        </label>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="submit" class="btn-primary">Salvar</button>
+                        <button type="button" onclick="closeSettings()" class="btn-secondary">Cancelar</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="/static/app.js"></script>
+    <script>
+        let salesChart, ordersStatusChart;
+
+        // Load dashboard data on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            loadDashboardData();
+            initializeCharts();
+        });
+
+        async function loadDashboardData() {
+            try {
+                const response = await fetch('/api/dashboard/owner', {
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    updateMetrics(data.metrics);
+                    updateActivity(data.activity);
+                    updateTopProducts(data.topProducts);
+                    updateCharts(data.chartData);
+                }
+            } catch (error) {
+                console.error('Erro ao carregar dados do dashboard:', error);
+            }
+        }
+
+        function updateMetrics(metrics) {
+            document.getElementById('revenue-today').textContent = `R$ ${metrics.revenueToday.toFixed(2)}`;
+            document.getElementById('orders-today').textContent = metrics.ordersToday;
+            document.getElementById('new-customers').textContent = metrics.newCustomers;
+            document.getElementById('avg-rating').textContent = metrics.avgRating.toFixed(1);
+
+            // Update change indicators
+            updateChangeIndicator('revenue-change', metrics.revenueChange);
+            updateChangeIndicator('orders-change', metrics.ordersChange);
+            updateChangeIndicator('customers-change', metrics.customersChange);
+            updateChangeIndicator('rating-change', metrics.ratingChange);
+        }
+
+        function updateChangeIndicator(elementId, change) {
+            const element = document.getElementById(elementId);
+            const isPositive = change >= 0;
+            element.textContent = `${isPositive ? '+' : ''}${change.toFixed(1)}%`;
+            element.className = `metric-change ${isPositive ? 'positive' : 'negative'}`;
+        }
+
+        function updateActivity(activities) {
+            const activityList = document.getElementById('recent-activity');
+            const html = activities.map(activity => `
+                <div class="activity-item">
+                    <div class="activity-icon">${getActivityIcon(activity.type)}</div>
+                    <div class="activity-content">
+                        <div class="activity-text">${activity.description}</div>
+                        <div class="activity-time">${formatTimeAgo(activity.timestamp)}</div>
+                    </div>
+                </div>
+            `).join('');
+            activityList.innerHTML = html;
+        }
+
+        function updateTopProducts(products) {
+            const productsList = document.getElementById('top-products');
+            const html = products.map(product => `
+                <div class="product-item">
+                    <div class="product-name">${product.name}</div>
+                    <div class="product-sales">${product.sales} vendas</div>
+                    <div class="product-revenue">R$ ${product.revenue.toFixed(2)}</div>
+                </div>
+            `).join('');
+            productsList.innerHTML = html;
+        }
+
+        function initializeCharts() {
+            // Sales chart
+            const salesCtx = document.getElementById('sales-chart').getContext('2d');
+            salesChart = new Chart(salesCtx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Vendas (R$)',
+                        data: [],
+                        borderColor: '#4CAF50',
+                        backgroundColor: 'rgba(76, 175, 80, 0.1)',
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return 'R$ ' + value.toFixed(2);
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Orders status chart
+            const ordersCtx = document.getElementById('orders-status-chart').getContext('2d');
+            ordersStatusChart = new Chart(ordersCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Pendente', 'Confirmado', 'Em Trânsito', 'Entregue', 'Cancelado'],
+                    datasets: [{
+                        data: [0, 0, 0, 0, 0],
+                        backgroundColor: [
+                            '#FFC107',
+                            '#2196F3',
+                            '#FF9800',
+                            '#4CAF50',
+                            '#F44336'
+                        ]
+                    }]
+                },
+                options: {
+                    responsive: true
+                }
+            });
+        }
+
+        function updateCharts(chartData) {
+            if (chartData.sales) {
+                salesChart.data.labels = chartData.sales.labels;
+                salesChart.data.datasets[0].data = chartData.sales.data;
+                salesChart.update();
+            }
+
+            if (chartData.ordersStatus) {
+                ordersStatusChart.data.datasets[0].data = chartData.ordersStatus;
+                ordersStatusChart.update();
+            }
+        }
+
+        function getActivityIcon(type) {
+            const icons = {
+                'order': '📦',
+                'payment': '💰',
+                'customer': '👥',
+                'delivery': '🚚',
+                'system': '⚙️'
+            };
+            return icons[type] || '📝';
+        }
+
+        function formatTimeAgo(timestamp) {
+            const now = new Date();
+            const time = new Date(timestamp);
+            const diff = now - time;
+
+            const minutes = Math.floor(diff / 60000);
+            const hours = Math.floor(diff / 3600000);
+            const days = Math.floor(diff / 86400000);
+
+            if (days > 0) return `${days} dia${days > 1 ? 's' : ''} atrás`;
+            if (hours > 0) return `${hours} hora${hours > 1 ? 's' : ''} atrás`;
+            if (minutes > 0) return `${minutes} minuto${minutes > 1 ? 's' : ''} atrás`;
+            return 'Agora';
+        }
+
+        function exportReport() {
+            // Implement report export functionality
+            alert('Funcionalidade de exportação em desenvolvimento');
+        }
+
+        function showSettings() {
+            document.getElementById('settings-modal').style.display = 'block';
+            loadSettings();
+        }
+
+        function closeSettings() {
+            document.getElementById('settings-modal').style.display = 'none';
+        }
+
+        async function loadSettings() {
+            try {
+                const response = await fetch('/api/settings', {
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    }
+                });
+
+                if (response.ok) {
+                    const settings = await response.json();
+                    document.getElementById('business-hours').value = settings.businessHours || '';
+                    document.getElementById('delivery-fee').value = settings.deliveryFee || '';
+                    document.getElementById('min-order').value = settings.minOrder || '';
+                    document.getElementById('auto-accept-orders').checked = settings.autoAcceptOrders || false;
+                }
+            } catch (error) {
+                console.error('Erro ao carregar configurações:', error);
+            }
+        }
+
+        // Settings form submission
+        document.getElementById('settings-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const settings = {
+                businessHours: document.getElementById('business-hours').value,
+                deliveryFee: parseFloat(document.getElementById('delivery-fee').value) || 0,
+                minOrder: parseFloat(document.getElementById('min-order').value) || 0,
+                autoAcceptOrders: document.getElementById('auto-accept-orders').checked
+            };
+
+            try {
+                const response = await fetch('/api/settings', {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    },
+                    body: JSON.stringify(settings)
+                });
+
+                if (response.ok) {
+                    alert('Configurações salvas com sucesso!');
+                    closeSettings();
+                } else {
+                    alert('Erro ao salvar configurações');
+                }
+            } catch (error) {
+                alert('Erro de conexão');
+            }
+        });
+
+        // Auto refresh every 5 minutes
+        setInterval(loadDashboardData, 300000);
+    </script>
+</body>
+</html>

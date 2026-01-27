@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard do Operador - Gas Automation</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="dashboard-container">
+        <header class="dashboard-header">
+            <h1>Dashboard do Operador</h1>
+            <div class="header-actions">
+                <span id="current-time"></span>
+                <button id="logout-btn" class="btn-secondary">Sair</button>
+            </div>
+        </header>
+
+        <nav class="dashboard-nav">
+            <button class="nav-btn active" data-tab="chats">Conversas</button>
+            <button class="nav-btn" data-tab="orders">Pedidos</button>
+            <button class="nav-btn" data-tab="customers">Clientes</button>
+            <button class="nav-btn" data-tab="reports">Relatórios</button>
+            <a href="/static/operador.html" class="nav-btn" style="text-decoration: none;">Painel Operador</a>
+            <a href="/static/painel_admin.html" class="nav-btn" style="text-decoration: none;">Painel Admin</a>
+        </nav>
+
+        <main class="dashboard-main">
+            <!-- Tab Conversas -->
+            <div id="chats-tab" class="tab-content active">
+                <div class="tab-header">
+                    <h2>Conversas Ativas</h2>
+                    <div class="filters">
+                        <select id="status-filter">
+                            <option value="all">Todos os Status</option>
+                            <option value="pending">Pendente</option>
+                            <option value="active">Ativo</option>
+                            <option value="closed">Fechado</option>
+                        </select>
+                    </div>
+                </div>
+                <div id="chats-list" class="chats-list">
+                    <!-- Conversas serão carregadas dinamicamente -->
+                </div>
+            </div>
+
+            <!-- Tab Pedidos -->
+            <div id="orders-tab" class="tab-content">
+                <div class="tab-header">
+                    <h2>Pedidos Recentes</h2>
+                    <button class="btn-primary" id="new-order-btn">Novo Pedido</button>
+                </div>
+                <div id="orders-list" class="orders-list">
+                    <!-- Pedidos serão carregados dinamicamente -->
+                </div>
+            </div>
+
+            <!-- Tab Clientes -->
+            <div id="customers-tab" class="tab-content">
+                <div class="tab-header">
+                    <h2>Clientes</h2>
+                    <button class="btn-primary" id="new-customer-btn">Novo Cliente</button>
+                </div>
+                <div id="customers-list" class="customers-list">
+                    <!-- Clientes serão carregados dinamicamente -->
+                </div>
+            </div>
+
+            <!-- Tab Relatórios -->
+            <div id="reports-tab" class="tab-content">
+                <div class="tab-header">
+                    <h2>Relatórios</h2>
+                </div>
+                <div class="reports-grid">
+                    <div class="report-card">
+                        <h3>Pedidos Hoje</h3>
+                        <div class="metric" id="orders-today">0</div>
+                    </div>
+                    <div class="report-card">
+                        <h3>Receita Hoje</h3>
+                        <div class="metric" id="revenue-today">R$ 0,00</div>
+                    </div>
+                    <div class="report-card">
+                        <h3>Conversas Ativas</h3>
+                        <div class="metric" id="active-chats">0</div>
+                    </div>
+                    <div class="report-card">
+                        <h3>Clientes Novos</h3>
+                        <div class="metric" id="new-customers">0</div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Chat Panel -->
+        <aside id="chat-panel" class="chat-panel">
+            <div class="chat-header">
+                <h3 id="chat-contact-name">Selecione uma conversa</h3>
+                <button id="close-chat-btn">&times;</button>
+            </div>
+            <div id="chat-messages" class="chat-messages">
+                <!-- Mensagens serão carregadas dinamicamente -->
+            </div>
+            <div class="chat-input">
+                <input type="text" id="message-input" placeholder="Digite sua mensagem...">
+                <button id="send-message-btn" class="btn-primary">Enviar</button>
+            </div>
+        </aside>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

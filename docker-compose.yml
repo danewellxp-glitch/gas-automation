@@ -1,0 +1,486 @@
+services:
+  # ===========================================
+  # API GATEWAY - TRAEFIK
+  # ===========================================
+  traefik:
+    image: traefik:v2.11
+    container_name: gas_traefik
+    restart: unless-stopped
+    command:
+      # API e Dashboard (Seguro - não exposto publicamente)
+      - "--api.insecure=false"
+      - "--api.dashboard=true"
+      # Providers
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.network=gas_network"
+      # Entrypoints
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      # Logs
+      - "--log.level=INFO"
+      - "--accesslog=true"
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080"  # Dashboard Traefik
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    labels:
+      - "traefik.enable=true"
+      # Dashboard
+      - "traefik.http.routers.traefik.rule=Host(`traefik.localhost`)"
+      - "traefik.http.routers.traefik.service=api@internal"
+      - "traefik.http.routers.traefik.entrypoints=web"
+    networks:
+      - gas_network
+    profiles:
+      - gateway
+
+  # ===========================================
+  # STORAGE - MINIO
+  # ===========================================
+  minio:
+    image: minio/minio:latest
+    container_name: gas_minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin123}
+    ports:
+      - "9000:9000"  # API S3
+      - "9001:9001"  # Console Web
+    volumes:
+      - minio_data:/data
+    networks:
+      - gas_network
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.minio.rule=Host(`minio.localhost`)"
+      - "traefik.http.routers.minio.entrypoints=web"
+      - "traefik.http.services.minio.loadbalancer.server.port=9001"
+    profiles:
+      - storage
+
+  # ===========================================
+  # BANCO DE DADOS - POSTGRESQL
+  # ===========================================
+  postgres:
+    image: postgres:15-alpine
+    container_name: gas_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-gasadmin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-gasadmin123}
+      POSTGRES_DB: ${POSTGRES_DB:-gas_automation}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+    networks:
+      - gas_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-gasadmin} -d ${POSTGRES_DB:-gas_automation}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ===========================================
+  # BACKUP AUTOMATICO - POSTGRESQL
+  # ===========================================
+  postgres-backup:
+    image: prodrigestivill/postgres-backup-local
+    container_name: gas_postgres_backup
+    restart: unless-stopped
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_DB: ${POSTGRES_DB:-gas_automation}
+      POSTGRES_USER: ${POSTGRES_USER:-gasadmin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-gasadmin123}
+      SCHEDULE: "0 2 * * *"
+      BACKUP_KEEP_DAYS: 7
+      BACKUP_KEEP_WEEKS: 4
+      BACKUP_KEEP_MONTHS: 6
+      HEALTHCHECK_PORT: 8080
+    volumes:
+      - ./backups:/backups
+    networks:
+      - gas_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles:
+      - backup
+
+  # ===========================================
+  # CACHE - REDIS
+  # ===========================================
+  redis:
+    image: redis:7-alpine
+    container_name: gas_redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - gas_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ===========================================
+  # WHATSAPP - WAHA
+  # ===========================================
+  waha:
+    image: devlikeapro/waha:latest
+    container_name: gas_waha
+    restart: unless-stopped
+    environment:
+      WAHA_DEFAULT_ENGINE: WEBJS
+      WHATSAPP_HOOK_URL: http://backend:8000/webhooks/waha
+      WHATSAPP_HOOK_EVENTS: message,message.ack,session.status
+      WAHA_PRINT_QR: true
+      WAHA_LOG_LEVEL: info
+      WHATSAPP_API_KEY: ${WAHA_API_KEY}
+      WAHA_API_KEY_PLAIN: ${WAHA_API_KEY}
+      WAHA_APPS_ENABLED: "true"
+      WAHA_DASHBOARD_USERNAME: ${WAHA_DASHBOARD_USERNAME}
+      WAHA_DASHBOARD_PASSWORD: ${WAHA_DASHBOARD_PASSWORD}
+      WHATSAPP_SWAGGER_USERNAME: ${WHATSAPP_SWAGGER_USERNAME}
+      WHATSAPP_SWAGGER_PASSWORD: ${WHATSAPP_SWAGGER_PASSWORD}
+      REDIS_URL: redis://redis:6379/1
+      WAHA_REDIS_HOST: redis
+      WAHA_REDIS_PORT: 6379
+      WAHA_REDIS_DB: 1
+    ports:
+      - "3000:3000"
+    volumes:
+      - waha_data:/app/.waha
+    networks:
+      - gas_network
+    depends_on:
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_started
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.waha.rule=Host(`waha.localhost`)"
+      - "traefik.http.routers.waha.entrypoints=web"
+      - "traefik.http.services.waha.loadbalancer.server.port=3000"
+
+  # ===========================================
+  # BACKEND - FASTAPI
+  # ===========================================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: gas_backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-gasadmin}:${POSTGRES_PASSWORD:-gasadmin123}@postgres:5432/${POSTGRES_DB:-gas_automation}
+      REDIS_URL: redis://redis:6379/0
+      WAHA_URL: http://waha:3000
+      WAHA_API_KEY: ${WAHA_API_KEY:-gasautomation123}
+      ASAAS_API_KEY: ${ASAAS_API_KEY}
+      ASAAS_API_URL: ${ASAAS_API_URL:-https://api.asaas.com/v3}
+      OLLAMA_URL: http://ollama:11434
+      FIREBIRD_HOST: ${FIREBIRD_HOST:-}
+      FIREBIRD_DATABASE: ${FIREBIRD_DATABASE:-}
+      FIREBIRD_USER: ${FIREBIRD_USER:-SYSDBA}
+      FIREBIRD_PASSWORD: ${FIREBIRD_PASSWORD:-}
+      SECRET_KEY: ${SECRET_KEY:-supersecretkey123changeme}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      METRICS_TOKEN: ${METRICS_TOKEN}
+      DEBUG: ${DEBUG:-false}
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      # MinIO
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin123}
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+    networks:
+      - gas_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    # DESENVOLVIMENTO: usa --reload para hot-reload
+    # PRODUÇÃO: remover --reload e usar múltiplos workers
+    # command: gunicorn app.main:app -w 4 -k uvicorn.workers.UvicornWorker -b 0.0.0.0:8000
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    labels:
+      - "traefik.enable=true"
+      # Roteamento principal
+      - "traefik.http.routers.backend.rule=Host(`api.localhost`)"
+      - "traefik.http.routers.backend.entrypoints=web"
+      - "traefik.http.services.backend.loadbalancer.server.port=8000"
+      # Rate Limiting: 100 requests por segundo
+      - "traefik.http.middlewares.backend-ratelimit.ratelimit.average=100"
+      - "traefik.http.middlewares.backend-ratelimit.ratelimit.burst=50"
+      - "traefik.http.routers.backend.middlewares=backend-ratelimit"
+      # CORS Headers (Whitelist específica - Segurança)
+      - "traefik.http.middlewares.backend-cors.headers.accesscontrolallowmethods=GET,POST,PUT,DELETE,OPTIONS"
+      - "traefik.http.middlewares.backend-cors.headers.accesscontrolallowheaders=*"
+      - "traefik.http.middlewares.backend-cors.headers.accesscontrolalloworiginlist=http://192.168.10.156:3001,http://localhost:3001"
+
+  # ===========================================
+  # IA LOCAL - OLLAMA
+  # ===========================================
+  ollama:
+    image: ollama/ollama:latest
+    container_name: gas_ollama
+    restart: unless-stopped
+    volumes:
+      - ollama_data:/root/.ollama
+    ports:
+      - "11434:11434"
+    networks:
+      - gas_network
+    # Para GPU NVIDIA, descomente as linhas abaixo:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+  # ===========================================
+  # FRONTEND - REACT
+  # ===========================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: gas_frontend
+    restart: unless-stopped
+    environment:
+      VITE_API_URL: http://192.168.10.156:8000/api
+      VITE_WS_URL: ws://192.168.10.156:8000
+      VITE_SERVER_URL: http://192.168.10.156:8000
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    networks:
+      - gas_network
+    depends_on:
+      - backend
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3001/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    # DESENVOLVIMENTO: usa dev server com hot-reload
+    # PRODUÇÃO: usar build estático com nginx
+    # Ver frontend/Dockerfile.prod para configuração de produção
+    command: npm run dev -- --host 0.0.0.0 --port 3001
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.frontend.rule=Host(`192.168.10.156`)"
+      - "traefik.http.routers.frontend.entrypoints=web"
+      - "traefik.http.services.frontend.loadbalancer.server.port=3001"
+
+  # ===========================================
+  # NOTIFICATION SERVICE (MICROSERVIÇO)
+  # ===========================================
+  notification-service:
+    build:
+      context: ./backend/services/notification-service
+      dockerfile: Dockerfile
+    container_name: gas_notification_service
+    restart: unless-stopped
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      BACKEND_URL: http://backend:8000
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
+      TWILIO_PHONE_NUMBER: ${TWILIO_PHONE_NUMBER:-}
+      SENDGRID_API_KEY: ${SENDGRID_API_KEY:-}
+      SENDGRID_FROM_EMAIL: ${SENDGRID_FROM_EMAIL:-noreply@gasautomation.local}
+    ports:
+      - "8001:8001"
+    networks:
+      - gas_network
+    depends_on:
+      - redis
+      - backend
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.notifications.rule=Host(`notifications.localhost`)"
+      - "traefik.http.routers.notifications.entrypoints=web"
+      - "traefik.http.services.notifications.loadbalancer.server.port=8001"
+    profiles:
+      - microservices
+
+  # ===========================================
+  # INVENTORY SERVICE (MICROSERVIÇO)
+  # ===========================================
+  inventory-service:
+    build:
+      context: ./backend/services/inventory-service
+      dockerfile: Dockerfile
+    container_name: gas_inventory_service
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-gasadmin}:${POSTGRES_PASSWORD:-gasadmin123}@postgres:5432/${POSTGRES_DB:-gas_automation}
+      REDIS_URL: redis://redis:6379/0
+      LOW_STOCK_THRESHOLD: 10
+      CRITICAL_STOCK_THRESHOLD: 5
+    ports:
+      - "8002:8002"
+    networks:
+      - gas_network
+    depends_on:
+      - redis
+      - postgres
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.inventory.rule=Host(`inventory.localhost`)"
+      - "traefik.http.routers.inventory.entrypoints=web"
+      - "traefik.http.services.inventory.loadbalancer.server.port=8002"
+    profiles:
+      - microservices
+
+  # ===========================================
+  # OBSERVABILIDADE - PROMETHEUS
+  # ===========================================
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: gas_prometheus
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=15d'
+      - '--web.enable-lifecycle'
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    networks:
+      - gas_network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.prometheus.rule=Host(`prometheus.localhost`)"
+      - "traefik.http.routers.prometheus.entrypoints=web"
+      - "traefik.http.services.prometheus.loadbalancer.server.port=9090"
+    profiles:
+      - monitoring
+
+  # ===========================================
+  # OBSERVABILIDADE - GRAFANA
+  # ===========================================
+  grafana:
+    image: grafana/grafana:latest
+    container_name: gas_grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin123}
+      GF_USERS_ALLOW_SIGN_UP: false
+      GF_SERVER_DOMAIN: grafana.localhost
+      GF_SERVER_ROOT_URL: http://grafana.localhost
+    ports:
+      - "3002:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    networks:
+      - gas_network
+    depends_on:
+      - prometheus
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.grafana.rule=Host(`grafana.localhost`)"
+      - "traefik.http.routers.grafana.entrypoints=web"
+      - "traefik.http.services.grafana.loadbalancer.server.port=3000"
+    profiles:
+      - monitoring
+
+  # ===========================================
+  # FERRAMENTAS DE DESENVOLVIMENTO (OPCIONAL)
+  # ===========================================
+
+  # pgAdmin - Interface PostgreSQL
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: gas_pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@gasautomation.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin123}
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    networks:
+      - gas_network
+    depends_on:
+      - postgres
+    profiles:
+      - tools
+
+  # Redis Commander - Interface Redis
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: gas_redis_commander
+    restart: unless-stopped
+    environment:
+      REDIS_HOSTS: local:redis:6379
+    ports:
+      - "8081:8081"
+    networks:
+      - gas_network
+    depends_on:
+      - redis
+    profiles:
+      - tools
+
+# ===========================================
+# VOLUMES
+# ===========================================
+volumes:
+  postgres_data:
+  redis_data:
+  waha_data:
+  ollama_data:
+  pgadmin_data:
+  minio_data:
+  prometheus_data:
+  grafana_data:
+
+# ===========================================
+# NETWORKS
+# ===========================================
+networks:
+  gas_network:
+    name: gas_network
+    driver: bridge

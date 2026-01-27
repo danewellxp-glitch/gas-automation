@@ -1,0 +1,21 @@
+# Framework Web
+fastapi==0.109.2
+uvicorn[standard]==0.27.1
+
+# Banco de dados
+sqlalchemy[asyncio]==2.0.25
+asyncpg==0.29.0
+alembic==1.13.1
+
+# Redis
+redis==5.0.1
+
+# Validação
+pydantic==2.6.1
+pydantic-settings==2.1.0
+
+# Utilitários
+python-dotenv==1.0.1
+
+# Logs
+structlog==24.1.0
