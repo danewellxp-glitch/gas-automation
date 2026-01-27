@@ -1,0 +1,192 @@
+📚 GUIA DE TESTE - MENSAGENS AO VIVO NO WEBSOCKET
+==================================================
+
+## CREDENCIAIS DE TESTE CRIADAS:
+
+Email: admin@gasautomation.local
+Senha: Admin@123456
+
+## COMO TESTAR:
+
+### 1️⃣ PASSO 1: ABRA O DASHBOARD
+   
+   Acesse: http://localhost:3001
+   
+   Faça login com:
+   - Email: admin@gasautomation.local
+   - Senha: Admin@123456
+
+### 2️⃣ PASSO 2: ABRA O DEVELOPER CONSOLE (F12)
+
+   Pressione F12 no navegador
+   Vá para a aba "Console"
+   
+   Você deve ver:
+   ✅ "WebSocket conectado"
+   
+   Se ver erro 403/401 = problema de autenticação
+
+### 3️⃣ PASSO 3: ENVIE UMA MENSAGEM DE TESTE
+
+   No terminal, execute:
+   
+   ```bash
+   curl -X POST http://localhost:8000/webhooks/waha \
+     -H "Content-Type: application/json" \
+     -d '{
+       "event": "message",
+       "session": "default",
+       "payload": {
+         "from": "5541999999999@c.us",
+         "fromMe": false,
+         "id": "msg_test",
+         "body": "Olá! Esta é uma mensagem de teste",
+         "timestamp": '$(date +%s)',
+         "pushName": "Cliente Teste",
+         "_data": {"notifyName": "Cliente Teste"}
+       }
+     }'
+   ```
+
+### 4️⃣ PASSO 4: VERIFIQUE NO DASHBOARD
+
+   A mensagem deve aparecer IMEDIATAMENTE em:
+   - Dashboard → Conversas
+   - Com o nome "Cliente Teste"
+   - Com o conteúdo "Olá! Esta é uma mensagem de teste"
+
+## 🔍 DIAGNÓSTICO SE NÃO FUNCIONAR:
+
+### Opção A: Verificar logs do backend
+   
+   docker-compose logs backend -f
+   
+   Procure por:
+   - "WebSocket conectado" = conexão estabelecida ✅
+   - "WebSocket emitido para" = mensagem enviada ✅
+   - "Processando mensagem" = webhook recebido ✅
+
+### Opção B: Testar WebSocket puro
+   
+   Abra em novo navegador:
+   http://localhost:8888/test_websocket.html
+   
+   Isto NÃO usa autenticação e deve mostrar:
+   - "✅ WebSocket aberto!"
+   - "📨 Mensagem recebida: {"type":"new_message"...}"
+
+### Opção C: Verificar erro no console (F12)
+   
+   Tipos de erro comuns:
+   
+   1) "Error during WebSocket handshake: ..."
+      = Backend não está respondendo
+      Solução: docker-compose restart backend
+      
+   2) "HTTP 403 Forbidden"
+      = Token JWT inválido/expirado
+      Solução: Fazer logout e login novamente
+      
+   3) Nenhum erro, mas não recebe mensagem
+      = WebSocket conectado mas broadcast não está funcionando
+      Solução: Ver logs do backend com grep "broadcast"
+
+### Opção D: Testar endpoint de status
+   
+   curl http://localhost:8000/docs
+   
+   Deve retornar 200. Se retornar 502/503 = backend down
+
+## 📊 O QUE ESPERAMOS VER:
+
+### Cenário 1: Funcionando Perfeitamente ✅
+   
+   Terminal:
+   $ curl -X POST http://localhost:8000/webhooks/waha ...
+   {"status":"processing"}
+   
+   Backend logs:
+   === Processando mensagem ===
+   ChatID: 5541999999999@c.us
+   Sender: Cliente Teste
+   Body: Olá! Esta é uma mensagem de teste
+   WebSocket emitido para 5541999999999: Olá! Esta é uma mensagem de teste
+   
+   Dashboard:
+   [Conversas]
+   Cliente Teste: Olá! Esta é uma mensagem de teste (AGORA)
+
+### Cenário 2: WebSocket Não Conecta ❌
+   
+   Console (F12):
+   X WebSocket erro: WebSocket is closed before the connection is established
+   
+   Solução:
+   - Verificar se backend está rodando
+   - Verificar firewall/CORS
+   - Verificar token de autenticação
+
+### Cenário 3: WebSocket Conecta Mas Não Recebe ❌
+   
+   Console (F12):
+   ✅ WebSocket conectado
+   (mas nada mais aparece)
+   
+   Solução:
+   - Mensagem chegou no backend? Ver logs
+   - Backend processou? Procurar "WebSocket emitido"
+   - Frontend ouve? Adicionar console.log no onmessage
+
+## 🛠️ COMO DEBUGAR MAIS A FUNDO:
+
+### Adicionar logs no frontend
+   
+   Edite: /frontend/src/pages/admin/AdminDashboard.tsx
+   
+   Na função connectWebSocket, altere:
+   
+   ```tsx
+   ws.onmessage = (event) => {
+     const data = JSON.parse(event.data);
+     console.log('Mensagem recebida:', data);  // ← JÁ EXISTE
+     console.log('Type:', data.type);          // ← ADICIONE ISTO
+     console.log('Data:', data.data);          // ← ADICIONE ISTO
+   ```
+
+### Adicionar logs no backend
+   
+   Edite: /backend/app/api/websocket.py
+   
+   Na função broadcast, altere:
+   
+   ```python
+   async def broadcast(self, message: dict):
+       logger.debug(f"[BROADCAST] Enviando {message.get('type')} para {len(self.active_connections)} conexões")
+       print(f"[BROADCAST] Conexões ativas: {len(self.active_connections)}")  # ← ADICIONE
+       print(f"[BROADCAST] Mensagem: {message}")  # ← ADICIONE
+       
+       # ... resto do código
+   ```
+
+## 📋 CHECKLIST FINAL:
+
+- [ ] Backend está rodando: docker-compose ps
+- [ ] Frontend está rodando: docker-compose ps
+- [ ] Usuário criado com sucesso
+- [ ] Fez login no Dashboard
+- [ ] Console mostra "WebSocket conectado"
+- [ ] Enviou mensagem de teste via curl
+- [ ] Mensagem apareceu no Dashboard em tempo real
+- [ ] Se não funcionou, seguiu os passos de diagnóstico acima
+
+## 🎯 CONCLUSÃO:
+
+Se seguir estes passos e ainda não ver as mensagens, o problema está em:
+
+1. **Autenticação WebSocket** - Frontend envia token JWT inválido
+2. **Broadcast não funciona** - Conexão feita mas mensagem não é enviada
+3. **Network/Firewall** - Porta bloqueada ou CORS incorreto
+
+Execute os testes acima e compartilhe os resultados para eu ajudar!
+
+=============================================================
