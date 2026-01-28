@@ -200,6 +200,13 @@ services:
       FIREBIRD_DATABASE: ${FIREBIRD_DATABASE:-}
       FIREBIRD_USER: ${FIREBIRD_USER:-SYSDBA}
       FIREBIRD_PASSWORD: ${FIREBIRD_PASSWORD:-}
+      FIREBIRD_CHARSET: ${FIREBIRD_CHARSET:-UTF8}
+      FIREBIRD_EXPORT_ON_DELIVERED: ${FIREBIRD_EXPORT_ON_DELIVERED:-false}
+      FIREBIRD_TRADE_ESTAB_ID: ${FIREBIRD_TRADE_ESTAB_ID:-}
+      FIREBIRD_TRADE_TIPOMOVEST_ID: ${FIREBIRD_TRADE_TIPOMOVEST_ID:-}
+      FIREBIRD_TRADE_ESTLOCAL_ID: ${FIREBIRD_TRADE_ESTLOCAL_ID:-1}
+      FIREBIRD_TRADE_BXESTOQUE: ${FIREBIRD_TRADE_BXESTOQUE:-}
+      FIREBIRD_TRADE_BXFINANC: ${FIREBIRD_TRADE_BXFINANC:-}
       SECRET_KEY: ${SECRET_KEY:-supersecretkey123changeme}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY}
       METRICS_TOKEN: ${METRICS_TOKEN}
@@ -365,6 +372,41 @@ services:
       - "traefik.http.services.inventory.loadbalancer.server.port=8002"
     profiles:
       - microservices
+
+  # ===========================================
+  # SYNC SERVICE (SINCRONIZAÇÃO FIREBIRD)
+  # ===========================================
+  sync-service:
+    build:
+      context: ./backend/services/sync-service
+      dockerfile: Dockerfile
+    container_name: gas_sync_service
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-gasadmin}:${POSTGRES_PASSWORD:-gasadmin123}@postgres:5432/${POSTGRES_DB:-gas_automation}
+      REDIS_URL: redis://redis:6379/0
+      FIREBIRD_HOST: ${FIREBIRD_HOST:-}
+      FIREBIRD_DATABASE: ${FIREBIRD_DATABASE:-}
+      FIREBIRD_USER: ${FIREBIRD_USER:-SYSDBA}
+      FIREBIRD_PASSWORD: ${FIREBIRD_PASSWORD:-}
+      FIREBIRD_CHARSET: ${FIREBIRD_CHARSET:-UTF8}
+      SYNC_INTERVAL_MINUTES: 15
+      SYNC_BATCH_SIZE: 100
+      SYNC_ENABLED: "true"
+    ports:
+      - "8003:8003"
+    networks:
+      - gas_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.sync.rule=Host(`sync.localhost`)"
+      - "traefik.http.routers.sync.entrypoints=web"
+      - "traefik.http.services.sync.loadbalancer.server.port=8003"
 
   # ===========================================
   # OBSERVABILIDADE - PROMETHEUS
