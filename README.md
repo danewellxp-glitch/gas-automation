@@ -1,48 +1,48 @@
 # Gas Automation
 
-Sistema de automa��o de pedidos de g�s via WhatsApp, com dashboards operacionais e executivos, entregas (drivers) e integra��es com pagamentos e ERP.
+Sistema de automação de pedidos de gás via WhatsApp, com dashboards operacionais e executivos, entregas (drivers) e integrações com pagamentos e ERP.
 
-## Vis�o geral (executiva)
+## Visão geral (executiva)
 
-O **Gas Automation** organiza a opera��o de uma distribuidora de g�s em um fluxo �nico:
+O **Gas Automation** organiza a operação de uma distribuidora de gás em um fluxo único:
 
 - **Cliente faz pedido pelo WhatsApp** (bot/fluxo guiado).
-- **Opera��o valida, aprova e despacha** via painel.
+- **Operação valida, aprova e despacha** via painel.
 - **Entregador recebe e atualiza status em tempo real**.
-- **Pagamentos e integra��es** (ex.: Asaas e Firebird/ERP) podem ser automatizados.
+- **Pagamentos e integrações** (ex.: Asaas e Firebird/ERP) podem ser automatizados.
 
 ## Principais funcionalidades
 
 - **Pedidos**
-  - Cria��o por WhatsApp (fluxo com m�quina de estados)
-  - Cria��o manual via dashboard (operador)
-  - Status: `pending` ? `paid` ? `preparing` ? `dispatched` ? `delivered` (ou `cancelled`)
-  - Exporta��o (CSV) e relat�rios
+  - Criação por WhatsApp (fluxo com máquina de estados)
+  - Criação manual via dashboard (operador)
+  - Status: `pending` -> `paid` -> `preparing` -> `dispatched` -> `delivered` (ou `cancelled`)
+  - Exportação (CSV) e relatórios
 
 - **WhatsApp (WAHA)**
   - Webhook de mensagens recebidas
-  - Envio de respostas (texto, bot�es, etc.)
+  - Envio de respostas (texto, botões, etc.)
 
 - **Pagamentos (Asaas)**
-  - Cobran�a e atualiza��o de status via webhook
+  - Cobrança e atualização de status via webhook
 
 - **Entrega / Driver**
-  - Gest�o de entregas, atribui��o de driver e tracking operacional
+  - Gestão de entregas, atribuição de driver e tracking operacional
   - Painel do entregador (driver)
   - Logs de tempo do driver (time tracking)
 
 - **Tempo real (WebSocket)**
-  - Atualiza��es ao vivo para dashboards
-  - Otimiza��es para escala: filtros por role/bairro, rate limiting, heartbeat, batching e bridge Redis
+  - Atualizações ao vivo para dashboards
+  - Otimizações para escala: filtros por role/bairro, rate limiting, heartbeat, batching e bridge Redis
 
-- **Integra��o com ERP (Firebird)**
-  - Sincroniza��o e exporta��o fiscal/operacional (quando habilitado)
+- **Integração com ERP (Firebird)**
+  - Sincronização e exportação fiscal/operacional (quando habilitado)
 
 - **Observabilidade**
-  - M�tricas Prometheus (endpoint protegido)
+  - Métricas Prometheus (endpoint protegido)
   - Dashboards Grafana
 
-## Arquitetura (alto n�vel)
+## Arquitetura (alto nível)
 
 ```
 Cliente (WhatsApp) -> WAHA -> Webhook -> Flow Engine -> PostgreSQL
@@ -59,7 +59,7 @@ Infra: Docker Compose + Traefik + Redis + Prometheus/Grafana
 - **Banco**: PostgreSQL
 - **Cache/Mensageria**: Redis (inclui Pub/Sub para WebSocket)
 - **Frontend**: React + Vite + TailwindCSS
-- **Integra��es**: WAHA (WhatsApp), Asaas (pagamentos), Firebird (ERP)
+- **Integrações**: WAHA (WhatsApp), Asaas (pagamentos), Firebird (ERP)
 - **Observabilidade**: Prometheus + Grafana
 - **Infra**: Docker Compose (com Traefik)
 
@@ -67,21 +67,21 @@ Infra: Docker Compose + Traefik + Redis + Prometheus/Grafana
 
 | Role | Objetivo |
 |------|----------|
-| `admin` | Administra��o total do sistema |
-| `owner` | Vis�o executiva (KPIs, relat�rios) |
-| `operator` | Opera��o di�ria (pedidos, conversas, despacho) |
-| `driver` | Entregas e atualiza��o de status |
+| `admin` | Administração total do sistema |
+| `owner` | Visão executiva (KPIs, relatórios) |
+| `operator` | Operação diária (pedidos, conversas, despacho) |
+| `driver` | Entregas e atualização de status |
 
 ## Quickstart (Docker)
 
-Pr�-requisitos: Docker + Docker Compose.
+Pré-requisitos: Docker + Docker Compose.
 
 ```bash
 docker-compose up -d
 docker-compose ps
 ```
 
-## URLs (ambiente padr�o)
+## URLs (ambiente padrão)
 
 - **Frontend**: `http://localhost:3001`
 - **Backend API**: `http://localhost:8000`
@@ -92,20 +92,20 @@ docker-compose ps
 
 > Em rede/local, substitua `localhost` pelo IP do servidor (ex.: `192.168.10.156`).
 
-## Vari�veis de ambiente (essenciais)
+## Variáveis de ambiente (essenciais)
 
-As vari�veis s�o lidas do `.env` (veja `backend/app/config.py` e `docker-compose.yml`).
+As variáveis são lidas do `.env` (veja `backend/app/config.py` e `docker-compose.yml`).
 
-- **Seguran�a**
-  - `SECRET_KEY` (m�nimo 32 chars)
-  - `JWT_SECRET_KEY` (m�nimo 32 chars)
+- **Segurança**
+  - `SECRET_KEY` (mínimo 32 chars)
+  - `JWT_SECRET_KEY` (mínimo 32 chars)
   - `METRICS_TOKEN` (protege `/metrics`)
 
 - **Banco/Cache**
   - `DATABASE_URL`
   - `REDIS_URL`
 
-- **Integra��es**
+- **Integrações**
   - `WAHA_API_KEY`
   - `ASAAS_API_KEY` (se usar pagamentos)
   - `FIREBIRD_HOST`, `FIREBIRD_DATABASE`, `FIREBIRD_USER`, `FIREBIRD_PASSWORD` (se usar Firebird)
@@ -132,28 +132,28 @@ npm run dev
 
 ## Escalabilidade (9.000+ pedidos/semana)
 
-O backend inclui melhorias espec�ficas para volume e tempo real:
+O backend inclui melhorias específicas para volume e tempo real:
 
-- **WebSocket escal�vel**: filtros por role/bairro, deduplica��o por usu�rio, heartbeat e rate limiting.
+- **WebSocket escalável**: filtros por role/bairro, deduplicação por usuário, heartbeat e rate limiting.
 - **Event batching**: reduz significativamente o volume de mensagens em picos.
-- **Redis WebSocket Bridge**: suporte a m�ltiplas inst�ncias do backend via Redis Pub/Sub.
-- **Pagina��o**: endpoints paginados para evitar carregar ?tudo? no frontend.
+- **Redis WebSocket Bridge**: suporte a múltiplas instâncias do backend via Redis Pub/Sub.
+- **Paginação**: endpoints paginados para evitar carregar ?tudo? no frontend.
 
-Verifica��o t�cnica: `docs/relatorios/VERIFICACAO_CAPACIDADE_9000_PEDIDOS_28JAN2026.md`.
+Verificação técnica: `docs/relatorios/VERIFICACAO_CAPACIDADE_9000_PEDIDOS_28JAN2026.md`.
 
-## Documenta��o
+## Documentação
 
-- **Relat�rio executivo do sistema**: `docs/resumos/RELATORIO_EXECUTIVO_SISTEMA.md`
-- **Resumo 21/Jan (sprint/escala/seguran�a)**: `docs/resumos/RELATORIO_EXECUTIVO_DIA_21_JAN_2026.md`
+- **Relatório executivo do sistema**: `docs/resumos/RELATORIO_EXECUTIVO_SISTEMA.md`
+- **Resumo 21/Jan (sprint/escala/segurança)**: `docs/resumos/RELATORIO_EXECUTIVO_DIA_21_JAN_2026.md`
 - **Escalabilidade (fases 1/2)**: `docs/planos/ESCALABILIDADE_COMPLETA_FASES_1_2.md`
 
 ## Troubleshooting
 
-- **Frontend ?Failed to fetch? no login**: normalmente � backend fora do ar ou rede/porta bloqueada. Verifique `http://<host>:8000/health`.
-- **Backend com erro de OpenCV/NumPy**: reconstituir imagem do backend com depend�ncias compat�veis (ver `backend/requirements.txt`).
+- **Frontend ?Failed to fetch? no login**: normalmente é backend fora do ar ou rede/porta bloqueada. Verifique `http://<host>:8000/health`.
+- **Backend com erro de OpenCV/NumPy**: reconstruir imagem do backend com dependências compatíveis (ver `backend/requirements.txt`).
 - **Login redireciona e fica em branco**: normalmente token expirado no navegador; o frontend deve limpar e voltar ao `/login`.
 
-## Licen�a
+## Licença
 
 Proprietary ? All rights reserved.
 
