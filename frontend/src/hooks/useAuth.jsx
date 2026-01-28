@@ -2,36 +2,157 @@ import { createContext, useContext, useState, useCallback, useEffect } from 'rea
 
 const AuthContext = createContext(null)
 
+function getApiUrl() {
+  return import.meta.env.VITE_API_URL || 'http://192.168.10.156:8000/api'
+}
+
+function safeJsonParse(value) {
+  try {
+    return JSON.parse(value)
+  } catch {
+    return null
+  }
+}
+
+function parseJwtPayload(token) {
+  try {
+    const [, payload] = token.split('.')
+    if (!payload) return null
+    const base64 = payload.replace(/-/g, '+').replace(/_/g, '/')
+    const json = decodeURIComponent(
+      atob(base64)
+        .split('')
+        .map((c) => `%${(`00${c.charCodeAt(0).toString(16)}`).slice(-2)}`)
+        .join('')
+    )
+    return JSON.parse(json)
+  } catch {
+    return null
+  }
+}
+
+function isJwtExpired(token) {
+  const payload = parseJwtPayload(token)
+  if (!payload?.exp) return false
+  // exp é em segundos
+  return Date.now() >= payload.exp * 1000
+}
+
+function clearStoredSession() {
+  localStorage.removeItem('access_token')
+  localStorage.removeItem('token')
+  localStorage.removeItem('refresh_token')
+  localStorage.removeItem('user')
+  localStorage.removeItem('username')
+}
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [token, setToken] = useState(null)
   const [loading, setLoading] = useState(true)
 
-  // Carregar token do localStorage ao iniciar
-  useEffect(() => {
-    const savedToken = localStorage.getItem('token')
-    const savedUser = localStorage.getItem('user')
-    
-    if (savedToken && savedUser) {
-      setToken(savedToken)
-      setUser(JSON.parse(savedUser))
-    }
-    
-    setLoading(false)
+  const logout = useCallback(() => {
+    clearStoredSession()
+    setToken(null)
+    setUser(null)
   }, [])
+
+  // Carregar token do localStorage e VALIDAR ao iniciar
+  useEffect(() => {
+    let cancelled = false
+
+    async function bootstrap() {
+      setLoading(true)
+
+      const savedToken = localStorage.getItem('access_token') || localStorage.getItem('token')
+      const savedUserRaw = localStorage.getItem('user')
+      const savedUser = savedUserRaw ? safeJsonParse(savedUserRaw) : null
+
+      if (!savedToken) {
+        if (!cancelled) setLoading(false)
+        return
+      }
+
+      // Token expirado → limpa e volta para login (evita tela branca)
+      if (isJwtExpired(savedToken)) {
+        logout()
+        if (!cancelled) setLoading(false)
+        return
+      }
+
+      // Seta estado inicial para permitir UI carregar (ProtectedRoute mostra loading)
+      if (!cancelled) {
+        setToken(savedToken)
+        if (savedUser) setUser(savedUser)
+      }
+
+      // Validar token no backend e sincronizar dados do usuário
+      try {
+        const meRes = await fetch(`${getApiUrl()}/auth/users/me`, {
+          headers: { Authorization: `Bearer ${savedToken}` },
+        })
+
+        if (!meRes.ok) {
+          // 401/403/etc: token inválido ou usuário desativado
+          logout()
+          if (!cancelled) setLoading(false)
+          return
+        }
+
+        const me = await meRes.json()
+
+        // Persistir e padronizar chaves
+        localStorage.setItem('access_token', savedToken)
+        localStorage.setItem('token', savedToken) // compatibilidade com código legado
+        localStorage.setItem(
+          'user',
+          JSON.stringify({
+            username: me.username,
+            email: me.email,
+            role: me.role,
+            full_name: me.full_name,
+          })
+        )
+        if (me.username) localStorage.setItem('username', me.username)
+
+        if (!cancelled) {
+          setUser({
+            username: me.username,
+            email: me.email,
+            role: me.role,
+            full_name: me.full_name,
+          })
+        }
+      } catch {
+        // Falha de rede: não derruba sessão imediatamente, mas evita ficar travado
+        // Mantém o estado atual e deixa as chamadas seguintes determinarem 401
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+
+    bootstrap()
+    return () => {
+      cancelled = true
+    }
+  }, [logout])
 
   const login = useCallback(async (email, password) => {
     try {
-      // Usar variável de ambiente para URL da API
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://192.168.10.156:8000/api'
-      const loginUrl = `${apiUrl}/auth/login`
-      
+      // Backend usa OAuth2PasswordRequestForm em /auth/token (form-urlencoded)
+      const apiUrl = getApiUrl()
+      const loginUrl = `${apiUrl}/auth/token`
+
+      const body = new URLSearchParams()
+      body.append('username', email) // aqui \"email\" é o input; no backend é \"username\"
+      body.append('password', password)
+
       const response = await fetch(loginUrl, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
+          'Content-Type': 'application/x-www-form-urlencoded',
         },
-        body: JSON.stringify({ email, password }),
+        body,
       })
 
       if (!response.ok) {
@@ -41,29 +162,29 @@ export function AuthProvider({ children }) {
 
       const data = await response.json()
       
-      // Salvar token e usuário
-      localStorage.setItem('token', data.access_token)
-      localStorage.setItem('user', JSON.stringify({
-        email,
-        role: data.role || 'operator',
-      }))
+      // Salvar token (padronizado) e usuário
+      localStorage.setItem('access_token', data.access_token)
+      localStorage.setItem('token', data.access_token) // compatibilidade
+      localStorage.setItem('username', email)
+      localStorage.setItem(
+        'user',
+        JSON.stringify({
+          username: email,
+          email: data.email || email,
+          role: data.role || 'operator',
+        })
+      )
 
       setToken(data.access_token)
       setUser({
-        email,
+        username: email,
+        email: data.email || email,
         role: data.role || 'operator',
       })
     } catch (error) {
       console.error('Login error:', error)
       throw error
     }
-  }, [])
-
-  const logout = useCallback(() => {
-    localStorage.removeItem('token')
-    localStorage.removeItem('user')
-    setToken(null)
-    setUser(null)
   }, [])
 
   const value = {

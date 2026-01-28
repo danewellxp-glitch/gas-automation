@@ -140,6 +140,19 @@ def create_category_dirs(docs_root: Path):
         category_dir.mkdir(parents=True, exist_ok=True)
 
 
+def files_are_identical(file1: Path, file2: Path) -> bool:
+    """Compara dois arquivos para verificar se são idênticos."""
+    try:
+        if not file1.exists() or not file2.exists():
+            return False
+        if file1.stat().st_size != file2.stat().st_size:
+            return False
+        with open(file1, 'rb') as f1, open(file2, 'rb') as f2:
+            return f1.read() == f2.read()
+    except Exception:
+        return False
+
+
 def organize_file(filepath: Path, category: str, dry_run: bool = False) -> Tuple[bool, str]:
     """
     Move um arquivo para a pasta apropriada.
@@ -155,13 +168,25 @@ def organize_file(filepath: Path, category: str, dry_run: bool = False) -> Tuple
     
     # Se já existe um arquivo com o mesmo nome no destino
     if target_path.exists():
-        # Adiciona timestamp para evitar sobrescrever
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        stem = filepath.stem
-        suffix = filepath.suffix
-        new_name = f"{stem}_{timestamp}{suffix}"
-        target_path = category_dir / new_name
-        message = f"⚠ Arquivo duplicado, renomeado para {new_name}"
+        # Verifica se são idênticos
+        if files_are_identical(filepath, target_path):
+            # Arquivos são idênticos, apenas remove o da raiz
+            if not dry_run:
+                try:
+                    filepath.unlink()
+                    return True, f"✓ Duplicata removida (arquivo já existe em docs/{category}/)"
+                except Exception as e:
+                    return False, f"✗ Erro ao remover duplicata: {e}"
+            else:
+                return True, f"[DRY RUN] Duplicata seria removida (arquivo já existe em docs/{category}/)"
+        else:
+            # Arquivos são diferentes, adiciona timestamp para evitar sobrescrever
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            stem = filepath.stem
+            suffix = filepath.suffix
+            new_name = f"{stem}_{timestamp}{suffix}"
+            target_path = category_dir / new_name
+            message = f"⚠ Arquivo duplicado com conteúdo diferente, renomeado para {new_name}"
     else:
         message = f"✓ Movido para docs/{category}/"
     

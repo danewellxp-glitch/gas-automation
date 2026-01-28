@@ -5,6 +5,7 @@ from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from sqlmodel import Session, select
+from sqlalchemy import or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.auth_models import User
 from app.config import settings
@@ -46,7 +47,8 @@ def get_password_hash(password: str) -> str:
 async def authenticate_user(session: AsyncSession, username: str, password: str):
     """Authenticate a user by username and password"""
     result = await session.execute(
-        select(User).where(User.username == username)
+        # Aceita login por username OU email (melhora UX do frontend)
+        select(User).where(or_(User.username == username, User.email == username))
     )
     user = result.scalar_one_or_none()
     if not user:

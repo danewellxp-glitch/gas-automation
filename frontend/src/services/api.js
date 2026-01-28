@@ -27,9 +27,14 @@ api.interceptors.response.use(
       // Limpa tokens invalidos
       localStorage.removeItem('access_token')
       localStorage.removeItem('token')
-      // TODO: Redirecionar para login quando implementado
-      // Por enquanto, apenas loga o erro para não quebrar navegação
-      logger.warn('API 401: Não autenticado')
+      localStorage.removeItem('user')
+      localStorage.removeItem('username')
+      logger.warn('API 401: sessão inválida/expirada, redirecionando para login')
+
+      // Evitar ficar preso em rota protegida com tela branca
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login'
+      }
     }
     return Promise.reject(error)
   }
