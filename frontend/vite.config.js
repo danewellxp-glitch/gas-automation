@@ -3,6 +3,11 @@ import react from '@vitejs/plugin-react'
 
 export default defineConfig({
   plugins: [react()],
+  build: {
+    // Evita falhas quando `dist/` está com permissões/owner diferentes (ex: gerado por container)
+    outDir: 'dist-build',
+    emptyOutDir: true,
+  },
   server: {
     port: 3001,
     host: true,

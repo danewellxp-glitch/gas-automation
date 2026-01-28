@@ -66,26 +66,24 @@ export default function AuditLogsPanel() {
     return date.toLocaleDateString('pt-BR') + ' ' + date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
   }
 
-  const getColorClass = (color) => {
-    const colors = {
-      blue: 'bg-blue-100 text-blue-800 border-blue-300',
-      purple: 'bg-purple-100 text-purple-800 border-purple-300',
-      green: 'bg-green-100 text-green-800 border-green-300',
-      yellow: 'bg-yellow-100 text-yellow-800 border-yellow-300',
-      indigo: 'bg-indigo-100 text-indigo-800 border-indigo-300',
-      orange: 'bg-orange-100 text-orange-800 border-orange-300',
-      red: 'bg-red-100 text-red-800 border-red-300'
+  const getBadge = (color) => {
+    const map = {
+      blue: 'bg-blue-100 text-blue-800',
+      purple: 'bg-purple-100 text-purple-800',
+      green: 'bg-green-100 text-green-800',
+      yellow: 'bg-amber-100 text-amber-800',
+      indigo: 'bg-indigo-100 text-indigo-800',
+      orange: 'bg-orange-100 text-orange-800',
+      red: 'bg-red-100 text-red-800',
     }
-    return colors[color] || colors.blue
+    return map[color] || 'bg-gray-100 text-gray-800'
   }
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="text-gray-600 mt-4">Carregando logs...</p>
-        </div>
+      <div className="rounded-lg border border-gray-200 bg-white p-8 text-center shadow-sm">
+        <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-gray-200 border-t-primary-600" />
+        <p className="mt-3 text-sm text-gray-600">Carregando logs...</p>
       </div>
     )
   }
@@ -95,66 +93,58 @@ export default function AuditLogsPanel() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-gray-800">📋 Logs de Auditoria</h2>
-          <p className="text-gray-600">Histórico de ações no sistema</p>
+          <h2 className="text-2xl font-semibold text-gray-900">Logs de auditoria</h2>
+          <p className="text-sm text-gray-600">Histórico de ações no sistema</p>
         </div>
         <button
           onClick={fetchLogs}
-          className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition"
+          className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700"
         >
-          🔄 Atualizar
+          Atualizar
         </button>
       </div>
 
       {/* Filtros */}
-      <div className="bg-white rounded-lg shadow p-4">
-        <div className="flex gap-2">
+      <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+        <div className="flex flex-wrap gap-2">
           <button
             onClick={() => setFilter('all')}
-            className={`px-4 py-2 rounded-lg font-medium transition ${
-              filter === 'all'
-                ? 'bg-blue-500 text-white'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            className={`rounded-lg px-3 py-2 text-sm font-medium ${
+              filter === 'all' ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
           >
             Todos ({logs.length})
           </button>
           <button
             onClick={() => setFilter('admin')}
-            className={`px-4 py-2 rounded-lg font-medium transition ${
-              filter === 'admin'
-                ? 'bg-blue-500 text-white'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            className={`rounded-lg px-3 py-2 text-sm font-medium ${
+              filter === 'admin' ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
           >
-            👑 Admins
+            Admin
           </button>
           <button
             onClick={() => setFilter('operator')}
-            className={`px-4 py-2 rounded-lg font-medium transition ${
-              filter === 'operator'
-                ? 'bg-blue-500 text-white'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            className={`rounded-lg px-3 py-2 text-sm font-medium ${
+              filter === 'operator' ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
           >
-            👤 Operadores
+            Operador
           </button>
           <button
             onClick={() => setFilter('system')}
-            className={`px-4 py-2 rounded-lg font-medium transition ${
-              filter === 'system'
-                ? 'bg-blue-500 text-white'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            className={`rounded-lg px-3 py-2 text-sm font-medium ${
+              filter === 'system' ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
           >
-            ⚙️ Sistema
+            Sistema
           </button>
         </div>
       </div>
 
       {/* Timeline de Logs */}
-      <div className="bg-white rounded-lg shadow">
-        <div className="p-4 border-b">
+      <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+        <div className="border-b border-gray-200 p-4">
           <p className="text-sm text-gray-600">
             Exibindo {logs.length} registro(s)
           </p>
@@ -162,9 +152,9 @@ export default function AuditLogsPanel() {
         
         <div className="divide-y max-h-[600px] overflow-y-auto">
           {logs.length === 0 ? (
-            <div className="p-8 text-center">
-              <p className="text-gray-500">📋 Nenhum log de auditoria disponível</p>
-              <p className="text-sm text-gray-400 mt-2">
+            <div className="p-10 text-center">
+              <p className="text-base font-medium text-gray-900">Nenhum log disponível</p>
+              <p className="mt-1 text-sm text-gray-600">
                 Os logs de auditoria serão exibidos aqui quando houver atividade no sistema
               </p>
             </div>
@@ -172,29 +162,29 @@ export default function AuditLogsPanel() {
             <div key={log.id} className="p-4 hover:bg-gray-50 transition">
               <div className="flex items-start gap-4">
                 {/* Ícone */}
-                <div className={`flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center text-xl border-2 ${getColorClass(log.color)}`}>
-                  {log.icon}
+                <div className="flex-shrink-0 grid h-10 w-10 place-items-center rounded-lg bg-gray-100 text-gray-700">
+                  {log.icon || ''}
                 </div>
 
                 {/* Conteúdo */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1">
-                      <p className="font-semibold text-gray-800">
+                      <p className="font-semibold text-gray-900">
                         {getActionLabel(log.action)}
                       </p>
                       <p className="text-sm text-gray-600 mt-1">
                         {log.details}
                       </p>
-                      <div className="flex items-center gap-4 mt-2 text-xs text-gray-500">
-                        <span>👤 {log.user}</span>
-                        <span>🌐 {log.ip}</span>
-                        <span>🕒 {formatTime(log.timestamp)}</span>
+                      <div className="flex flex-wrap items-center gap-4 mt-2 text-xs text-gray-500">
+                        <span>{log.user}</span>
+                        <span>{log.ip}</span>
+                        <span>{formatTime(log.timestamp)}</span>
                       </div>
                     </div>
                     
                     {/* Badge do tipo */}
-                    <span className={`flex-shrink-0 px-3 py-1 rounded-full text-xs font-medium border ${getColorClass(log.color)}`}>
+                    <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${getBadge(log.color)}`}>
                       {log.action}
                     </span>
                   </div>
@@ -208,17 +198,17 @@ export default function AuditLogsPanel() {
       {/* Estatísticas Rápidas */}
       {logs.length > 0 && (
       <div className="grid grid-cols-3 gap-4">
-        <div className="bg-white rounded-lg shadow p-4 text-center">
-          <p className="text-3xl font-bold text-blue-600">{logs.filter(l => l.action === 'LOGIN').length}</p>
-          <p className="text-sm text-gray-600 mt-1">Logins hoje</p>
+        <div className="rounded-lg border border-gray-200 bg-white p-4 text-center shadow-sm">
+          <p className="text-3xl font-semibold text-gray-900">{logs.filter(l => l.action === 'LOGIN').length}</p>
+          <p className="text-sm text-gray-600 mt-1">Logins</p>
         </div>
-        <div className="bg-white rounded-lg shadow p-4 text-center">
-          <p className="text-3xl font-bold text-purple-600">{logs.filter(l => l.action === 'ROLE_CHANGE').length}</p>
-          <p className="text-sm text-gray-600 mt-1">Mudanças de Role</p>
+        <div className="rounded-lg border border-gray-200 bg-white p-4 text-center shadow-sm">
+          <p className="text-3xl font-semibold text-gray-900">{logs.filter(l => l.action === 'ROLE_CHANGE').length}</p>
+          <p className="text-sm text-gray-600 mt-1">Mudanças de role</p>
         </div>
-        <div className="bg-white rounded-lg shadow p-4 text-center">
-          <p className="text-3xl font-bold text-green-600">{logs.filter(l => l.action === 'USER_CREATE').length}</p>
-          <p className="text-sm text-gray-600 mt-1">Usuários Criados</p>
+        <div className="rounded-lg border border-gray-200 bg-white p-4 text-center shadow-sm">
+          <p className="text-3xl font-semibold text-gray-900">{logs.filter(l => l.action === 'USER_CREATE').length}</p>
+          <p className="text-sm text-gray-600 mt-1">Usuários criados</p>
         </div>
       </div>
       )}

@@ -4,6 +4,7 @@
  */
 
 import { useState, useEffect } from 'react'
+import { RefreshCcw } from 'lucide-react'
 import toast from 'react-hot-toast'
 import api, { getOrdersPending } from '../../services/api'
 
@@ -83,11 +84,9 @@ export default function PendingOrdersPanel() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="text-gray-600 mt-4">Carregando pedidos...</p>
-        </div>
+      <div className="rounded-lg border border-gray-200 bg-white p-8 text-center shadow-sm">
+        <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-gray-200 border-t-primary-600" />
+        <p className="mt-3 text-sm text-gray-600">Carregando pedidos...</p>
       </div>
     )
   }
@@ -97,130 +96,128 @@ export default function PendingOrdersPanel() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-gray-800">📦 Pedidos Pendentes</h2>
-          <p className="text-gray-600">Aprovar ou rejeitar pedidos do WhatsApp</p>
+          <h2 className="text-2xl font-semibold text-gray-900">Pedidos pendentes</h2>
+          <p className="text-sm text-gray-600">Aprovar ou rejeitar pedidos do WhatsApp</p>
         </div>
         <button
           onClick={fetchOrders}
-          className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition"
+          className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700"
         >
-          🔄 Atualizar
+          <RefreshCcw className="h-4 w-4" />
+          Atualizar
         </button>
       </div>
 
       {/* Lista de Pedidos */}
       {orders.length === 0 ? (
-        <div className="bg-white rounded-lg shadow p-8 text-center">
-          <div className="text-6xl mb-4">🎉</div>
-          <p className="text-xl font-semibold text-gray-800">Nenhum pedido pendente!</p>
-          <p className="text-gray-600 mt-2">Todos os pedidos foram processados</p>
+        <div className="rounded-lg border border-gray-200 bg-white p-10 text-center shadow-sm">
+          <p className="text-base font-medium text-gray-900">Nenhum pedido pendente</p>
+          <p className="mt-1 text-sm text-gray-600">Todos os pedidos foram processados.</p>
         </div>
       ) : (
         <div className="grid gap-4">
           {orders.map((order) => (
-            <div key={order.id} className="bg-white rounded-lg shadow hover:shadow-lg transition">
-              <div className="p-6">
-                {/* Header do Pedido */}
-                <div className="flex items-start justify-between mb-4">
-                  <div>
-                    <h3 className="text-lg font-bold text-gray-800">
-                      Pedido #{order.order_number || order.id}
-                    </h3>
-                    <p className="text-sm text-gray-600 mt-1">
-                      📅 {formatDateTime(order.created_at)}
-                    </p>
-                  </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => {
-                        setSelectedOrder(order)
-                        setActionType('approve')
-                      }}
-                      className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition font-medium"
-                    >
-                      ✅ Aprovar
-                    </button>
-                    <button
-                      onClick={() => {
-                        setSelectedOrder(order)
-                        setActionType('reject')
-                      }}
-                      className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition font-medium"
-                    >
-                      ❌ Rejeitar
-                    </button>
-                  </div>
+            <div key={order.id} className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+              {/* Header do Pedido */}
+              <div className="flex items-start justify-between mb-4">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    Pedido #{order.order_number || order.id}
+                  </h3>
+                  <p className="mt-1 text-sm text-gray-500">
+                    {formatDateTime(order.created_at)}
+                  </p>
                 </div>
-
-                {/* Informações do Cliente */}
-                <div className="bg-gray-50 rounded-lg p-4 mb-4">
-                  <h4 className="font-semibold text-gray-700 mb-2">👤 Cliente</h4>
-                  <div className="grid grid-cols-2 gap-2 text-sm">
-                    <div>
-                      <span className="text-gray-600">Nome:</span>
-                      <span className="font-medium text-gray-800 ml-2">
-                        {order.customer_name || 'N/A'}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-gray-600">Telefone:</span>
-                      <span className="font-medium text-gray-800 ml-2">
-                        {order.customer_phone || 'N/A'}
-                      </span>
-                    </div>
-                    {order.delivery_address && (
-                      <div className="col-span-2">
-                        <span className="text-gray-600">Endereço:</span>
-                        <span className="font-medium text-gray-800 ml-2">
-                          {order.delivery_address}
-                        </span>
-                      </div>
-                    )}
-                  </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      setSelectedOrder(order)
+                      setActionType('approve')
+                    }}
+                    className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
+                  >
+                    Aprovar
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSelectedOrder(order)
+                      setActionType('reject')
+                    }}
+                    className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
+                  >
+                    Rejeitar
+                  </button>
                 </div>
-
-                {/* Itens do Pedido */}
-                <div className="mb-4">
-                  <h4 className="font-semibold text-gray-700 mb-2">📦 Itens</h4>
-                  <div className="space-y-2">
-                    {order.items?.map((item, idx) => (
-                      <div key={idx} className="flex justify-between items-center p-2 bg-gray-50 rounded">
-                        <div>
-                          <span className="font-medium">{item.product_name || item.name}</span>
-                          <span className="text-gray-600 text-sm ml-2">x{item.quantity}</span>
-                        </div>
-                        <span className="font-bold">{formatCurrency(item.total || item.price * item.quantity)}</span>
-                      </div>
-                    )) || (
-                      <p className="text-gray-500 text-sm">Nenhum item especificado</p>
-                    )}
-                  </div>
-                </div>
-
-                {/* Total */}
-                <div className="border-t pt-4 flex justify-between items-center">
-                  <span className="text-lg font-bold text-gray-700">Total:</span>
-                  <span className="text-2xl font-bold text-green-600">
-                    {formatCurrency(order.total_amount || order.total || 0)}
-                  </span>
-                </div>
-
-                {/* Forma de Pagamento */}
-                {order.payment_method && (
-                  <div className="mt-2 text-sm text-gray-600">
-                    💳 Pagamento: <span className="font-medium">{order.payment_method}</span>
-                  </div>
-                )}
-
-                {/* Observações */}
-                {order.notes && (
-                  <div className="mt-4 p-3 bg-blue-50 rounded-lg">
-                    <p className="text-sm text-gray-700">
-                      <strong>📝 Observações:</strong> {order.notes}
-                    </p>
-                  </div>
-                )}
               </div>
+
+              {/* Informações do Cliente */}
+              <div className="rounded-lg bg-gray-50 p-4 mb-4">
+                <h4 className="text-sm font-semibold text-gray-900 mb-2">Cliente</h4>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div>
+                    <span className="text-gray-500">Nome:</span>
+                    <span className="ml-2 font-medium text-gray-900">
+                      {order.customer_name || 'N/A'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">Telefone:</span>
+                    <span className="ml-2 font-medium text-gray-900">
+                      {order.customer_phone || 'N/A'}
+                    </span>
+                  </div>
+                  {order.delivery_address && (
+                    <div className="col-span-2">
+                      <span className="text-gray-500">Endereço:</span>
+                      <span className="ml-2 font-medium text-gray-900">
+                        {order.delivery_address}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Itens do Pedido */}
+              <div className="mb-4">
+                <h4 className="text-sm font-semibold text-gray-900 mb-2">Itens</h4>
+                <div className="space-y-2">
+                  {order.items?.map((item, idx) => (
+                    <div key={idx} className="flex justify-between items-center rounded-lg bg-gray-50 p-2">
+                      <div>
+                        <span className="font-medium">{item.product_name || item.name}</span>
+                        <span className="ml-2 text-sm text-gray-500">x{item.quantity}</span>
+                      </div>
+                      <span className="font-bold">{formatCurrency(item.total || item.price * item.quantity)}</span>
+                    </div>
+                  )) || (
+                    <p className="text-sm text-gray-500">Nenhum item especificado</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Total */}
+              <div className="flex items-center justify-between border-t border-gray-200 pt-4">
+                <span className="text-sm font-semibold text-gray-900">Total</span>
+                <span className="text-xl font-semibold text-gray-900">
+                  {formatCurrency(order.total_amount || order.total || 0)}
+                </span>
+              </div>
+
+              {/* Forma de Pagamento */}
+              {order.payment_method && (
+                <div className="mt-2 text-sm text-gray-600">
+                  Pagamento: <span className="font-medium text-gray-900">{order.payment_method}</span>
+                </div>
+              )}
+
+              {/* Observações */}
+              {order.notes && (
+                <div className="mt-4 rounded-lg bg-gray-50 p-3">
+                  <p className="text-sm text-gray-700">
+                    <span className="font-medium text-gray-900">Observações:</span> {order.notes}
+                  </p>
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -228,14 +225,14 @@ export default function PendingOrdersPanel() {
 
       {/* Modal de Confirmação */}
       {selectedOrder && actionType && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-2xl w-full max-w-md">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 p-4">
+          <div className="w-full max-w-md overflow-hidden rounded-xl bg-white shadow-xl">
             {/* Header */}
-            <div className={`p-6 border-b ${actionType === 'approve' ? 'bg-green-50' : 'bg-red-50'}`}>
-              <h3 className="text-lg font-bold text-gray-800">
-                {actionType === 'approve' ? '✅ Aprovar Pedido' : '❌ Rejeitar Pedido'}
+            <div className={`border-b border-gray-200 p-6 ${actionType === 'approve' ? 'bg-green-50' : 'bg-red-50'}`}>
+              <h3 className="text-lg font-semibold text-gray-900">
+                {actionType === 'approve' ? 'Aprovar pedido' : 'Rejeitar pedido'}
               </h3>
-              <p className="text-sm text-gray-600 mt-1">
+              <p className="mt-1 text-sm text-gray-600">
                 Pedido #{selectedOrder.order_number || selectedOrder.id}
               </p>
             </div>
@@ -244,24 +241,20 @@ export default function PendingOrdersPanel() {
             <div className="p-6">
               {actionType === 'approve' ? (
                 <div>
-                  <p className="text-gray-700 mb-4">
-                    Confirmar aprovação deste pedido?
-                  </p>
-                  <div className="bg-gray-50 p-3 rounded">
-                    <p className="text-sm font-medium">
-                      Total: <span className="text-green-600">{formatCurrency(selectedOrder.total_amount || 0)}</span>
-                    </p>
+                  <p className="text-sm text-gray-700">Confirmar aprovação deste pedido?</p>
+                  <div className="mt-3 rounded-lg bg-gray-50 p-3 text-sm">
+                    Total: <span className="font-semibold text-gray-900">{formatCurrency(selectedOrder.total_amount || 0)}</span>
                   </div>
                 </div>
               ) : (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-gray-900 mb-2">
                     Motivo da Rejeição:
                   </label>
                   <textarea
                     value={rejectReason}
                     onChange={(e) => setRejectReason(e.target.value)}
-                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-red-500"
+                    className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-red-500 focus:ring-red-500"
                     rows="4"
                     placeholder="Ex: Produto indisponível, endereço fora da área de entrega, etc."
                   />
@@ -270,7 +263,7 @@ export default function PendingOrdersPanel() {
             </div>
 
             {/* Footer */}
-            <div className="p-6 border-t bg-gray-50 rounded-b-lg flex gap-3">
+            <div className="flex gap-3 border-t border-gray-200 bg-gray-50 p-6">
               <button
                 onClick={() => {
                   setSelectedOrder(null)
@@ -278,7 +271,7 @@ export default function PendingOrdersPanel() {
                   setRejectReason('')
                 }}
                 disabled={processing}
-                className="flex-1 px-4 py-2 bg-gray-300 text-gray-800 rounded hover:bg-gray-400 transition font-medium disabled:opacity-50"
+                className="flex-1 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
               >
                 Cancelar
               </button>
@@ -291,8 +284,8 @@ export default function PendingOrdersPanel() {
                   }
                 }}
                 disabled={processing}
-                className={`flex-1 px-4 py-2 text-white rounded hover:opacity-90 transition font-medium disabled:opacity-50 ${
-                  actionType === 'approve' ? 'bg-green-500' : 'bg-red-500'
+                className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50 ${
+                  actionType === 'approve' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'
                 }`}
               >
                 {processing ? 'Processando...' : 'Confirmar'}

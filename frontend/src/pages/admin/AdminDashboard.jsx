@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
+import { LayoutDashboard, Users, FileText, Settings } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import { apiRequest, getApiUrl } from '../../utils/api'
+import FlowbiteLayout from '../../components/flowbite/FlowbiteLayout'
 import {
   getRoleBadge,
   formatDateTime,
@@ -16,10 +18,10 @@ import AuditLogsPanel from '../../components/admin/AuditLogsPanel'
 import SystemSettings from '../../components/admin/SystemSettings'
 
 const VALID_ROLES = [
-  { value: 'admin', label: 'Admin', icon: '👑', description: 'Acesso total ao sistema' },
-  { value: 'operator', label: 'Operador', icon: '👤', description: 'Gerencia conversas e pedidos' },
-  { value: 'owner', label: 'Proprietário', icon: '💼', description: 'Visão executiva' },
-  { value: 'user', label: 'Usuário', icon: '📦', description: 'Acesso básico' }
+  { value: 'admin', label: 'Admin', description: 'Acesso total ao sistema' },
+  { value: 'operator', label: 'Operador', description: 'Gerencia conversas e pedidos' },
+  { value: 'owner', label: 'Proprietário', description: 'Visão executiva' },
+  { value: 'user', label: 'Usuário', description: 'Acesso básico' }
 ]
 
 export default function AdminDashboard() {
@@ -133,8 +135,8 @@ export default function AdminDashboard() {
   }
 
   const getRoleIcon = (role) => {
-    const roleObj = VALID_ROLES.find(r => r.value === role)
-    return roleObj?.icon || '📦'
+    // Removido: emojis nos dashboards (visual mais profissional)
+    return ''
   }
 
   const SortIcon = ({ field }) => {
@@ -143,137 +145,74 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div className="flex h-screen bg-gray-100">
-      {/* Sidebar */}
-      <div className="w-64 bg-white shadow-lg flex flex-col">
-        <div className="p-6 border-b">
-          <h1 className="text-xl font-bold text-gray-800">Gas Automation</h1>
-          <p className="text-sm text-gray-500">Painel do Admin</p>
-        </div>
-        
-        <nav className="p-4 flex-1">
-          <div className="space-y-2">
-            <button 
-              onClick={() => setActiveView('dashboard')}
-              className={`w-full text-left px-4 py-3 rounded transition ${
-                activeView === 'dashboard' 
-                  ? 'bg-blue-500 text-white' 
-                  : 'hover:bg-gray-100'
-              }`}
-            >
-              📊 Dashboard
-            </button>
-            <button 
-              onClick={() => setActiveView('users')}
-              className={`w-full text-left px-4 py-3 rounded transition ${
-                activeView === 'users' 
-                  ? 'bg-blue-500 text-white' 
-                  : 'hover:bg-gray-100'
-              }`}
-            >
-              👥 Usuários
-            </button>
-            <button 
-              onClick={() => setActiveView('reports')}
-              className={`w-full text-left px-4 py-3 rounded transition ${
-                activeView === 'reports' 
-                  ? 'bg-blue-500 text-white' 
-                  : 'hover:bg-gray-100'
-              }`}
-            >
-              📋 Relatórios
-            </button>
-            <button 
-              onClick={() => setActiveView('settings')}
-              className={`w-full text-left px-4 py-3 rounded transition ${
-                activeView === 'settings' 
-                  ? 'bg-blue-500 text-white' 
-                  : 'hover:bg-gray-100'
-              }`}
-            >
-              ⚙️ Configurações
-            </button>
-          </div>
-        </nav>
+    <FlowbiteLayout
+      appName="Gas Automation"
+      pageTitle="Admin"
+      userEmail={user?.email || ''}
+      onLogout={logout}
+      navItems={[
+        { key: 'dashboard', type: 'button', label: 'Dashboard', icon: LayoutDashboard, onClick: () => setActiveView('dashboard') },
+        { key: 'users', type: 'button', label: 'Usuários', icon: Users, onClick: () => setActiveView('users') },
+        { key: 'reports', type: 'button', label: 'Relatórios', icon: FileText, onClick: () => setActiveView('reports') },
+        { key: 'settings', type: 'button', label: 'Configurações', icon: Settings, onClick: () => setActiveView('settings') },
+      ]}
+    >
+      {/* Renderizar view baseada no estado */}
+      {activeView === 'dashboard' && <DashboardOverview />}
 
-        <div className="border-t p-4">
-          <div className="flex items-center justify-between gap-2">
-            <div className="text-sm min-w-0">
-              <p className="font-semibold text-gray-800 truncate">{user?.email}</p>
-              <p className="text-gray-500 text-xs uppercase font-bold">{getRoleIcon(user?.role)} {user?.role}</p>
-            </div>
-            <button 
-              onClick={logout}
-              className="px-3 py-1 bg-red-500 text-white rounded text-xs hover:bg-red-600 transition whitespace-nowrap"
-            >
-              Sair
-            </button>
-          </div>
-        </div>
-      </div>
+      {activeView === 'reports' && <AuditLogsPanel />}
 
-      {/* Main Content */}
-      <div className="flex-1 overflow-auto">
-        <div className="p-8">
-          {/* Renderizar view baseada no estado */}
-          {activeView === 'dashboard' && <DashboardOverview />}
-          
-          {activeView === 'reports' && <AuditLogsPanel />}
-          
-          {activeView === 'settings' && <SystemSettings />}
-          
-          {activeView === 'users' && (
-            <>
-              {/* Header */}
-              <div className="mb-6">
-                <h2 className="text-2xl font-bold text-gray-800">Gerenciamento de Usuários</h2>
-                <p className="text-gray-600">Gerencie roles e permissões do sistema</p>
-              </div>
+      {activeView === 'settings' && <SystemSettings />}
+
+      {activeView === 'users' && (
+        <>
+          {/* Header */}
+          <div className="mb-6">
+            <h2 className="text-2xl font-semibold text-gray-900">Gerenciamento de Usuários</h2>
+            <p className="text-gray-600">Gerencie roles e permissões do sistema</p>
+          </div>
 
               {/* Error Message */}
               {error && (
-                <div className="mb-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded">
+                <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
                   {error}
                 </div>
               )}
 
               {/* Users Table */}
-          <div className="bg-white rounded-lg shadow">
+          <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
             {/* Search Bar */}
-            <div className="p-4 border-b">
+            <div className="border-b border-gray-200 p-4">
               <input
                 type="text"
                 placeholder="Buscar por email, nome ou usuário..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:border-blue-500"
+                className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-primary-500 focus:ring-primary-500"
               />
-              <p className="text-xs text-gray-500 mt-2">
+              <p className="mt-2 text-xs text-gray-500">
                 {displayedUsers.length} de {users.length} usuários
               </p>
             </div>
 
             {loading ? (
               <div className="p-8 text-center">
-                <div className="inline-block">
-                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-                </div>
-                <p className="text-gray-600 mt-4">Carregando usuários...</p>
+                <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-gray-200 border-t-primary-600" />
+                <p className="mt-3 text-sm text-gray-600">Carregando usuários...</p>
               </div>
             ) : displayedUsers.length === 0 ? (
-              <div className="p-8 text-center">
-                <p className="text-gray-500">
-                  {searchTerm ? 'Nenhum usuário encontrado com esse critério' : 'Nenhum usuário encontrado'}
-                </p>
+              <div className="p-8 text-center text-sm text-gray-600">
+                {searchTerm ? 'Nenhum usuário encontrado com esse critério' : 'Nenhum usuário encontrado'}
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-gray-50 border-b">
+                <table className="w-full text-left text-sm text-gray-700">
+                  <thead>
                     <tr>
                       <th 
                         onClick={() => handleSort('email')}
-                        className="px-6 py-4 text-left text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition"
+                        className="cursor-pointer hover:bg-opacity-50 transition"
+                        style={{ background: 'rgba(0, 0, 0, 0.02)' }}
                       >
                         <div className="flex items-center gap-2">
                           Email
@@ -282,7 +221,8 @@ export default function AdminDashboard() {
                       </th>
                       <th 
                         onClick={() => handleSort('full_name')}
-                        className="px-6 py-4 text-left text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition"
+                        className="cursor-pointer hover:bg-opacity-50 transition"
+                        style={{ background: 'rgba(0, 0, 0, 0.02)' }}
                       >
                         <div className="flex items-center gap-2">
                           Nome
@@ -291,44 +231,47 @@ export default function AdminDashboard() {
                       </th>
                       <th 
                         onClick={() => handleSort('role')}
-                        className="px-6 py-4 text-left text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition"
+                        className="cursor-pointer hover:bg-opacity-50 transition"
+                        style={{ background: 'rgba(0, 0, 0, 0.02)' }}
                       >
                         <div className="flex items-center gap-2">
                           Role
                           <SortIcon field="role" />
                         </div>
                       </th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">Status</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">Criado em</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">Ações</th>
+                      <th style={{ background: 'rgba(0, 0, 0, 0.02)' }}>Status</th>
+                      <th style={{ background: 'rgba(0, 0, 0, 0.02)' }}>Criado em</th>
+                      <th style={{ background: 'rgba(0, 0, 0, 0.02)' }}>Ações</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y">
+                  <tbody>
                     {displayedUsers.map(userData => (
-                      <tr key={userData.id} className="hover:bg-gray-50 transition">
-                        <td className="px-6 py-4 text-sm text-gray-800">{userData.email}</td>
-                        <td className="px-6 py-4 text-sm text-gray-800">{userData.full_name || userData.username || '-'}</td>
-                        <td className="px-6 py-4 text-sm">
-                          <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold border ${getRoleColor(userData.role)}`}>
-                            {getRoleIcon(userData.role)} {userData.role}
+                      <tr key={userData.id} className="border-t border-gray-100 hover:bg-gray-50">
+                        <td className="px-4 py-3">{userData.email}</td>
+                        <td className="px-4 py-3">{userData.full_name || userData.username || '-'}</td>
+                        <td>
+                          <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700">
+                            {userData.role}
                           </span>
                         </td>
-                        <td className="px-6 py-4 text-sm">
-                          <span className={`px-2 py-1 rounded text-xs font-medium ${userData.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
-                            {userData.is_active ? '✓ Ativo' : '✗ Inativo'}
+                        <td>
+                          <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${
+                            userData.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
+                          }`}>
+                            {userData.is_active ? 'Ativo' : 'Inativo'}
                           </span>
                         </td>
-                        <td className="px-6 py-4 text-sm text-gray-600">
+                        <td className="px-4 py-3 text-gray-500">
                           {userData.created_at ? formatDateTime(userData.created_at) : '-'}
                         </td>
-                        <td className="px-6 py-4 text-sm">
+                        <td>
                           <button 
                             onClick={() => handleEditClick(userData)}
                             disabled={userData.id === user?.id}
-                            className={`px-3 py-1 rounded text-xs font-medium transition ${
-                              userData.id === user?.id 
-                                ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
-                                : 'bg-blue-500 text-white hover:bg-blue-600'
+                            className={`rounded-lg px-3 py-1.5 text-xs font-medium ${
+                              userData.id === user?.id
+                                ? 'cursor-not-allowed bg-gray-100 text-gray-400'
+                                : 'bg-primary-600 text-white hover:bg-primary-700'
                             }`}
                             title={userData.id === user?.id ? 'Você não pode editar sua própria role' : 'Editar role'}
                           >
@@ -344,19 +287,17 @@ export default function AdminDashboard() {
           </div>
             </>
           )}
-        </div>
-      </div>
 
       {/* Modal para editar role (só aparece na view de users) */}
       {selectedUser && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-2xl w-full max-w-md">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 p-4">
+          <div className="w-full max-w-md overflow-hidden rounded-xl bg-white shadow-xl">
             {/* Header */}
-            <div className="p-6 border-b">
-              <h3 className="text-lg font-bold text-gray-800">
+            <div className="border-b border-gray-200 p-6">
+              <h3 className="text-lg font-semibold text-gray-900">
                 Alterar Role
               </h3>
-              <p className="text-sm text-gray-600 mt-1">
+              <p className="mt-1 text-sm text-gray-500">
                 {selectedUser.email}
               </p>
             </div>
@@ -364,17 +305,17 @@ export default function AdminDashboard() {
             {/* Content */}
             <div className="p-6">
               <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-3">
+                <label className="block text-sm font-medium mb-3">
                   Role Atual
                 </label>
-                <div className={`px-4 py-3 rounded-lg border-2 ${getRoleColor(selectedUser.role)}`}>
-                  <span className="font-medium">{getRoleIcon(selectedUser.role)} {selectedUser.role}</span>
+                <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                  <span className="font-medium text-gray-900">{selectedUser.role}</span>
                 </div>
               </div>
 
               {!showConfirmation ? (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-3">
+                  <label className="block text-sm font-medium mb-3">
                     Nova Role
                   </label>
                   <div className="space-y-2">
@@ -382,16 +323,14 @@ export default function AdminDashboard() {
                       <button
                         key={role.value}
                         onClick={() => handleRoleChange(role.value)}
-                        className={`w-full p-3 text-left rounded-lg border-2 transition ${
+                        className={`w-full rounded-lg border p-3 text-left transition ${
                           newRole === role.value
-                            ? 'border-blue-500 bg-blue-50'
-                            : 'border-gray-200 hover:border-gray-300'
+                            ? 'border-primary-600 bg-primary-50'
+                            : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
                         }`}
                       >
-                        <div className="font-medium text-gray-800">
-                          {role.icon} {role.label}
-                        </div>
-                        <div className="text-xs text-gray-600 mt-1">
+                        <div className="font-medium text-gray-900">{role.label}</div>
+                        <div className="mt-1 text-xs text-gray-500">
                           {role.description}
                         </div>
                       </button>
@@ -399,8 +338,8 @@ export default function AdminDashboard() {
                   </div>
                 </div>
               ) : (
-                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                  <p className="font-medium text-gray-800 mb-2">Confirmar alteração?</p>
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
+                  <p className="mb-2 font-medium text-gray-900">Confirmar alteração?</p>
                   <p className="text-sm text-gray-700">
                     Você está alterando a role de <strong>{selectedUser.email}</strong> para <strong>{newRole}</strong>
                   </p>
@@ -409,7 +348,7 @@ export default function AdminDashboard() {
             </div>
 
             {/* Footer */}
-            <div className="p-6 border-t bg-gray-50 rounded-b-lg flex gap-3">
+            <div className="flex gap-3 border-t border-gray-200 bg-gray-50 p-6">
               {!showConfirmation ? (
                 <>
                   <button 
@@ -417,14 +356,14 @@ export default function AdminDashboard() {
                       setSelectedUser(null)
                       setNewRole('')
                     }}
-                    className="flex-1 px-4 py-2 bg-gray-300 text-gray-800 rounded hover:bg-gray-400 transition font-medium"
+                    className="flex-1 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
                   >
                     Cancelar
                   </button>
                   <button 
                     onClick={() => setShowConfirmation(true)}
                     disabled={newRole === selectedUser.role || !newRole}
-                    className="flex-1 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex-1 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
                   >
                     Próximo
                   </button>
@@ -433,14 +372,14 @@ export default function AdminDashboard() {
                 <>
                   <button 
                     onClick={() => setShowConfirmation(false)}
-                    className="flex-1 px-4 py-2 bg-gray-300 text-gray-800 rounded hover:bg-gray-400 transition font-medium"
+                    className="flex-1 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
                   >
                     Voltar
                   </button>
                   <button 
                     onClick={updateUserRole}
                     disabled={updating}
-                    className="flex-1 px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex-1 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
                   >
                     {updating ? 'Salvando...' : 'Confirmar'}
                   </button>
@@ -450,6 +389,6 @@ export default function AdminDashboard() {
           </div>
         </div>
       )}
-    </div>
+    </FlowbiteLayout>
   )
 }

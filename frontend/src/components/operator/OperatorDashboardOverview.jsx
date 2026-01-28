@@ -4,6 +4,7 @@
  */
 
 import { useState, useEffect } from 'react'
+import { LayoutDashboard, Package, RefreshCcw, MessageSquare, AlertTriangle, Clock } from 'lucide-react'
 
 export default function OperatorDashboardOverview() {
   const [metrics, setMetrics] = useState(null)
@@ -58,173 +59,125 @@ export default function OperatorDashboardOverview() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="text-gray-600 mt-4">Carregando métricas...</p>
-        </div>
+      <div className="rounded-lg border border-gray-200 bg-white p-8 text-center shadow-sm">
+        <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-gray-200 border-t-primary-600" />
+        <p className="mt-3 text-sm text-gray-600">Carregando métricas...</p>
       </div>
     )
   }
 
   if (!metrics) {
     return (
-      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-        <p className="text-red-700">Erro ao carregar métricas</p>
+      <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+        Erro ao carregar métricas
       </div>
     )
   }
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div>
-        <h2 className="text-2xl font-bold text-gray-800">📊 Painel do Operador</h2>
-        <p className="text-gray-600">Visão geral de atendimento e pedidos</p>
+        <h2 className="text-2xl font-semibold text-gray-900">Atendimento</h2>
+        <p className="text-sm text-gray-600">Pedidos e conversas em andamento</p>
       </div>
 
-      {/* Cards de Métricas */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Pedidos Pendentes */}
-        <div className="bg-gradient-to-br from-yellow-500 to-yellow-600 rounded-lg p-6 text-white">
-          <div className="flex items-center justify-between">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
+          <div className="flex items-start justify-between">
             <div>
-              <p className="text-yellow-100 text-sm mb-1">Pedidos Pendentes</p>
-              <p className="text-4xl font-bold">{metrics.orders.pending}</p>
-              <p className="text-yellow-100 text-xs mt-2">
-                Aguardando aprovação
-              </p>
+              <p className="text-sm text-gray-500">Pedidos pendentes</p>
+              <p className="mt-1 text-3xl font-semibold text-gray-900">{metrics.orders.pending}</p>
+              <p className="mt-1 text-xs text-gray-500">Aguardando aprovação</p>
             </div>
-            <div className="text-5xl opacity-20">⏳</div>
+            <div className="rounded-lg bg-amber-50 p-3 text-amber-700">
+              <Clock className="h-5 w-5" />
+            </div>
           </div>
         </div>
 
-        {/* Em Processamento */}
-        <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg p-6 text-white">
-          <div className="flex items-center justify-between">
+        <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
+          <div className="flex items-start justify-between">
             <div>
-              <p className="text-blue-100 text-sm mb-1">Em Processamento</p>
-              <p className="text-4xl font-bold">{metrics.orders.processing}</p>
-              <p className="text-blue-100 text-xs mt-2">
-                Sendo preparados
-              </p>
+              <p className="text-sm text-gray-500">Em processamento</p>
+              <p className="mt-1 text-3xl font-semibold text-gray-900">{metrics.orders.processing}</p>
+              <p className="mt-1 text-xs text-gray-500">Pedidos em preparo</p>
             </div>
-            <div className="text-5xl opacity-20">🔄</div>
+            <div className="rounded-lg bg-primary-50 p-3 text-primary-700">
+              <RefreshCcw className="h-5 w-5" />
+            </div>
           </div>
         </div>
 
-        {/* Conversas Ativas */}
-        <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-lg p-6 text-white">
-          <div className="flex items-center justify-between">
+        <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
+          <div className="flex items-start justify-between">
             <div>
-              <p className="text-green-100 text-sm mb-1">Conversas Ativas</p>
-              <p className="text-4xl font-bold">{metrics.conversations.active}</p>
-              <p className="text-green-100 text-xs mt-2">
-                {metrics.conversations.mine} minhas
-              </p>
+              <p className="text-sm text-gray-500">Conversas ativas</p>
+              <p className="mt-1 text-3xl font-semibold text-gray-900">{metrics.conversations.active}</p>
+              <p className="mt-1 text-xs text-gray-500">{metrics.conversations.mine} atribuídas a você</p>
             </div>
-            <div className="text-5xl opacity-20">💬</div>
+            <div className="rounded-lg bg-green-50 p-3 text-green-700">
+              <MessageSquare className="h-5 w-5" />
+            </div>
           </div>
         </div>
 
-        {/* Aguardando Atendimento */}
-        <div className="bg-gradient-to-br from-red-500 to-red-600 rounded-lg p-6 text-white">
-          <div className="flex items-center justify-between">
+        <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
+          <div className="flex items-start justify-between">
             <div>
-              <p className="text-red-100 text-sm mb-1">Aguardando</p>
-              <p className="text-4xl font-bold">{metrics.conversations.waiting}</p>
-              <p className="text-red-100 text-xs mt-2">
-                Sem atendente
-              </p>
+              <p className="text-sm text-gray-500">Aguardando</p>
+              <p className="mt-1 text-3xl font-semibold text-gray-900">{metrics.conversations.waiting}</p>
+              <p className="mt-1 text-xs text-gray-500">Sem atendente</p>
             </div>
-            <div className="text-5xl opacity-20">⚠️</div>
-          </div>
-        </div>
-      </div>
-
-      {/* Seção de Ações Rápidas */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <h3 className="text-lg font-bold text-gray-800 mb-4">⚡ Ações Rápidas</h3>
-        <div className="grid grid-cols-3 gap-4">
-          <button 
-            onClick={() => window.location.hash = '#orders'}
-            className="p-4 bg-yellow-50 hover:bg-yellow-100 rounded-lg transition text-center"
-          >
-            <div className="text-3xl mb-2">📦</div>
-            <p className="font-medium text-gray-800">Aprovar Pedidos</p>
-            <p className="text-sm text-gray-600 mt-1">{metrics.orders.pending} pendentes</p>
-          </button>
-
-          <button 
-            onClick={() => window.location.hash = '#conversations'}
-            className="p-4 bg-green-50 hover:bg-green-100 rounded-lg transition text-center"
-          >
-            <div className="text-3xl mb-2">💬</div>
-            <p className="font-medium text-gray-800">Conversas</p>
-            <p className="text-sm text-gray-600 mt-1">{metrics.conversations.active} ativas</p>
-          </button>
-
-          <button 
-            onClick={() => window.location.hash = '#history'}
-            className="p-4 bg-blue-50 hover:bg-blue-100 rounded-lg transition text-center"
-          >
-            <div className="text-3xl mb-2">📋</div>
-            <p className="font-medium text-gray-800">Histórico</p>
-            <p className="text-sm text-gray-600 mt-1">Ver todos</p>
-          </button>
-        </div>
-      </div>
-
-      {/* Resumo de Atividade */}
-      <div className="grid grid-cols-2 gap-4">
-        <div className="bg-white rounded-lg shadow p-6">
-          <h3 className="text-lg font-bold text-gray-800 mb-4">📦 Status dos Pedidos</h3>
-          <div className="space-y-3">
-            <div className="flex justify-between items-center">
-              <span className="text-gray-600">Pendentes</span>
-              <span className="font-bold text-yellow-600">{metrics.orders.pending}</span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-gray-600">Processando</span>
-              <span className="font-bold text-blue-600">{metrics.orders.processing}</span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-gray-600">Total</span>
-              <span className="font-bold text-gray-800">{metrics.orders.total}</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-lg shadow p-6">
-          <h3 className="text-lg font-bold text-gray-800 mb-4">💬 Status das Conversas</h3>
-          <div className="space-y-3">
-            <div className="flex justify-between items-center">
-              <span className="text-gray-600">Minhas</span>
-              <span className="font-bold text-green-600">{metrics.conversations.mine}</span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-gray-600">Aguardando</span>
-              <span className="font-bold text-red-600">{metrics.conversations.waiting}</span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-gray-600">Total Ativas</span>
-              <span className="font-bold text-gray-800">{metrics.conversations.active}</span>
+            <div className="rounded-lg bg-red-50 p-3 text-red-700">
+              <AlertTriangle className="h-5 w-5" />
             </div>
           </div>
         </div>
       </div>
 
-      {/* Botão de Atualização */}
-      <div className="text-center">
+      <div className="grid gap-4 lg:grid-cols-2">
+        <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+          <h3 className="text-base font-semibold text-gray-900">Pedidos</h3>
+          <p className="text-sm text-gray-500">Resumo</p>
+          <div className="mt-4 space-y-2">
+            {[
+              { label: 'Pendentes', value: metrics.orders.pending },
+              { label: 'Processando', value: metrics.orders.processing },
+              { label: 'Total', value: metrics.orders.total },
+            ].map((row) => (
+              <div key={row.label} className="flex items-center justify-between rounded-lg bg-gray-50 p-3">
+                <span className="text-sm font-medium text-gray-700">{row.label}</span>
+                <span className="text-sm font-semibold text-gray-900">{row.value}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+          <h3 className="text-base font-semibold text-gray-900">Conversas</h3>
+          <p className="text-sm text-gray-500">Resumo</p>
+          <div className="mt-4 space-y-2">
+            {[
+              { label: 'Minhas', value: metrics.conversations.mine },
+              { label: 'Aguardando', value: metrics.conversations.waiting },
+              { label: 'Ativas', value: metrics.conversations.active },
+            ].map((row) => (
+              <div key={row.label} className="flex items-center justify-between rounded-lg bg-gray-50 p-3">
+                <span className="text-sm font-medium text-gray-700">{row.label}</span>
+                <span className="text-sm font-semibold text-gray-900">{row.value}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="flex items-center justify-end">
         <button
           onClick={fetchMetrics}
-          className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition"
+          className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700"
         >
-          🔄 Atualizar Métricas
+          Atualizar
         </button>
-        <p className="text-xs text-gray-500 mt-2">
-          Atualização automática a cada 30 segundos
-        </p>
       </div>
     </div>
   )

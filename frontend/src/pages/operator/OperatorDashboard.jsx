@@ -4,7 +4,9 @@
  */
 
 import { useState, lazy, Suspense } from 'react'
+import { LayoutDashboard, PlusCircle, Package, MessageSquare, History, Map as MapIcon } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
+import FlowbiteLayout from '../../components/flowbite/FlowbiteLayout'
 
 // Importar componentes
 import OperatorDashboardOverview from '../../components/operator/OperatorDashboardOverview'
@@ -20,138 +22,45 @@ export default function OperatorDashboard() {
   const [activeView, setActiveView] = useState('dashboard')
 
   return (
-    <div className="flex h-screen bg-gray-100">
-      {/* Sidebar */}
-      <div className="w-64 bg-white shadow-lg flex flex-col">
-        <div className="p-6 border-b">
-          <h1 className="text-xl font-bold text-gray-800">Gas Automation</h1>
-          <p className="text-sm text-gray-500">Painel do Operador</p>
-        </div>
-        
-        <nav className="p-4 flex-1">
-          <div className="space-y-2">
-            <button
-              onClick={() => setActiveView('dashboard')}
-              className={`w-full text-left px-4 py-3 rounded transition ${
-                activeView === 'dashboard'
-                  ? 'bg-blue-500 text-white'
-                  : 'hover:bg-gray-100'
-              }`}
-            >
-              📊 Dashboard
-            </button>
-            <button
-              onClick={() => setActiveView('create-order')}
-              className={`w-full text-left px-4 py-3 rounded transition ${
-                activeView === 'create-order'
-                  ? 'bg-blue-500 text-white'
-                  : 'hover:bg-gray-100'
-              }`}
-            >
-              ➕ Criar Pedido
-            </button>
-            <button
-              onClick={() => setActiveView('orders')}
-              className={`w-full text-left px-4 py-3 rounded transition ${
-                activeView === 'orders'
-                  ? 'bg-blue-500 text-white'
-                  : 'hover:bg-gray-100'
-              }`}
-            >
-              📦 Pedidos Pendentes
-            </button>
-            <button
-              onClick={() => setActiveView('conversations')}
-              className={`w-full text-left px-4 py-3 rounded transition ${
-                activeView === 'conversations'
-                  ? 'bg-blue-500 text-white'
-                  : 'hover:bg-gray-100'
-              }`}
-            >
-              💬 Conversas
-            </button>
-            <button
-              onClick={() => setActiveView('history')}
-              className={`w-full text-left px-4 py-3 rounded transition ${
-                activeView === 'history'
-                  ? 'bg-blue-500 text-white'
-                  : 'hover:bg-gray-100'
-              }`}
-            >
-              📋 Histórico
-            </button>
-            <button
-              onClick={() => setActiveView('map')}
-              className={`w-full text-left px-4 py-3 rounded transition ${
-                activeView === 'map'
-                  ? 'bg-blue-500 text-white'
-                  : 'hover:bg-gray-100'
-              }`}
-            >
-              🗺️ Mapa
-            </button>
-          </div>
-        </nav>
+    <FlowbiteLayout
+      appName="Gas Automation"
+      pageTitle="Operador"
+      userEmail={user?.email || ''}
+      onLogout={logout}
+      navItems={[
+        { key: 'dashboard', type: 'button', label: 'Dashboard', icon: LayoutDashboard, onClick: () => setActiveView('dashboard') },
+        { key: 'create-order', type: 'button', label: 'Criar pedido', icon: PlusCircle, onClick: () => setActiveView('create-order') },
+        { key: 'orders', type: 'button', label: 'Pedidos pendentes', icon: Package, onClick: () => setActiveView('orders') },
+        { key: 'conversations', type: 'button', label: 'Conversas', icon: MessageSquare, onClick: () => setActiveView('conversations') },
+        { key: 'history', type: 'button', label: 'Histórico', icon: History, onClick: () => setActiveView('history') },
+        { key: 'map', type: 'button', label: 'Mapa', icon: MapIcon, onClick: () => setActiveView('map') },
+      ]}
+    >
+      {/* Renderizar view baseada no estado */}
+      {activeView === 'dashboard' && <OperatorDashboardOverview />}
 
-        {/* User Info */}
-        <div className="border-t p-4">
-          <div className="flex items-center justify-between gap-2">
-            <div className="text-sm min-w-0">
-              <p className="font-semibold text-gray-800 truncate">{user?.email}</p>
-              <p className="text-gray-500 text-xs uppercase font-bold">
-                👤 {user?.role}
-              </p>
-            </div>
-            <button 
-              onClick={logout}
-              className="px-3 py-1 bg-red-500 text-white rounded text-xs hover:bg-red-600 transition whitespace-nowrap"
-            >
-              Sair
-            </button>
-          </div>
-        </div>
-      </div>
+      {activeView === 'create-order' && <CreateOrderPanel />}
 
-      {/* Main Content */}
-      <div className="flex-1 overflow-auto">
-        <div className="p-8">
-          {/* Renderizar view baseada no estado */}
-          {activeView === 'dashboard' && <OperatorDashboardOverview />}
-          
-          {activeView === 'create-order' && <CreateOrderPanel />}
-          
-          {activeView === 'orders' && <PendingOrdersPanel />}
-          
-          {activeView === 'conversations' && (
-            <div className="bg-white rounded-lg shadow p-8 text-center">
-              <div className="text-6xl mb-4">💬</div>
-              <h2 className="text-2xl font-bold text-gray-800 mb-2">Conversas</h2>
-              <p className="text-gray-600 mb-6">
-                Painel de conversas em desenvolvimento.
-              </p>
-              <p className="text-sm text-gray-500">
-                Em breve: Chat em tempo real com WebSocket
-              </p>
-            </div>
-          )}
-          
-          {activeView === 'history' && (
-            <div className="bg-white rounded-lg shadow p-8 text-center">
-              <div className="text-6xl mb-4">📋</div>
-              <h2 className="text-2xl font-bold text-gray-800 mb-2">Histórico</h2>
-              <p className="text-gray-600 mb-6">
-                Visualize pedidos e conversas anteriores.
-              </p>
-              <p className="text-sm text-gray-500">
-                Em desenvolvimento
-              </p>
-            </div>
-          )}
+      {activeView === 'orders' && <PendingOrdersPanel />}
 
-          {activeView === 'map' && <MapView />}
+      {activeView === 'conversations' && (
+        <div className="rounded-lg border border-gray-200 bg-white p-8 text-center shadow-sm">
+          <h2 className="text-2xl font-semibold text-gray-900 mb-2">Conversas</h2>
+          <p className="text-gray-600 mb-6">Painel de conversas em desenvolvimento.</p>
+          <p className="text-sm text-gray-500">Em breve: Chat em tempo real com WebSocket</p>
         </div>
-      </div>
-    </div>
+      )}
+
+      {activeView === 'history' && (
+        <div className="rounded-lg border border-gray-200 bg-white p-8 text-center shadow-sm">
+          <h2 className="text-2xl font-semibold text-gray-900 mb-2">Histórico</h2>
+          <p className="text-gray-600 mb-6">Visualize pedidos e conversas anteriores.</p>
+          <p className="text-sm text-gray-500">Em desenvolvimento</p>
+        </div>
+      )}
+
+      {activeView === 'map' && <MapView />}
+    </FlowbiteLayout>
   )
 }
 
@@ -168,13 +77,12 @@ function MapView() {
 
   if (error) {
     return (
-      <div className="bg-white rounded-lg shadow p-8 text-center">
-        <div className="text-6xl mb-4">⚠️</div>
-        <h2 className="text-2xl font-bold text-red-600 mb-2">Erro ao carregar mapa</h2>
+      <div className="rounded-lg border border-red-200 bg-red-50 p-8 text-center">
+        <h2 className="text-2xl font-semibold text-red-700 mb-2">Erro ao carregar mapa</h2>
         <p className="text-gray-600 mb-4">{error}</p>
         <button
           onClick={refresh}
-          className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+          className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700"
         >
           Tentar novamente
         </button>
@@ -185,20 +93,20 @@ function MapView() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold text-gray-800">Mapa de Entregas</h2>
+        <h2 className="text-2xl font-semibold text-gray-900">Mapa de Entregas</h2>
         <button
           onClick={refresh}
           disabled={isLoading}
-          className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
+          className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
         >
           {isLoading ? 'Atualizando...' : 'Atualizar'}
         </button>
       </div>
 
       <Suspense fallback={
-        <div className="bg-white rounded-lg shadow p-8 text-center">
-          <div className="animate-spin text-4xl mb-4">🔄</div>
-          <p className="text-gray-600">Carregando mapa...</p>
+        <div className="rounded-lg border border-gray-200 bg-white p-8 text-center shadow-sm">
+          <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-gray-200 border-t-primary-600" />
+          <p className="mt-3 text-sm text-gray-600">Carregando mapa...</p>
         </div>
       }>
         <DeliveryMap
@@ -213,27 +121,24 @@ function MapView() {
 
       {/* Resumo */}
       <div className="grid grid-cols-3 gap-4">
-        <div className="bg-white rounded-lg shadow p-4">
+        <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
           <div className="flex items-center gap-3">
-            <div className="text-3xl">🚚</div>
             <div>
-              <p className="text-2xl font-bold text-blue-600">{drivers.length}</p>
+              <p className="text-2xl font-bold text-primary-700">{drivers.length}</p>
               <p className="text-sm text-gray-500">Entregadores</p>
             </div>
           </div>
         </div>
-        <div className="bg-white rounded-lg shadow p-4">
+        <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
           <div className="flex items-center gap-3">
-            <div className="text-3xl">📦</div>
             <div>
               <p className="text-2xl font-bold text-green-600">{deliveries.length}</p>
               <p className="text-sm text-gray-500">Entregas Ativas</p>
             </div>
           </div>
         </div>
-        <div className="bg-white rounded-lg shadow p-4">
+        <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
           <div className="flex items-center gap-3">
-            <div className="text-3xl">📍</div>
             <div>
               <p className="text-2xl font-bold text-red-600">{customerLocations.length}</p>
               <p className="text-sm text-gray-500">Localizações</p>

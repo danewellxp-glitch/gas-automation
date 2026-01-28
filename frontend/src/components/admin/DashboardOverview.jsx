@@ -4,6 +4,7 @@
  */
 
 import { useState, useEffect } from 'react'
+import { Activity, Truck, Users, Package } from 'lucide-react'
 
 export default function DashboardOverview() {
   const [metrics, setMetrics] = useState(null)
@@ -84,170 +85,138 @@ export default function DashboardOverview() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="text-gray-600 mt-4">Carregando métricas...</p>
-        </div>
+      <div className="rounded-lg border border-gray-200 bg-white p-8 text-center shadow-sm">
+        <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-gray-200 border-t-primary-600" />
+        <p className="mt-3 text-sm text-gray-600">Carregando métricas...</p>
       </div>
     )
   }
 
   if (!metrics) {
     return (
-      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-        <p className="text-red-700">Erro ao carregar métricas</p>
+      <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+        Erro ao carregar métricas
       </div>
     )
   }
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div>
-        <h2 className="text-2xl font-bold text-gray-800">📊 Dashboard Executivo</h2>
-        <p className="text-gray-600">Visão geral do sistema em tempo real</p>
+        <h2 className="text-2xl font-semibold text-gray-900">Visão geral</h2>
+        <p className="text-sm text-gray-600">Métricas do sistema em tempo real</p>
       </div>
 
-      {/* Cards de Métricas Principais */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Total de Usuários */}
-        <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg p-6 text-white">
-          <div className="flex items-center justify-between">
+      {/* Cards principais */}
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
+          <div className="flex items-start justify-between">
             <div>
-              <p className="text-blue-100 text-sm mb-1">Total de Usuários</p>
-              <p className="text-4xl font-bold">{metrics.users.total}</p>
-              <p className="text-blue-100 text-xs mt-2">
-                {metrics.users.active} ativos
-              </p>
+              <p className="text-sm text-gray-500">Total de usuários</p>
+              <p className="mt-1 text-3xl font-semibold text-gray-900">{metrics.users.total}</p>
+              <p className="mt-1 text-xs text-gray-500">{metrics.users.active} ativos</p>
             </div>
-            <div className="text-5xl opacity-20">👥</div>
+            <div className="rounded-lg bg-primary-50 p-3 text-primary-700">
+              <Users className="h-5 w-5" />
+            </div>
           </div>
         </div>
 
-        {/* Entregadores */}
-        <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-lg p-6 text-white">
-          <div className="flex items-center justify-between">
+        <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
+          <div className="flex items-start justify-between">
             <div>
-              <p className="text-green-100 text-sm mb-1">Entregadores</p>
-              <p className="text-4xl font-bold">{metrics.drivers.total}</p>
-              <p className="text-green-100 text-xs mt-2">
-                {metrics.drivers.active} online
-              </p>
+              <p className="text-sm text-gray-500">Entregadores</p>
+              <p className="mt-1 text-3xl font-semibold text-gray-900">{metrics.drivers.total}</p>
+              <p className="mt-1 text-xs text-gray-500">{metrics.drivers.active} online</p>
             </div>
-            <div className="text-5xl opacity-20">🚚</div>
+            <div className="rounded-lg bg-green-50 p-3 text-green-700">
+              <Truck className="h-5 w-5" />
+            </div>
           </div>
         </div>
 
-        {/* Entregas Hoje */}
-        <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-lg p-6 text-white">
-          <div className="flex items-center justify-between">
+        <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
+          <div className="flex items-start justify-between">
             <div>
-              <p className="text-purple-100 text-sm mb-1">Entregas Hoje</p>
-              <p className="text-4xl font-bold">{metrics.deliveries.today}</p>
-              <p className="text-purple-100 text-xs mt-2">
-                {metrics.deliveries.hoursWorked}h trabalhadas
-              </p>
+              <p className="text-sm text-gray-500">Entregas hoje</p>
+              <p className="mt-1 text-3xl font-semibold text-gray-900">{metrics.deliveries.today}</p>
+              <p className="mt-1 text-xs text-gray-500">{metrics.deliveries.hoursWorked}h trabalhadas</p>
             </div>
-            <div className="text-5xl opacity-20">📦</div>
+            <div className="rounded-lg bg-indigo-50 p-3 text-indigo-700">
+              <Package className="h-5 w-5" />
+            </div>
           </div>
         </div>
 
-        {/* Sistema */}
-        <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-lg p-6 text-white">
-          <div className="flex items-center justify-between">
+        <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
+          <div className="flex items-start justify-between">
             <div>
-              <p className="text-orange-100 text-sm mb-1">Status do Sistema</p>
-              <p className="text-2xl font-bold">Operacional</p>
-              <p className="text-orange-100 text-xs mt-2">
-                Todos os serviços online
-              </p>
+              <p className="text-sm text-gray-500">Status do sistema</p>
+              <p className="mt-1 text-2xl font-semibold text-gray-900">Operacional</p>
+              <p className="mt-1 text-xs text-gray-500">Serviços online</p>
             </div>
-            <div className="text-5xl opacity-20">✅</div>
+            <div className="rounded-lg bg-amber-50 p-3 text-amber-700">
+              <Activity className="h-5 w-5" />
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Seção: Usuários por Role */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <h3 className="text-lg font-bold text-gray-800 mb-4">👥 Usuários por Role</h3>
-        <div className="grid grid-cols-5 gap-4">
-          <div className="text-center p-4 bg-red-50 rounded-lg">
-            <p className="text-3xl font-bold text-red-600">{metrics.users.byRole.admin}</p>
-            <p className="text-sm text-gray-600 mt-1">👑 Admins</p>
+      <div className="grid gap-4 lg:grid-cols-2">
+        {/* Usuários por role */}
+        <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+          <div className="mb-4">
+            <h3 className="text-base font-semibold text-gray-900">Usuários por role</h3>
+            <p className="text-sm text-gray-500">Distribuição de perfis</p>
           </div>
-          <div className="text-center p-4 bg-blue-50 rounded-lg">
-            <p className="text-3xl font-bold text-blue-600">{metrics.users.byRole.operator}</p>
-            <p className="text-sm text-gray-600 mt-1">👤 Operadores</p>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            {[
+              { label: 'Admins', value: metrics.users.byRole.admin },
+              { label: 'Operadores', value: metrics.users.byRole.operator },
+              { label: 'Owners', value: metrics.users.byRole.owner },
+              { label: 'Drivers', value: metrics.users.byRole.driver },
+              { label: 'Users', value: metrics.users.byRole.user },
+            ].map((r) => (
+              <div key={r.label} className="rounded-lg bg-gray-50 p-4">
+                <div className="text-2xl font-semibold text-gray-900">{r.value}</div>
+                <div className="mt-1 text-xs text-gray-500">{r.label}</div>
+              </div>
+            ))}
           </div>
-          <div className="text-center p-4 bg-purple-50 rounded-lg">
-            <p className="text-3xl font-bold text-purple-600">{metrics.users.byRole.owner}</p>
-            <p className="text-sm text-gray-600 mt-1">💼 Owners</p>
+        </div>
+
+        {/* Status drivers */}
+        <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+          <div className="mb-4">
+            <h3 className="text-base font-semibold text-gray-900">Status dos entregadores</h3>
+            <p className="text-sm text-gray-500">Situação atual</p>
           </div>
-          <div className="text-center p-4 bg-green-50 rounded-lg">
-            <p className="text-3xl font-bold text-green-600">{metrics.users.byRole.driver}</p>
-            <p className="text-sm text-gray-600 mt-1">🚚 Drivers</p>
-          </div>
-          <div className="text-center p-4 bg-gray-50 rounded-lg">
-            <p className="text-3xl font-bold text-gray-600">{metrics.users.byRole.user}</p>
-            <p className="text-sm text-gray-600 mt-1">📦 Users</p>
+          <div className="space-y-2">
+            {[
+              { label: 'Disponível', value: metrics.drivers.available, dot: 'bg-green-500' },
+              { label: 'Ocupado', value: metrics.drivers.busy, dot: 'bg-blue-500' },
+              { label: 'Em pausa', value: metrics.drivers.break, dot: 'bg-amber-500' },
+              { label: 'Offline', value: metrics.drivers.offline, dot: 'bg-gray-400' },
+            ].map((s) => (
+              <div key={s.label} className="flex items-center justify-between rounded-lg bg-gray-50 p-3">
+                <div className="flex items-center gap-3">
+                  <span className={`h-2.5 w-2.5 rounded-full ${s.dot}`} />
+                  <span className="text-sm font-medium text-gray-900">{s.label}</span>
+                </div>
+                <span className="text-sm font-semibold text-gray-900">{s.value}</span>
+              </div>
+            ))}
           </div>
         </div>
       </div>
 
-      {/* Seção: Status dos Entregadores */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <h3 className="text-lg font-bold text-gray-800 mb-4">🚚 Status dos Entregadores</h3>
-        <div className="space-y-3">
-          {/* Available */}
-          <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
-            <div className="flex items-center gap-3">
-              <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
-              <span className="font-medium text-gray-800">Disponível</span>
-            </div>
-            <span className="text-2xl font-bold text-green-600">{metrics.drivers.available}</span>
-          </div>
-
-          {/* Busy */}
-          <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
-            <div className="flex items-center gap-3">
-              <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-              <span className="font-medium text-gray-800">Ocupado (em entrega)</span>
-            </div>
-            <span className="text-2xl font-bold text-blue-600">{metrics.drivers.busy}</span>
-          </div>
-
-          {/* Break */}
-          <div className="flex items-center justify-between p-3 bg-yellow-50 rounded-lg">
-            <div className="flex items-center gap-3">
-              <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
-              <span className="font-medium text-gray-800">Em pausa</span>
-            </div>
-            <span className="text-2xl font-bold text-yellow-600">{metrics.drivers.break}</span>
-          </div>
-
-          {/* Offline */}
-          <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-            <div className="flex items-center gap-3">
-              <div className="w-3 h-3 bg-gray-500 rounded-full"></div>
-              <span className="font-medium text-gray-800">Offline</span>
-            </div>
-            <span className="text-2xl font-bold text-gray-600">{metrics.drivers.offline}</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Botão de Atualização */}
-      <div className="text-center">
+      <div className="flex items-center justify-end">
         <button
           onClick={fetchMetrics}
-          className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition"
+          className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700"
         >
-          🔄 Atualizar Métricas
+          Atualizar métricas
         </button>
-        <p className="text-xs text-gray-500 mt-2">
-          Atualização automática a cada 30 segundos
-        </p>
       </div>
     </div>
   )
