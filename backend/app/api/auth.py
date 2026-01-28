@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import timedelta, datetime
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
@@ -9,7 +9,7 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 
 from app.database import get_db
-from app.auth import authenticate_user, create_access_token, get_current_user, create_user
+from app.auth import authenticate_user, create_access_token, get_current_user, create_user, verify_password, get_password_hash
 from app.models.auth_models import User
 from app.config import settings
 
@@ -31,12 +31,14 @@ class UserInfo(BaseModel):
     email: str
     full_name: str
     role: str
+    must_change_password: Optional[bool] = False
 
 class Token(BaseModel):
     access_token: str
     token_type: str
     role: Optional[str] = "operator"
     email: Optional[str] = None
+    must_change_password: Optional[bool] = False
     user: Optional[UserInfo] = None
 
 class TokenData(BaseModel):
@@ -83,12 +85,14 @@ async def login_by_email(
         "token_type": "bearer",
         "role": user.role,
         "email": user.email,
+        "must_change_password": getattr(user, "must_change_password", False),
         "user": {
             "id": user.id,
             "username": user.username,
             "email": user.email,
             "full_name": user.full_name,
-            "role": user.role
+            "role": user.role,
+            "must_change_password": getattr(user, "must_change_password", False),
         }
     }
 
@@ -151,13 +155,64 @@ async def login_for_access_token(
         "access_token": access_token,
         "token_type": "bearer",
         "role": user.role,
-        "email": user.email
+        "email": user.email,
+        "must_change_password": getattr(user, "must_change_password", False),
     }
 
-@router.get("/users/me", response_model=User)
+class UserMeResponse(BaseModel):
+    id: int
+    username: str
+    email: str
+    full_name: str
+    role: str
+    is_active: bool
+    must_change_password: bool = False
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+@router.get("/users/me", response_model=UserMeResponse)
 async def read_users_me(current_user: User = Depends(get_current_user)):
-    """Get current user information"""
-    return current_user
+    """Get current user information (sem expor hashed_password)"""
+    return {
+        "id": current_user.id,
+        "username": current_user.username,
+        "email": current_user.email,
+        "full_name": current_user.full_name,
+        "role": current_user.role,
+        "is_active": current_user.is_active,
+        "must_change_password": getattr(current_user, "must_change_password", False),
+        "created_at": current_user.created_at.isoformat() if getattr(current_user, "created_at", None) else None,
+        "updated_at": current_user.updated_at.isoformat() if getattr(current_user, "updated_at", None) else None,
+    }
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+@router.post("/change-password")
+async def change_password(
+    body: ChangePasswordRequest,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+):
+    """
+    Troca senha do usuário autenticado.
+    Usado para fluxo de senha temporária (troca obrigatória no 1º login).
+    """
+    if not verify_password(body.current_password, current_user.hashed_password):
+        raise HTTPException(status_code=400, detail="Senha atual inválida")
+
+    # get_password_hash já valida min/max
+    current_user.hashed_password = get_password_hash(body.new_password)
+    current_user.must_change_password = False
+    current_user.temp_password_issued_at = None
+    current_user.updated_at = datetime.utcnow()
+
+    session.add(current_user)
+    await session.commit()
+    await session.refresh(current_user)
+
+    return {"message": "Senha alterada com sucesso"}
 
 @router.put("/users/me")
 async def update_user(

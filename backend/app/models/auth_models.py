@@ -19,6 +19,8 @@ class User(SQLModel, table=True):
     hashed_password: str
     role: str = Field(default="user")
     is_active: bool = Field(default=True)
+    must_change_password: bool = Field(default=False)
+    temp_password_issued_at: Optional[datetime] = Field(default=None)
     created_at: datetime = Field(default_factory=lambda: datetime.now())
     updated_at: datetime = Field(default_factory=lambda: datetime.now())
 

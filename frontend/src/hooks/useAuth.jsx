@@ -51,6 +51,45 @@ export function AuthProvider({ children }) {
   const [token, setToken] = useState(null)
   const [loading, setLoading] = useState(true)
 
+  const refreshMe = useCallback(async (accessToken) => {
+    const t = accessToken || token || localStorage.getItem('access_token') || localStorage.getItem('token')
+    if (!t) return null
+
+    const meRes = await fetch(`${getApiUrl()}/auth/users/me`, {
+      headers: { Authorization: `Bearer ${t}` },
+    })
+
+    if (!meRes.ok) {
+      throw new Error('Falha ao validar sessão')
+    }
+
+    const me = await meRes.json()
+
+    localStorage.setItem('access_token', t)
+    localStorage.setItem('token', t)
+    localStorage.setItem(
+      'user',
+      JSON.stringify({
+        username: me.username,
+        email: me.email,
+        role: me.role,
+        full_name: me.full_name,
+        must_change_password: !!me.must_change_password,
+      })
+    )
+    if (me.username) localStorage.setItem('username', me.username)
+
+    setUser({
+      username: me.username,
+      email: me.email,
+      role: me.role,
+      full_name: me.full_name,
+      must_change_password: !!me.must_change_password,
+    })
+
+    return me
+  }, [token])
+
   const logout = useCallback(() => {
     clearStoredSession()
     setToken(null)
@@ -88,41 +127,7 @@ export function AuthProvider({ children }) {
 
       // Validar token no backend e sincronizar dados do usuário
       try {
-        const meRes = await fetch(`${getApiUrl()}/auth/users/me`, {
-          headers: { Authorization: `Bearer ${savedToken}` },
-        })
-
-        if (!meRes.ok) {
-          // 401/403/etc: token inválido ou usuário desativado
-          logout()
-          if (!cancelled) setLoading(false)
-          return
-        }
-
-        const me = await meRes.json()
-
-        // Persistir e padronizar chaves
-        localStorage.setItem('access_token', savedToken)
-        localStorage.setItem('token', savedToken) // compatibilidade com código legado
-        localStorage.setItem(
-          'user',
-          JSON.stringify({
-            username: me.username,
-            email: me.email,
-            role: me.role,
-            full_name: me.full_name,
-          })
-        )
-        if (me.username) localStorage.setItem('username', me.username)
-
-        if (!cancelled) {
-          setUser({
-            username: me.username,
-            email: me.email,
-            role: me.role,
-            full_name: me.full_name,
-          })
-        }
+        await refreshMe(savedToken)
       } catch {
         // Falha de rede: não derruba sessão imediatamente, mas evita ficar travado
         // Mantém o estado atual e deixa as chamadas seguintes determinarem 401
@@ -172,6 +177,7 @@ export function AuthProvider({ children }) {
           username: email,
           email: data.email || email,
           role: data.role || 'operator',
+          must_change_password: !!data.must_change_password,
         })
       )
 
@@ -180,6 +186,7 @@ export function AuthProvider({ children }) {
         username: email,
         email: data.email || email,
         role: data.role || 'operator',
+        must_change_password: !!data.must_change_password,
       })
     } catch (error) {
       console.error('Login error:', error)
@@ -193,6 +200,7 @@ export function AuthProvider({ children }) {
     loading,
     login,
     logout,
+    refreshMe,
     isAuthenticated: !!token,
   }
 

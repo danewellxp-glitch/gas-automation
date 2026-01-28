@@ -1,0 +1,21 @@
+:root {
+  --corona-content-bg: #000000;
+  --corona-surface: #191c24;
+  --corona-border: #2c2e33;
+
+  --corona-text: #ffffff;
+  --corona-text-muted: #6c7293;
+
+  --corona-primary: #0090e7;
+  --corona-success: #00d25b;
+  --corona-danger: #fc424a;
+  --corona-warning: #ffab00;
+  --corona-info: #8f5fe8;
+
+  --corona-sidebar-width: 244px;
+  --corona-sidebar-width-icon: 70px;
+  --corona-navbar-height: 70px;
+  --corona-content-padding-y: 1.875rem;
+  --corona-content-padding-x: 1.75rem;
+}
+

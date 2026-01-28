@@ -25,6 +25,10 @@ import app.metrics as metrics
 
 # Importar rotas
 from app.api import webhooks, orders, products, customers, websocket, chats, auth, chatbot, users, drivers, cargas
+from app.api import admin_users
+from app.api import admin_errors
+from app.api import admin_system_health
+from app.api import admin_debug
 from app.api import images, tipos_preco, vasilhames, locations, exports, firebird_schema, rpa
 
 # Importar serviços para delivery system
@@ -284,6 +288,26 @@ async def api_info():
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     """Handler global de exceções não tratadas."""
+    # Central de erros (best-effort). Não deve causar cascata.
+    try:
+        from app.database import AsyncSessionLocal
+        from app.services.error_center import upsert_error_event
+
+        async with AsyncSessionLocal() as s:
+            await upsert_error_event(
+                s,
+                service="backend",
+                error_type=type(exc).__name__,
+                message=str(exc) or type(exc).__name__,
+                details={
+                    "path": getattr(request, "url", None).path if getattr(request, "url", None) else None,
+                    "method": getattr(request, "method", None),
+                },
+            )
+    except Exception:
+        # Nunca falhar o handler por causa do error center
+        pass
+
     # Em produção, não expor detalhes do erro
     if settings.is_production:
         return JSONResponse(
@@ -346,6 +370,10 @@ app.include_router(websocket.router, prefix="/ws", tags=["WebSocket"])
 app.include_router(chats.router, prefix="/api", tags=["Chats"])
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(users.router, prefix="/api", tags=["Users"])
+app.include_router(admin_users.router, prefix="/api", tags=["Admin Users"])
+app.include_router(admin_system_health.router, prefix="/api", tags=["Admin System Health"])
+app.include_router(admin_errors.router, prefix="/api", tags=["Admin Errors"])
+app.include_router(admin_debug.router, prefix="/api", tags=["Admin Debug"])
 app.include_router(chatbot.router, prefix="/api/chatbot", tags=["Chatbot"])
 app.include_router(drivers.router, prefix="/api/drivers", tags=["Drivers"])
 app.include_router(cargas.router, prefix="/api/cargas", tags=["Cargas"])

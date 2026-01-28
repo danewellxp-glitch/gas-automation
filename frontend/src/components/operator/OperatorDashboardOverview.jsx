@@ -40,13 +40,13 @@ export default function OperatorDashboardOverview() {
       setMetrics({
         orders: {
           pending: orders.filter(o => o.status === 'pending').length,
-          processing: orders.filter(o => o.status === 'processing').length,
+          processing: orders.filter(o => o.status === 'preparing').length,
           total: orders.length
         },
         conversations: {
-          active: conversations.filter(c => c.status === 'active').length,
-          waiting: conversations.filter(c => !c.assigned_to).length,
-          mine: conversations.filter(c => c.assigned_to === localStorage.getItem('username')).length,
+          active: conversations.length, // Todas as conversas são consideradas ativas
+          waiting: 0, // Sistema de atribuição não implementado ainda
+          mine: 0, // Sistema de atribuição não implementado ainda
           total: conversations.length
         }
       })
@@ -98,9 +98,9 @@ export default function OperatorDashboardOverview() {
         <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-sm text-gray-500">Em processamento</p>
+              <p className="text-sm text-gray-500">Em preparo</p>
               <p className="mt-1 text-3xl font-semibold text-gray-900">{metrics.orders.processing}</p>
-              <p className="mt-1 text-xs text-gray-500">Pedidos em preparo</p>
+              <p className="mt-1 text-xs text-gray-500">Sendo preparados</p>
             </div>
             <div className="rounded-lg bg-primary-50 p-3 text-primary-700">
               <RefreshCcw className="h-5 w-5" />
@@ -113,7 +113,7 @@ export default function OperatorDashboardOverview() {
             <div>
               <p className="text-sm text-gray-500">Conversas ativas</p>
               <p className="mt-1 text-3xl font-semibold text-gray-900">{metrics.conversations.active}</p>
-              <p className="mt-1 text-xs text-gray-500">{metrics.conversations.mine} atribuídas a você</p>
+              <p className="mt-1 text-xs text-gray-500">Total de conversas</p>
             </div>
             <div className="rounded-lg bg-green-50 p-3 text-green-700">
               <MessageSquare className="h-5 w-5" />
@@ -124,12 +124,12 @@ export default function OperatorDashboardOverview() {
         <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-sm text-gray-500">Aguardando</p>
-              <p className="mt-1 text-3xl font-semibold text-gray-900">{metrics.conversations.waiting}</p>
-              <p className="mt-1 text-xs text-gray-500">Sem atendente</p>
+              <p className="text-sm text-gray-500">Total pedidos</p>
+              <p className="mt-1 text-3xl font-semibold text-gray-900">{metrics.orders.total}</p>
+              <p className="mt-1 text-xs text-gray-500">Todos os status</p>
             </div>
-            <div className="rounded-lg bg-red-50 p-3 text-red-700">
-              <AlertTriangle className="h-5 w-5" />
+            <div className="rounded-lg bg-blue-50 p-3 text-blue-700">
+              <Package className="h-5 w-5" />
             </div>
           </div>
         </div>
@@ -142,7 +142,7 @@ export default function OperatorDashboardOverview() {
           <div className="mt-4 space-y-2">
             {[
               { label: 'Pendentes', value: metrics.orders.pending },
-              { label: 'Processando', value: metrics.orders.processing },
+              { label: 'Em preparo', value: metrics.orders.processing },
               { label: 'Total', value: metrics.orders.total },
             ].map((row) => (
               <div key={row.label} className="flex items-center justify-between rounded-lg bg-gray-50 p-3">
@@ -158,8 +158,7 @@ export default function OperatorDashboardOverview() {
           <p className="text-sm text-gray-500">Resumo</p>
           <div className="mt-4 space-y-2">
             {[
-              { label: 'Minhas', value: metrics.conversations.mine },
-              { label: 'Aguardando', value: metrics.conversations.waiting },
+              { label: 'Total', value: metrics.conversations.total },
               { label: 'Ativas', value: metrics.conversations.active },
             ].map((row) => (
               <div key={row.label} className="flex items-center justify-between rounded-lg bg-gray-50 p-3">

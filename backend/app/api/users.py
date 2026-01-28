@@ -20,6 +20,8 @@ class UserResponse(BaseModel):
     full_name: str
     role: str
     is_active: bool
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
 class UpdateRoleRequest(BaseModel):
     role: str
@@ -48,7 +50,9 @@ async def list_users(
             username=u.username,
             full_name=u.full_name,
             role=u.role,
-            is_active=u.is_active
+            is_active=u.is_active,
+            created_at=getattr(u, "created_at", None),
+            updated_at=getattr(u, "updated_at", None),
         )
         for u in users
     ]
@@ -62,7 +66,9 @@ async def get_current_user_info(current_user: User = Depends(get_current_user)):
         username=current_user.username,
         full_name=current_user.full_name,
         role=current_user.role,
-        is_active=current_user.is_active
+        is_active=current_user.is_active,
+        created_at=getattr(current_user, "created_at", None),
+        updated_at=getattr(current_user, "updated_at", None),
     )
 
 @router.put("/{user_id}/role")
@@ -120,7 +126,9 @@ async def update_user_role(
             username=user.username,
             full_name=user.full_name,
             role=user.role,
-            is_active=user.is_active
+            is_active=user.is_active,
+            created_at=getattr(user, "created_at", None),
+            updated_at=getattr(user, "updated_at", None),
         )
     }
 
@@ -154,7 +162,9 @@ async def get_user(
         username=user.username,
         full_name=user.full_name,
         role=user.role,
-        is_active=user.is_active
+        is_active=user.is_active,
+        created_at=getattr(user, "created_at", None),
+        updated_at=getattr(user, "updated_at", None),
     )
 
 

@@ -47,6 +47,9 @@ class Settings(BaseSettings):
     asaas_api_url: str = "https://api.asaas.com/v3"
     asaas_webhook_token: Optional[str] = None
 
+    # Sync Service (Firebird Sync Service)
+    sync_service_url: str = "http://localhost:8003"
+
     # Ollama (IA Local)
     ollama_url: str = "http://localhost:11434"
     ollama_model: str = "qwen2.5:3b"
@@ -99,7 +102,7 @@ class Settings(BaseSettings):
 
     # Negócio
     default_delivery_time_minutes: int = 40
-    supported_bairros: list[str] = [
+    supported_bairros: List[str] = [
         "Alto Boqueirão",
         "Boqueirão",
         "Ganchinho",
@@ -111,7 +114,7 @@ class Settings(BaseSettings):
 
     @field_validator('cors_origins')
     @classmethod
-    def validate_cors_origins(cls, v: list[str]) -> list[str]:
+    def validate_cors_origins(cls, v: List[str]) -> List[str]:
         """Valida que CORS não permite todas as origens (wildcard)."""
         if "*" in v:
             raise ValueError(

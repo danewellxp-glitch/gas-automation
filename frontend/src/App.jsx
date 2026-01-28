@@ -11,6 +11,7 @@ import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import Orders from './pages/Orders'
 import Chats from './pages/Chats'
+import ChangePassword from './pages/ChangePassword'
 
 // Pages por Role
 import OperatorDashboard from './pages/operator/OperatorDashboard'
@@ -31,6 +32,8 @@ function AppRoutes() {
   // Função para obter o dashboard correto baseado na role
   const getDashboardPath = useCallback(() => {
     if (!user?.role) return '/login'
+
+    if (user?.must_change_password) return '/change-password'
     
     const roleRoutes = {
       'driver': '/driver/dashboard',
@@ -61,6 +64,15 @@ function AppRoutes() {
       <Route 
         path="/login" 
         element={isAuthenticated ? <Navigate to={getDashboardPath()} replace /> : <Login />} 
+      />
+
+      <Route
+        path="/change-password"
+        element={
+          <ProtectedRoute>
+            <ChangePassword />
+          </ProtectedRoute>
+        }
       />
 
       {/* Dashboard padrão (protegido) */}

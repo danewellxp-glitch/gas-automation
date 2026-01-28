@@ -77,6 +77,8 @@ async def create_user(session: AsyncSession, username: str, email: str, full_nam
         full_name=full_name,
         hashed_password=hashed_password,
         role=role,
+        must_change_password=False,
+        temp_password_issued_at=None,
         created_at=datetime.now(),
         updated_at=datetime.now()
     )

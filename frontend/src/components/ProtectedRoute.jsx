@@ -20,6 +20,11 @@ export default function ProtectedRoute({ children, requiredRole = null }) {
     return <Navigate to="/login" state={{ from: location }} replace />
   }
 
+  // Troca obrigatória de senha (primeiro login / reset)
+  if (user?.must_change_password && location.pathname !== '/change-password') {
+    return <Navigate to="/change-password" replace />
+  }
+
   // Verificar se a role é permitida (se requiredRole foi especificado)
   if (requiredRole && user?.role !== requiredRole) {
     // Redirecionar para o dashboard correto da role do usuário

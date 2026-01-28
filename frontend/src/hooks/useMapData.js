@@ -27,7 +27,7 @@ export default function useMapData({
       setIsLoading(true);
       setError(null);
 
-      const response = await api.get('/api/locations/map-data', {
+      const response = await api.get('/locations/map-data', {
         params: {
           include_offline_drivers: includeOfflineDrivers,
           hours_back: hoursBack,
