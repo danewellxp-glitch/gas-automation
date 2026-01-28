@@ -2,7 +2,7 @@
 API Routes do sistema.
 """
 
-from app.api import orders, products, webhooks, customers, test_flow, websocket, locations
+from app.api import orders, products, webhooks, customers, test_flow, websocket, locations, exports
 
 __all__ = [
     "webhooks",
@@ -12,4 +12,5 @@ __all__ = [
     "test_flow",
     "websocket",
     "locations",
+    "exports",
 ]

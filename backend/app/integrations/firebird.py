@@ -956,6 +956,311 @@ class FirebirdClient:
             logger.error(f"Teste de conexão falhou: {e}")
             return False
 
+    # ==================== Schema Discovery ====================
+
+    def get_all_tables(self) -> List[Dict]:
+        """
+        Lista todas as tabelas do banco Firebird.
+
+        Returns:
+            Lista de tabelas com nome e tipo (TABLE, VIEW, etc.)
+        """
+        if not self.is_available:
+            logger.warning("Firebird não disponível")
+            return []
+
+        query = """
+            SELECT
+                TRIM(RDB$RELATION_NAME) AS TABLE_NAME,
+                CASE RDB$VIEW_SOURCE
+                    WHEN NULL THEN 'TABLE'
+                    ELSE 'VIEW'
+                END AS TABLE_TYPE,
+                RDB$DESCRIPTION AS DESCRIPTION
+            FROM RDB$RELATIONS
+            WHERE RDB$SYSTEM_FLAG = 0
+              AND RDB$RELATION_NAME NOT STARTING WITH 'RDB$'
+            ORDER BY RDB$RELATION_NAME
+        """
+
+        try:
+            results = self.execute_query(query)
+            tables = []
+            for row in results:
+                tables.append({
+                    "name": (row.get("table_name") or "").strip(),
+                    "type": (row.get("table_type") or "TABLE").strip(),
+                    "description": (row.get("description") or "").strip() if row.get("description") else None,
+                })
+            return tables
+        except FirebirdError as e:
+            logger.error(f"Erro ao listar tabelas: {e}")
+            return []
+
+    def get_table_columns(self, table_name: str) -> List[Dict]:
+        """
+        Lista todas as colunas de uma tabela.
+
+        Args:
+            table_name: Nome da tabela
+
+        Returns:
+            Lista de colunas com nome, tipo, nullable, etc.
+        """
+        if not self.is_available:
+            logger.warning("Firebird não disponível")
+            return []
+
+        query = """
+            SELECT
+                TRIM(RF.RDB$FIELD_NAME) AS COLUMN_NAME,
+                TRIM(F.RDB$FIELD_TYPE) AS FIELD_TYPE_CODE,
+                F.RDB$FIELD_LENGTH AS FIELD_LENGTH,
+                F.RDB$FIELD_PRECISION AS FIELD_PRECISION,
+                F.RDB$FIELD_SCALE AS FIELD_SCALE,
+                RF.RDB$NULL_FLAG AS NOT_NULL,
+                RF.RDB$DEFAULT_SOURCE AS DEFAULT_VALUE,
+                RF.RDB$DESCRIPTION AS DESCRIPTION,
+                CASE F.RDB$FIELD_TYPE
+                    WHEN 7 THEN 'SMALLINT'
+                    WHEN 8 THEN 'INTEGER'
+                    WHEN 9 THEN 'QUAD'
+                    WHEN 10 THEN 'FLOAT'
+                    WHEN 12 THEN 'DATE'
+                    WHEN 13 THEN 'TIME'
+                    WHEN 14 THEN 'CHAR'
+                    WHEN 16 THEN 'BIGINT'
+                    WHEN 27 THEN 'DOUBLE PRECISION'
+                    WHEN 35 THEN 'TIMESTAMP'
+                    WHEN 37 THEN 'VARCHAR'
+                    WHEN 40 THEN 'CSTRING'
+                    WHEN 45 THEN 'BLOB_ID'
+                    WHEN 261 THEN 'BLOB'
+                    ELSE 'UNKNOWN'
+                END AS FIELD_TYPE
+            FROM RDB$RELATION_FIELDS RF
+            JOIN RDB$FIELDS F ON RF.RDB$FIELD_SOURCE = F.RDB$FIELD_NAME
+            WHERE RF.RDB$RELATION_NAME = ?
+            ORDER BY RF.RDB$FIELD_POSITION
+        """
+
+        try:
+            results = self.execute_query(query, (table_name.upper(),))
+            columns = []
+            for row in results:
+                field_type = (row.get("field_type") or "UNKNOWN").strip()
+                field_length = row.get("field_length")
+
+                # Montar tipo completo (ex: VARCHAR(100))
+                if field_type in ("VARCHAR", "CHAR") and field_length:
+                    type_display = f"{field_type}({field_length})"
+                elif field_type == "NUMERIC" and row.get("field_precision"):
+                    scale = abs(row.get("field_scale") or 0)
+                    type_display = f"NUMERIC({row.get('field_precision')},{scale})"
+                else:
+                    type_display = field_type
+
+                columns.append({
+                    "name": (row.get("column_name") or "").strip(),
+                    "type": type_display,
+                    "type_code": row.get("field_type_code"),
+                    "length": field_length,
+                    "precision": row.get("field_precision"),
+                    "scale": row.get("field_scale"),
+                    "nullable": row.get("not_null") != 1,
+                    "default": (row.get("default_value") or "").strip() if row.get("default_value") else None,
+                    "description": (row.get("description") or "").strip() if row.get("description") else None,
+                })
+            return columns
+        except FirebirdError as e:
+            logger.error(f"Erro ao listar colunas de {table_name}: {e}")
+            return []
+
+    def get_table_primary_key(self, table_name: str) -> List[str]:
+        """
+        Retorna colunas da chave primária de uma tabela.
+
+        Args:
+            table_name: Nome da tabela
+
+        Returns:
+            Lista de nomes das colunas que formam a PK
+        """
+        if not self.is_available:
+            return []
+
+        query = """
+            SELECT
+                TRIM(ISG.RDB$FIELD_NAME) AS COLUMN_NAME
+            FROM RDB$RELATION_CONSTRAINTS RC
+            JOIN RDB$INDEX_SEGMENTS ISG ON RC.RDB$INDEX_NAME = ISG.RDB$INDEX_NAME
+            WHERE RC.RDB$RELATION_NAME = ?
+              AND RC.RDB$CONSTRAINT_TYPE = 'PRIMARY KEY'
+            ORDER BY ISG.RDB$FIELD_POSITION
+        """
+
+        try:
+            results = self.execute_query(query, (table_name.upper(),))
+            return [(row.get("column_name") or "").strip() for row in results]
+        except FirebirdError:
+            return []
+
+    def get_table_foreign_keys(self, table_name: str) -> List[Dict]:
+        """
+        Retorna foreign keys de uma tabela.
+
+        Args:
+            table_name: Nome da tabela
+
+        Returns:
+            Lista de FKs com coluna local, tabela referenciada e coluna referenciada
+        """
+        if not self.is_available:
+            return []
+
+        query = """
+            SELECT
+                TRIM(RC.RDB$CONSTRAINT_NAME) AS FK_NAME,
+                TRIM(ISG.RDB$FIELD_NAME) AS LOCAL_COLUMN,
+                TRIM(RC2.RDB$RELATION_NAME) AS REFERENCED_TABLE,
+                TRIM(ISG2.RDB$FIELD_NAME) AS REFERENCED_COLUMN
+            FROM RDB$RELATION_CONSTRAINTS RC
+            JOIN RDB$INDEX_SEGMENTS ISG ON RC.RDB$INDEX_NAME = ISG.RDB$INDEX_NAME
+            JOIN RDB$REF_CONSTRAINTS REFC ON RC.RDB$CONSTRAINT_NAME = REFC.RDB$CONSTRAINT_NAME
+            JOIN RDB$RELATION_CONSTRAINTS RC2 ON REFC.RDB$CONST_NAME_UQ = RC2.RDB$CONSTRAINT_NAME
+            JOIN RDB$INDEX_SEGMENTS ISG2 ON RC2.RDB$INDEX_NAME = ISG2.RDB$INDEX_NAME
+            WHERE RC.RDB$RELATION_NAME = ?
+              AND RC.RDB$CONSTRAINT_TYPE = 'FOREIGN KEY'
+            ORDER BY RC.RDB$CONSTRAINT_NAME, ISG.RDB$FIELD_POSITION
+        """
+
+        try:
+            results = self.execute_query(query, (table_name.upper(),))
+            fks = []
+            for row in results:
+                fks.append({
+                    "name": (row.get("fk_name") or "").strip(),
+                    "local_column": (row.get("local_column") or "").strip(),
+                    "referenced_table": (row.get("referenced_table") or "").strip(),
+                    "referenced_column": (row.get("referenced_column") or "").strip(),
+                })
+            return fks
+        except FirebirdError:
+            return []
+
+    def get_full_schema(self) -> Dict:
+        """
+        Retorna schema completo do banco (todas as tabelas com colunas).
+
+        Returns:
+            Dicionário com todas as tabelas, colunas, PKs e FKs
+        """
+        if not self.is_available:
+            return {"error": "Firebird não disponível", "tables": []}
+
+        tables = self.get_all_tables()
+        schema = {
+            "database": self.database,
+            "host": self.host,
+            "tables_count": len(tables),
+            "tables": []
+        }
+
+        for table in tables:
+            table_name = table["name"]
+            table_info = {
+                "name": table_name,
+                "type": table["type"],
+                "columns": self.get_table_columns(table_name),
+                "primary_key": self.get_table_primary_key(table_name),
+                "foreign_keys": self.get_table_foreign_keys(table_name),
+            }
+            schema["tables"].append(table_info)
+
+        return schema
+
+    def describe_table(self, table_name: str) -> Dict:
+        """
+        Descreve uma tabela específica (colunas, PKs, FKs).
+
+        Args:
+            table_name: Nome da tabela
+
+        Returns:
+            Dicionário com informações da tabela
+        """
+        if not self.is_available:
+            return {"error": "Firebird não disponível"}
+
+        return {
+            "name": table_name.upper(),
+            "columns": self.get_table_columns(table_name),
+            "primary_key": self.get_table_primary_key(table_name),
+            "foreign_keys": self.get_table_foreign_keys(table_name),
+        }
+
+    def search_tables(self, pattern: str) -> List[Dict]:
+        """
+        Busca tabelas pelo nome (suporta wildcards).
+
+        Args:
+            pattern: Padrão de busca (ex: 'ITEM%', '%PESSOA%')
+
+        Returns:
+            Lista de tabelas que correspondem ao padrão
+        """
+        if not self.is_available:
+            return []
+
+        query = """
+            SELECT
+                TRIM(RDB$RELATION_NAME) AS TABLE_NAME,
+                CASE RDB$VIEW_SOURCE
+                    WHEN NULL THEN 'TABLE'
+                    ELSE 'VIEW'
+                END AS TABLE_TYPE
+            FROM RDB$RELATIONS
+            WHERE RDB$SYSTEM_FLAG = 0
+              AND RDB$RELATION_NAME NOT STARTING WITH 'RDB$'
+              AND RDB$RELATION_NAME LIKE ?
+            ORDER BY RDB$RELATION_NAME
+        """
+
+        try:
+            results = self.execute_query(query, (pattern.upper(),))
+            return [
+                {
+                    "name": (row.get("table_name") or "").strip(),
+                    "type": (row.get("table_type") or "TABLE").strip(),
+                }
+                for row in results
+            ]
+        except FirebirdError:
+            return []
+
+    def execute_raw_query(self, query: str, params: tuple = None) -> List[Dict]:
+        """
+        Executa query SQL raw (apenas SELECT).
+
+        ATENÇÃO: Use com cuidado! Apenas para consultas ad-hoc.
+
+        Args:
+            query: SQL SELECT
+            params: Parâmetros
+
+        Returns:
+            Resultados como lista de dicionários
+        """
+        if not self.is_available:
+            return []
+
+        # Validar que é apenas SELECT
+        query_upper = query.strip().upper()
+        if not query_upper.startswith("SELECT"):
+            raise FirebirdError("Apenas queries SELECT são permitidas")
+
+        return self.execute_query(query, params)
+
 
 # Instância global (singleton)
 firebird_client = FirebirdClient()

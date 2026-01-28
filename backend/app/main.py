@@ -25,7 +25,7 @@ import app.metrics as metrics
 
 # Importar rotas
 from app.api import webhooks, orders, products, customers, websocket, chats, auth, chatbot, users, drivers, cargas
-from app.api import images, tipos_preco, vasilhames, locations
+from app.api import images, tipos_preco, vasilhames, locations, exports, firebird_schema, rpa
 
 # Importar serviços para delivery system
 try:
@@ -353,6 +353,9 @@ app.include_router(images.router, prefix="/api/images", tags=["Images"])
 app.include_router(tipos_preco.router, prefix="/api/tipos-preco", tags=["Tipos de Preço"])
 app.include_router(vasilhames.router, prefix="/api/vasilhames", tags=["Vasilhames"])
 app.include_router(locations.router, prefix="/api/locations", tags=["Locations"])
+app.include_router(exports.router, prefix="/api/exports", tags=["Exports"])
+app.include_router(firebird_schema.router, prefix="/api/firebird", tags=["Firebird Schema"])
+app.include_router(rpa.router, prefix="/api/rpa", tags=["RPA Gasmaster"])
 
 
 # ==================== AUDIT LOGS (rota direta para compatibilidade) ====================

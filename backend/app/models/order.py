@@ -150,6 +150,19 @@ class Order(BaseModel):
         comment="Último erro de exportação Firebird"
     )
 
+    # Exportação para arquivos (alternativa ao Firebird)
+    file_export_status: Mapped[Optional[str]] = mapped_column(
+        String(20),
+        nullable=True,
+        index=True,
+        comment="Status exportação arquivo: exported, pending, failed"
+    )
+    file_exported_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="Data/hora da exportação para arquivo"
+    )
+
     # Valores
     total_amount: Mapped[Decimal] = mapped_column(
         Numeric(10, 2),
