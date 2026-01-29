@@ -53,15 +53,24 @@ class ConversationOut(BaseModel):
     id: str
     customer_number: str
     name: Optional[str] = None
-    status: str = "pending"
+    status: str = "waiting"
+    last_message: Optional[str] = None
+    last_message_at: Optional[datetime] = None
+    assigned_to: Optional[int] = None
+    assigned_to_me: bool = False
+    assigned_to_name: Optional[str] = None
+    unread_count: int = 0
+    created_at: Optional[datetime] = None
 
 
 class ConversationMessageOut(BaseModel):
-    sender: str
+    id: Optional[str] = None
+    sender: str  # customer, agent, bot, system
     content: str
     message_type: str
     bot_service: Optional[str] = None
-    timestamp: str
+    timestamp: Optional[str] = None
+    created_at: Optional[str] = None
     isFromCurrentUser: bool = False
 
 
@@ -173,34 +182,32 @@ async def send_message(
         chat_id = phone if "@" in phone else f"{phone}@c.us"
 
         # Enviar via WAHA
-        success = await waha_client.send_message(chat_id, request.message)
+        result = await waha_client.send_text(chat_id, request.message)
 
-        if success:
-            # Log da mensagem enviada
-            event = EventLog(
-                event_type="message_sent",
-                entity_type="chat",
-                payload={
-                    "phone": phone,
-                    "message": request.message,
-                    "manual": True
-                }
-            )
-            db.add(event)
-            await db.commit()
-
-            # Emitir via WebSocket
-            await emit_new_message({
+        # Log da mensagem enviada
+        event = EventLog(
+            event_type="message_sent",
+            entity_type="chat",
+            payload={
                 "phone": phone,
                 "message": request.message,
-                "from_me": True
-            })
+                "manual": True
+            }
+        )
+        db.add(event)
+        await db.commit()
 
-            return {"success": True, "message": "Mensagem enviada"}
-        else:
-            raise HTTPException(status_code=500, detail="Falha ao enviar mensagem")
+        # Emitir via WebSocket
+        await emit_new_message({
+            "phone": phone,
+            "message": request.message,
+            "from_me": True
+        })
+
+        return {"success": True, "message": "Mensagem enviada", "result": result}
 
     except Exception as e:
+        print(f"Erro ao enviar mensagem: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -250,11 +257,17 @@ async def list_conversations_operator(db: AsyncSession = Depends(get_db)):
     # Extrair telefones únicos em ordem de última mensagem
     seen_phones = set()
     phones_ordered = []
+    phone_last_event = {}
     for event in events:
         phone = event.payload.get("phone")
-        if phone and phone not in seen_phones:
-            phones_ordered.append(phone)
-            seen_phones.add(phone)
+        if phone:
+            if phone not in seen_phones:
+                phones_ordered.append(phone)
+                seen_phones.add(phone)
+                phone_last_event[phone] = event
+
+    # Buscar estado do Redis para cada conversa
+    redis = redis_manager.client
 
     for phone in phones_ordered:
         # Buscar cliente
@@ -263,11 +276,36 @@ async def list_conversations_operator(db: AsyncSession = Depends(get_db)):
         )
         customer = result.scalar_one_or_none()
 
+        last_event = phone_last_event.get(phone)
+
+        # Buscar estado do Redis
+        state = "start"
+        if redis:
+            try:
+                context_data = await redis.hgetall(f"conversation:{phone}")
+                state = context_data.get("state", "start") if context_data else "start"
+            except Exception:
+                pass
+
+        # Determinar status baseado no estado
+        status = "waiting"
+        if state == "talking_to_human":
+            status = "active"
+        elif state in ["order_confirmed", "tracking_order"]:
+            status = "bot"
+
         conversation = ConversationOut(
             id=phone,
             customer_number=phone,
             name=customer.name if customer else None,
-            status="pending"
+            status=status,
+            last_message=last_event.payload.get("message") if last_event else None,
+            last_message_at=last_event.created_at if last_event else None,
+            assigned_to=None,
+            assigned_to_me=False,
+            assigned_to_name=None,
+            unread_count=0,
+            created_at=last_event.created_at if last_event else None
         )
         conversations.append(conversation)
 
@@ -301,14 +339,21 @@ async def get_conversation_messages_operator(
     events = result.scalars().all()
 
     for event in reversed(events):
-        message_type = "customer" if event.event_type == "message_received" else "agent"
-        sender = "Cliente" if event.event_type == "message_received" else "Atendente"
+        # Determinar sender baseado no tipo de evento
+        if event.event_type == "message_received":
+            sender = "customer"
+        elif event.payload.get("manual"):
+            sender = "agent"
+        else:
+            sender = "bot"
 
         message = ConversationMessageOut(
+            id=str(event.id),
             sender=sender,
             content=event.payload.get("message", ""),
-            message_type=message_type,
+            message_type="text",
             timestamp=event.created_at.isoformat(),
+            created_at=event.created_at.isoformat(),
             isFromCurrentUser=(event.event_type == "message_sent")
         )
         messages.append(message)
@@ -328,34 +373,32 @@ async def reply_to_conversation(
         chat_id = conversation_id if "@" in conversation_id else f"{conversation_id}@c.us"
 
         # Enviar via WAHA
-        success = await waha_client.send_message(chat_id, request.message)
+        result = await waha_client.send_text(chat_id, request.message)
 
-        if success:
-            # Log da mensagem enviada
-            event = EventLog(
-                event_type="message_sent",
-                entity_type="chat",
-                payload={
-                    "phone": conversation_id,
-                    "message": request.message,
-                    "manual": True
-                }
-            )
-            db.add(event)
-            await db.commit()
-
-            # Emitir via WebSocket
-            await emit_new_message({
+        # Log da mensagem enviada
+        event = EventLog(
+            event_type="message_sent",
+            entity_type="chat",
+            payload={
                 "phone": conversation_id,
                 "message": request.message,
-                "from_me": True
-            })
+                "manual": True
+            }
+        )
+        db.add(event)
+        await db.commit()
 
-            return {"success": True, "message": "Mensagem enviada"}
-        else:
-            raise HTTPException(status_code=500, detail="Falha ao enviar mensagem")
+        # Emitir via WebSocket
+        await emit_new_message({
+            "phone": conversation_id,
+            "message": request.message,
+            "from_me": True
+        })
+
+        return {"success": True, "message": "Mensagem enviada", "result": result}
 
     except Exception as e:
+        print(f"Erro ao enviar mensagem: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

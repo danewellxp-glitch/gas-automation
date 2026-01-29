@@ -13,6 +13,7 @@ import OperatorDashboardOverview from '../../components/operator/OperatorDashboa
 import PendingOrdersPanel from '../../components/operator/PendingOrdersPanel'
 import CreateOrderPanel from '../../components/operator/CreateOrderPanel'
 import OrderHistoryPanel from '../../components/operator/OrderHistoryPanel'
+import ConversationsPanel from '../../components/operator/ConversationsPanel'
 
 // Lazy load do mapa (componente pesado)
 const DeliveryMap = lazy(() => import('../../components/map/DeliveryMap'))
@@ -44,13 +45,7 @@ export default function OperatorDashboard() {
 
       {activeView === 'orders' && <PendingOrdersPanel />}
 
-      {activeView === 'conversations' && (
-        <div className="rounded-lg border border-gray-200 bg-white p-8 text-center shadow-sm">
-          <h2 className="text-2xl font-semibold text-gray-900 mb-2">Conversas</h2>
-          <p className="text-gray-600 mb-6">Painel de conversas em desenvolvimento.</p>
-          <p className="text-sm text-gray-500">Em breve: Chat em tempo real com WebSocket</p>
-        </div>
-      )}
+      {activeView === 'conversations' && <ConversationsPanel />}
 
       {activeView === 'history' && <OrderHistoryPanel />}
 

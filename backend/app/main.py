@@ -111,35 +111,35 @@ async def lifespan(app: FastAPI):
     Executa na inicialização e finalização.
     """
     # Startup
-    print(f"🚀 Iniciando {settings.app_name} v{settings.app_version}")
-    print(f"📍 Ambiente: {settings.environment}")
+    print(f"[START] Iniciando {settings.app_name} v{settings.app_version}")
+    print(f"[ENV] Ambiente: {settings.environment}")
 
     # Conectar Redis
     await redis_manager.connect()
-    print("✅ Redis conectado")
+    print("[OK] Redis conectado")
     
     # Iniciar monitor de heartbeat WebSocket
     from app.api.websocket import manager as ws_manager
     heartbeat_task = asyncio.create_task(ws_manager.heartbeat_monitor())
-    print("✅ Monitor de heartbeat WebSocket iniciado")
+    print("[OK] Monitor de heartbeat WebSocket iniciado")
     
     # Iniciar Redis WebSocket Bridge para escala horizontal (FASE 3)
     from app.core.redis_websocket_bridge import redis_ws_bridge
     await redis_ws_bridge.start()
-    print("✅ Redis WebSocket Bridge iniciado (escala horizontal)")
+    print("[OK] Redis WebSocket Bridge iniciado (escala horizontal)")
     
     # Iniciar Event Batcher para agrupar eventos (FASE 3)
     await ws_manager.enable_batching()
-    print("✅ Event Batcher iniciado (agrupamento de eventos)")
+    print("[OK] Event Batcher iniciado (agrupamento de eventos)")
     
     # Inicializar métricas Prometheus (FASE 3)
     metrics.init_system_info(version=settings.app_version, environment=settings.environment)
-    print("✅ Métricas Prometheus inicializadas")
+    print("[OK] Métricas Prometheus inicializadas")
     
     # Iniciar task de atualização periódica de métricas
     from app.core.redis_websocket_bridge import redis_ws_bridge
     metrics_task = asyncio.create_task(_metrics_updater(ws_manager, redis_ws_bridge))
-    print("✅ Monitor de métricas iniciado")
+    print("[OK] Monitor de métricas iniciado")
 
     # TODO: Pré-carregar modelo Ollama se necessário
     # TODO: Verificar conexão com Firebird se habilitado
@@ -147,7 +147,7 @@ async def lifespan(app: FastAPI):
     yield
 
     # Shutdown
-    print("🔄 Encerrando aplicação...")
+    print("[STOP] Encerrando aplicação...")
     
     # Cancelar task de heartbeat
     heartbeat_task.cancel()
@@ -170,7 +170,7 @@ async def lifespan(app: FastAPI):
     await redis_ws_bridge.stop()
     
     await redis_manager.disconnect()
-    print("✅ Conexões encerradas")
+    print("[OK] Conexões encerradas")
 
 
 # Criar aplicação FastAPI
