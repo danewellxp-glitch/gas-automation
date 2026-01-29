@@ -214,6 +214,11 @@ export const endConversation = async (id) => {
   return response.data
 }
 
+export const transferToBot = async (id) => {
+  const response = await api.post(`/conversations/${id}/transfer-to-bot`)
+  return response.data
+}
+
 // REMOVIDO: createTestConversation - Não usar em produção
 // Conversas devem ser criadas apenas através do fluxo real do WhatsApp
 

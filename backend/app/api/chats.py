@@ -404,9 +404,122 @@ async def reply_to_conversation(
 
 @router.post("/conversations/{conversation_id}/end")
 async def end_conversation(conversation_id: str, db: AsyncSession = Depends(get_db)):
-    """Encerra uma conversa."""
-    # Por enquanto apenas retorna sucesso (sem sistema de encerramento implementado)
-    return {"success": True, "message": f"Conversa {conversation_id} encerrada"}
+    """
+    Encerra uma conversa e devolve ao bot.
+    - Reseta o estado para 'start' no Redis
+    - Envia mensagem informando o cliente
+    - Registra no EventLog
+    """
+    try:
+        phone = conversation_id
+        redis = redis_manager.client
+
+        # 1. Resetar estado no Redis para 'start'
+        if redis:
+            await redis.hset(f"conversation:{phone}", "state", "start")
+            # Limpar dados temporários do atendimento humano
+            await redis.hdel(f"conversation:{phone}", "assigned_operator")
+
+        # 2. Enviar mensagem ao cliente informando que voltou ao bot
+        chat_id = phone if "@" in phone else f"{phone}@c.us"
+        message_to_client = (
+            "✅ *Atendimento encerrado*\n\n"
+            "Obrigado por entrar em contato! "
+            "Se precisar de algo mais, é só me chamar.\n\n"
+            "Digite *menu* para ver as opções disponíveis."
+        )
+
+        try:
+            await waha_client.send_text(chat_id, message_to_client)
+        except Exception as e:
+            print(f"Aviso: Não foi possível enviar mensagem de encerramento: {e}")
+
+        # 3. Registrar no EventLog
+        event = EventLog(
+            event_type="conversation_ended",
+            entity_type="chat",
+            payload={
+                "phone": phone,
+                "action": "end_conversation",
+                "message": "Atendimento encerrado pelo operador"
+            }
+        )
+        db.add(event)
+        await db.commit()
+
+        # 4. Emitir via WebSocket
+        await emit_new_message({
+            "phone": phone,
+            "message": "[Sistema] Conversa encerrada e devolvida ao bot",
+            "from_me": True,
+            "system": True
+        })
+
+        return {"success": True, "message": f"Conversa {conversation_id} encerrada e devolvida ao bot"}
+
+    except Exception as e:
+        print(f"Erro ao encerrar conversa: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/conversations/{conversation_id}/transfer-to-bot")
+async def transfer_to_bot(conversation_id: str, db: AsyncSession = Depends(get_db)):
+    """
+    Transfere a conversa de volta para o bot mantendo o contexto.
+    Diferente de 'end' que reseta tudo, este mantém o estado atual do pedido.
+    """
+    try:
+        phone = conversation_id
+        redis = redis_manager.client
+
+        # 1. Verificar estado atual
+        current_state = "start"
+        if redis:
+            context_data = await redis.hgetall(f"conversation:{phone}")
+            current_state = context_data.get("state", "start") if context_data else "start"
+
+        # 2. Se está em talking_to_human, voltar para o estado anterior ou awaiting_product
+        if current_state == "talking_to_human":
+            # Tentar recuperar estado anterior ou usar awaiting_product como padrão
+            previous_state = "awaiting_product"
+            if redis:
+                await redis.hset(f"conversation:{phone}", "state", previous_state)
+                await redis.hdel(f"conversation:{phone}", "assigned_operator")
+
+        # 3. Enviar mensagem ao cliente
+        chat_id = phone if "@" in phone else f"{phone}@c.us"
+        message_to_client = (
+            "🤖 *Você foi transferido de volta para o atendimento automático*\n\n"
+            "Como posso ajudar?\n\n"
+            "1️⃣ Fazer um pedido\n"
+            "2️⃣ Consultar pedido\n"
+            "3️⃣ Falar com atendente"
+        )
+
+        try:
+            await waha_client.send_text(chat_id, message_to_client)
+        except Exception as e:
+            print(f"Aviso: Não foi possível enviar mensagem de transferência: {e}")
+
+        # 4. Registrar no EventLog
+        event = EventLog(
+            event_type="transfer_to_bot",
+            entity_type="chat",
+            payload={
+                "phone": phone,
+                "action": "transfer_to_bot",
+                "previous_state": current_state,
+                "new_state": "awaiting_product"
+            }
+        )
+        db.add(event)
+        await db.commit()
+
+        return {"success": True, "message": f"Conversa {conversation_id} transferida para o bot"}
+
+    except Exception as e:
+        print(f"Erro ao transferir para bot: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/bot-interactions")

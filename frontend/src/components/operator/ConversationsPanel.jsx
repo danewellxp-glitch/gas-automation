@@ -15,7 +15,8 @@ import {
   getConversationMessages,
   assignConversation,
   replyConversation,
-  endConversation
+  endConversation,
+  transferToBot
 } from '../../services/api'
 import { useSharedWebSocketEvent } from '../../hooks/useSharedWebSocket'
 
@@ -198,7 +199,7 @@ function MessageBubble({ message }) {
 }
 
 // Componente da janela de chat
-function ChatWindow({ conversation, messages, loading, onSend, onAssign, onEnd, isAssignedToMe }) {
+function ChatWindow({ conversation, messages, loading, onSend, onAssign, onEnd, onTransferToBot, isAssignedToMe }) {
   const [inputMessage, setInputMessage] = useState('')
   const [sending, setSending] = useState(false)
   const messagesEndRef = useRef(null)
@@ -259,6 +260,16 @@ function ChatWindow({ conversation, messages, loading, onSend, onAssign, onEnd, 
                 className="px-3 py-1.5 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 transition-colors"
               >
                 Assumir
+              </button>
+            )}
+            {conversation.status !== 'closed' && (
+              <button
+                onClick={onTransferToBot}
+                className="px-3 py-1.5 text-sm font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors flex items-center gap-1"
+                title="Transferir conversa de volta para o bot"
+              >
+                <Bot className="w-4 h-4" />
+                Transferir para Bot
               </button>
             )}
             {isAssignedToMe && conversation.status !== 'closed' && (
@@ -439,16 +450,33 @@ export default function ConversationsPanel() {
   const handleEndConversation = async () => {
     if (!selectedConversation) return
 
-    if (!confirm('Deseja encerrar esta conversa?')) return
+    if (!confirm('Deseja encerrar esta conversa e devolver ao bot?')) return
 
     try {
       await endConversation(selectedConversation.id)
-      toast.success('Conversa encerrada')
+      toast.success('Conversa encerrada e devolvida ao bot')
       loadConversations()
       setSelectedConversation(prev => ({ ...prev, status: 'closed' }))
     } catch (error) {
       console.error('Erro ao encerrar conversa:', error)
       toast.error('Erro ao encerrar conversa')
+    }
+  }
+
+  // Transferir para bot (mantém contexto)
+  const handleTransferToBot = async () => {
+    if (!selectedConversation) return
+
+    if (!confirm('Transferir conversa de volta para o bot?')) return
+
+    try {
+      await transferToBot(selectedConversation.id)
+      toast.success('Conversa transferida para o bot')
+      loadConversations()
+      setSelectedConversation(prev => ({ ...prev, status: 'bot' }))
+    } catch (error) {
+      console.error('Erro ao transferir para bot:', error)
+      toast.error('Erro ao transferir para bot')
     }
   }
 
@@ -487,6 +515,7 @@ export default function ConversationsPanel() {
             onSend={handleSendMessage}
             onAssign={handleAssign}
             onEnd={handleEndConversation}
+            onTransferToBot={handleTransferToBot}
             isAssignedToMe={selectedConversation.assigned_to_me}
           />
         ) : (
