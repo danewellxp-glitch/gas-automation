@@ -10,6 +10,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 logger = logging.getLogger(__name__)
 
@@ -225,13 +226,29 @@ async def get_my_deliveries(
     # Enriquecer com dados do pedido
     deliveries_data = []
     for delivery in deliveries:
-        # Buscar pedido relacionado
+        # Buscar pedido relacionado com customer
         order_result = await session.execute(
-            select(Order).where(Order.id == delivery.order_id)
+            select(Order)
+            .options(selectinload(Order.customer))
+            .where(Order.id == delivery.order_id)
         )
         order = order_result.scalar_one_or_none()
         
         if order:
+            # Formatar endereço como string para compatibilidade
+            delivery_address_str = None
+            if order.delivery_address:
+                addr = order.delivery_address
+                parts = []
+                if addr.get('street'):
+                    parts.append(addr.get('street'))
+                if addr.get('number'):
+                    parts.append(addr.get('number'))
+                if addr.get('complement'):
+                    parts.append(addr.get('complement'))
+                if parts:
+                    delivery_address_str = ', '.join(parts)
+            
             deliveries_data.append({
                 "id": str(delivery.id),
                 "order_id": str(order.id),
@@ -239,6 +256,7 @@ async def get_my_deliveries(
                 "status": delivery.status,
                 "bairro": delivery.bairro,
                 "delivery_address": order.delivery_address,
+                "delivery_address_str": delivery_address_str,
                 "estimated_minutes": delivery.estimated_minutes,
                 "assigned_at": delivery.assigned_at.isoformat() if delivery.assigned_at else None,
                 "picked_up_at": delivery.picked_up_at.isoformat() if delivery.picked_up_at else None,
@@ -247,6 +265,8 @@ async def get_my_deliveries(
                 "delivered_at": delivery.delivered_at.isoformat() if delivery.delivered_at else None,
                 "notes": delivery.notes,
                 "order_total": float(order.total_amount),
+                "customer_name": order.customer.name if order.customer else None,
+                "customer_phone": order.customer.phone if order.customer else None,
                 "order_items": [
                     {
                         "product_code": item.product_code,
@@ -440,6 +460,80 @@ async def update_delivery_status(
         "id": str(delivery.id),
         "status": delivery.status,
         "message": "Status atualizado com sucesso"
+    }
+
+
+@router.post("/deliveries/{delivery_id}/accept", response_model=dict)
+async def accept_delivery(
+    delivery_id: UUID,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db)
+):
+    """
+    Aceita uma entrega disponível (pending).
+    
+    Requires: role = "driver"
+    """
+    if current_user.role != "driver":
+        raise HTTPException(status_code=403, detail="Acesso restrito a entregadores")
+    
+    # Buscar driver
+    driver_result = await session.execute(
+        select(Driver).where(Driver.phone == current_user.username)
+    )
+    driver = driver_result.scalar_one_or_none()
+    
+    if not driver:
+        raise HTTPException(status_code=404, detail="Perfil de entregador não encontrado")
+    
+    # Verificar se driver está disponível
+    if driver.status != DriverStatus.AVAILABLE.value:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Você precisa estar disponível para aceitar entregas. Status atual: {driver.status}"
+        )
+    
+    # Buscar delivery
+    delivery_result = await session.execute(
+        select(Delivery).where(Delivery.id == delivery_id)
+    )
+    delivery = delivery_result.scalar_one_or_none()
+    
+    if not delivery:
+        raise HTTPException(status_code=404, detail="Entrega não encontrada")
+    
+    # Verificar se entrega está disponível (pending)
+    if delivery.status != DeliveryStatus.PENDING.value:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Entrega não está disponível para aceitação. Status atual: {delivery.status}"
+        )
+    
+    # Verificar se já tem driver atribuído
+    if delivery.driver_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Esta entrega já foi atribuída a outro entregador"
+        )
+    
+    # Atribuir entrega ao driver
+    delivery.driver_id = driver.id
+    delivery.driver_name = driver.name
+    delivery.driver_phone = driver.phone
+    delivery.update_status(DeliveryStatus.ASSIGNED.value)
+    
+    # Atualizar status do driver para ocupado
+    driver.status = DriverStatus.BUSY.value
+    
+    session.add(delivery)
+    session.add(driver)
+    await session.commit()
+    await session.refresh(delivery)
+    
+    return {
+        "id": str(delivery.id),
+        "status": delivery.status,
+        "message": "Entrega aceita com sucesso"
     }
 
 

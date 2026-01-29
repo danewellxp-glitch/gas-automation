@@ -89,12 +89,17 @@ async def create_user(session: AsyncSession, username: str, email: str, full_nam
 
 async def get_current_user(token: str = Depends(oauth2_scheme), session: AsyncSession = Depends(get_db)) -> User:
     """Get current user from JWT token"""
+    import logging
+    logger = logging.getLogger(__name__)
+    
     try:
         payload = jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
         username: str = payload.get("sub")
         if username is None:
+            logger.warning("Token sem 'sub' (username)")
             raise credentials_exception()
-    except JWTError:
+    except JWTError as e:
+        logger.warning(f"Erro ao decodificar JWT: {e}")
         raise credentials_exception()
 
     result = await session.execute(
@@ -102,6 +107,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme), session: AsyncSe
     )
     user = result.scalar_one_or_none()
     if user is None:
+        logger.warning(f"Usuário não encontrado: {username}")
         raise credentials_exception()
 
     # Verificar se usuário está ativo

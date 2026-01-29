@@ -35,7 +35,18 @@ export default function DashboardOverview() {
       setLastUpdate(new Date())
     } catch (err) {
       console.error('Erro ao buscar dashboard:', err)
-      setError(err.message || 'Erro ao carregar dashboard')
+      // Verificar se é erro de autenticação
+      if (err.message.includes('credenciais') || err.message.includes('401') || err.message.includes('Sessão expirada')) {
+        setError('Sessão expirada. Por favor, faça login novamente.')
+        // Redirecionar para login após 2 segundos
+        setTimeout(() => {
+          window.location.href = '/login'
+        }, 2000)
+      } else if (err.message.includes('403') || err.message.includes('Acesso negado')) {
+        setError('Você não tem permissão para acessar este dashboard. Apenas owners e admins podem acessar.')
+      } else {
+        setError(err.message || 'Erro ao carregar dashboard')
+      }
     } finally {
       setLoading(false)
     }

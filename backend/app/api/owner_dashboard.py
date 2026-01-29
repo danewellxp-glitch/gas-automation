@@ -33,10 +33,11 @@ router = APIRouter(prefix="/owner", tags=["Owner", "Dashboard"])
 
 
 def _require_owner(user: User) -> None:
-    if user.role != "owner":
+    """Verifica se o usuário tem role 'owner' ou 'admin'."""
+    if user.role not in ["owner", "admin"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only owners can access this resource",
+            detail="Apenas owners e admins podem acessar este recurso",
         )
 
 
@@ -93,8 +94,8 @@ class RevenueChartPoint(BaseModel):
 class RevenueChart(BaseModel):
     """Gráfico de receita ao longo do tempo."""
     period: str  # "day", "week", "month"
-    current: List[RevenueChartPoint]
-    previous: List[RevenueChartPoint]
+    current: list[RevenueChartPoint]
+    previous: list[RevenueChartPoint]
 
 
 class OrdersByType(BaseModel):
@@ -150,7 +151,7 @@ class FinancialBreakdown(BaseModel):
     net_revenue: float
     cancelled_revenue: float
     cancelled_count: int
-    cancelled_reasons: Dict[str, int]
+    cancelled_reasons: dict[str, int]
     pending_payments_count: int
     pending_payments_value: float
     repeat_customers_count: int
@@ -163,15 +164,15 @@ class CustomerMetrics(BaseModel):
     total_active: int
     new_today: int
     new_month: int
-    top_customers: List[Dict[str, Any]]
+    top_customers: list[dict[str, Any]]
     repeat_rate: float
 
 
 class BairroMetrics(BaseModel):
     """Métricas por bairro."""
-    most_profitable: List[OrdersByBairro]
-    most_cancelled: List[OrdersByBairro]
-    slowest_delivery: List[OrdersByBairro]
+    most_profitable: list[OrdersByBairro]
+    most_cancelled: list[OrdersByBairro]
+    slowest_delivery: list[OrdersByBairro]
 
 
 class ExecutiveAlert(BaseModel):
@@ -188,20 +189,20 @@ class OwnerDashboardResponse(BaseModel):
     cards: ExecutiveCards
     revenue_chart: RevenueChart
     orders_by_type: OrdersByType
-    orders_by_bairro: List[OrdersByBairro]
-    top_products: List[TopProduct]
-    driver_performance: List[DriverPerformance]
-    operator_performance: List[OperatorPerformance]
+    orders_by_bairro: list[OrdersByBairro]
+    top_products: list[TopProduct]
+    driver_performance: list[DriverPerformance]
+    operator_performance: list[OperatorPerformance]
     financial_breakdown: FinancialBreakdown
     customer_metrics: CustomerMetrics
     bairro_metrics: BairroMetrics
-    alerts: List[ExecutiveAlert]
+    alerts: list[ExecutiveAlert]
 
 
 # ==================== HELPERS ====================
 
 
-def _get_period_dates(period: str) -> Tuple[datetime, datetime, datetime, datetime]:
+def _get_period_dates(period: str) -> tuple[datetime, datetime, datetime, datetime]:
     """Retorna datas para período atual e anterior."""
     now = datetime.now(timezone.utc)
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -1210,12 +1211,12 @@ async def export_report(
 
 class BusinessSettings(BaseModel):
     """Configurações de negócio."""
-    products: List[Dict[str, Any]] = []
-    bairros: List[str] = []
-    enabled_bairros: List[str] = []
-    operating_hours: Dict[str, Dict[str, Any]] = {}
-    promotions: List[Dict[str, Any]] = []
-    monthly_goals: Dict[str, float] = {}
+    products: list[dict[str, Any]] = []
+    bairros: list[str] = []
+    enabled_bairros: list[str] = []
+    operating_hours: dict[str, dict[str, Any]] = {}
+    promotions: list[dict[str, Any]] = []
+    monthly_goals: dict[str, float] = {}
 
 
 @router.get("/settings", response_model=BusinessSettings)

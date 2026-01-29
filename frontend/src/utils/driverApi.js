@@ -140,6 +140,23 @@ export async function updateDeliveryStatus(deliveryId, status, notes = '') {
 }
 
 /**
+ * Aceitar uma entrega disponível
+ */
+export async function acceptDelivery(deliveryId) {
+  const response = await fetch(buildApiEndpoint(`drivers/deliveries/${deliveryId}/accept`), {
+    method: 'POST',
+    headers: getAuthHeaders()
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}))
+    throw new Error(error.detail || 'Erro ao aceitar entrega')
+  }
+
+  return response.json()
+}
+
+/**
  * Reportar problema em uma entrega
  */
 export async function reportDeliveryProblem(deliveryId, problemType, description) {
@@ -166,18 +183,44 @@ export async function reportDeliveryProblem(deliveryId, problemType, description
  * Buscar carga atual do motorista (ativa)
  */
 export async function getCargaAtual() {
-  // Primeiro buscar o perfil para obter o driver_id
-  const profile = await getDriverProfile()
+  try {
+    // Primeiro buscar o perfil para obter o driver_id
+    const profile = await getDriverProfile()
 
-  const response = await fetch(buildApiEndpoint(`cargas/driver/${profile.id}/atual`), {
-    headers: getAuthHeaders()
-  })
+    if (!profile || !profile.id) {
+      console.warn('Perfil não encontrado ao buscar carga')
+      return { tem_carga: false, carga: null }
+    }
 
-  if (!response.ok) {
-    throw new Error('Erro ao buscar carga atual')
+    const response = await fetch(buildApiEndpoint(`cargas/driver/${profile.id}/atual`), {
+      headers: getAuthHeaders()
+    })
+
+    if (!response.ok) {
+      // Se 404, não tem carga (não é erro)
+      if (response.status === 404) {
+        return { tem_carga: false, carga: null }
+      }
+      // Se 401, pode ser token expirado - deixar propagar
+      if (response.status === 401) {
+        const error = await response.json().catch(() => ({}))
+        throw new Error(error.detail || 'Sessão expirada. Por favor, faça login novamente.')
+      }
+      // Outros erros - retornar sem carga
+      console.warn(`Erro ${response.status} ao buscar carga atual`)
+      return { tem_carga: false, carga: null }
+    }
+
+    const data = await response.json()
+    return data
+  } catch (error) {
+    // Se erro de rede ou outro, retornar sem carga (exceto 401)
+    if (error.message && error.message.includes('Sessão expirada')) {
+      throw error // Propagar erro de autenticação
+    }
+    console.error('Erro ao buscar carga:', error)
+    return { tem_carga: false, carga: null }
   }
-
-  return response.json()
 }
 
 /**
@@ -219,6 +262,22 @@ export async function realizarAcertoCarga(cargaId, itens, observacoes = '') {
 }
 
 /**
+ * Buscar resumo de tempo trabalhado
+ * @param {string} period - 'today', 'week', 'month'
+ */
+export async function getTimeSummary(period = 'today') {
+  const response = await fetch(buildApiEndpoint(`drivers/me/time-summary?period=${period}`), {
+    headers: getAuthHeaders()
+  })
+
+  if (!response.ok) {
+    throw new Error('Erro ao buscar tempo trabalhado')
+  }
+
+  return response.json()
+}
+
+/**
  * Wrapper completo de todas as APIs do driver
  */
 export const driverApi = {
@@ -228,8 +287,10 @@ export const driverApi = {
   updateStatus: updateDriverStatus,
   updateLocation: updateDriverLocation,
   getDeliveries: getDriverDeliveries,
+  acceptDelivery,
   updateDeliveryStatus,
   reportProblem: reportDeliveryProblem,
+  getTimeSummary,
   // Carga do veículo
   getCargaAtual,
   registrarSaidaCarga,

@@ -1,10 +1,12 @@
 /**
- * Página de Perfil do Driver
+ * Página de Perfil do Driver - Novo Estilo
  */
 
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { ArrowLeft, Loader, User, Star, Package, TrendingUp, Clock, LogOut, Phone, Mail, Car } from 'lucide-react'
 import { driverApi } from '../../utils/driverApi'
+import '../../styles/driver-dashboard.css'
 
 export default function DriverProfile() {
   const navigate = useNavigate()
@@ -43,20 +45,23 @@ export default function DriverProfile() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-        <p className="text-gray-600">Carregando perfil...</p>
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
+        <div className="text-center">
+          <Loader className="w-12 h-12 text-emerald-400 animate-spin mx-auto mb-4" />
+          <p className="text-slate-300 text-lg font-medium">Carregando perfil...</p>
+        </div>
       </div>
     )
   }
 
   if (!driver || !stats) {
     return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
-        <div className="text-center">
-          <p className="text-gray-600 mb-4">Erro ao carregar perfil</p>
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
+        <div className="bg-slate-800 rounded-2xl shadow-2xl p-8 max-w-md w-full text-center border border-slate-700/50">
+          <p className="text-slate-300 mb-4">Erro ao carregar perfil</p>
           <button
             onClick={() => navigate('/driver/dashboard')}
-            className="bg-blue-600 text-white px-6 py-2 rounded-lg"
+            className="bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white px-6 py-3 rounded-xl font-semibold transition-all duration-200"
           >
             Voltar
           </button>
@@ -70,93 +75,106 @@ export default function DriverProfile() {
     : 'N/A'
 
   return (
-    <div className="min-h-screen bg-gray-100 pb-24">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 pb-24">
       {/* Header */}
-      <div className="bg-white shadow-md p-4 mb-4">
-        <button
-          onClick={() => navigate('/driver/dashboard')}
-          className="text-blue-600 hover:text-blue-700 mb-2"
-        >
-          ← Voltar
-        </button>
-        <h1 className="text-2xl font-bold text-gray-800">Meu Perfil</h1>
-      </div>
-
-      <div className="max-w-2xl mx-auto px-4 space-y-4">
-        {/* Foto e Nome */}
-        <div className="bg-white rounded-lg shadow p-6 text-center">
-          <div className="w-24 h-24 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <span className="text-5xl">👤</span>
+      <header className="bg-slate-800/80 backdrop-blur-lg border-b border-slate-700/50 sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-4 py-4">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => navigate('/driver/dashboard')}
+              className="w-10 h-10 bg-slate-700/50 hover:bg-slate-700 rounded-full flex items-center justify-center transition-all duration-200"
+            >
+              <ArrowLeft className="w-5 h-5 text-slate-300" />
+            </button>
+            <h1 className="text-white font-bold text-xl">Meu Perfil</h1>
           </div>
-          <h2 className="text-2xl font-bold text-gray-800 mb-2">{driver.name}</h2>
-          <div className="flex items-center justify-center gap-2 text-yellow-500">
-            <span className="text-2xl">⭐</span>
-            <span className="text-xl font-semibold">{driver.rating?.toFixed(1)}</span>
-            <span className="text-gray-500 text-sm">
-              ({stats.total_deliveries} avaliações)
+        </div>
+      </header>
+
+      <div className="max-w-2xl mx-auto px-4 py-6 space-y-6">
+        {/* Foto e Nome */}
+        <div className="bg-gradient-to-r from-slate-800/90 to-slate-700/90 backdrop-blur-lg rounded-2xl p-8 text-center border border-slate-600/30 shadow-xl">
+          <div className="w-24 h-24 bg-gradient-to-br from-emerald-400 to-teal-500 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg shadow-emerald-500/30">
+            <span className="text-5xl text-white font-bold">{driver.name?.charAt(0) || 'D'}</span>
+          </div>
+          <h2 className="text-2xl font-bold text-white mb-3">{driver.name}</h2>
+          <div className="flex items-center justify-center gap-2">
+            <Star className="w-6 h-6 text-amber-400 fill-amber-400" />
+            <span className="text-2xl font-bold text-white">{driver.rating?.toFixed(1) || '5.0'}</span>
+            <span className="text-slate-400 text-sm">
+              ({stats.total_deliveries} entregas)
             </span>
           </div>
         </div>
 
         {/* Estatísticas */}
-        <div className="bg-white rounded-lg shadow p-6">
-          <h3 className="text-lg font-semibold text-gray-800 mb-4">📊 Estatísticas</h3>
-          <div className="space-y-3">
-            <div className="flex justify-between">
-              <span className="text-gray-600">Total de entregas:</span>
-              <span className="font-bold text-gray-800">{stats.total_deliveries}</span>
+        <div className="bg-slate-800/70 backdrop-blur-lg rounded-2xl p-6 border border-slate-700/50 shadow-lg">
+          <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+            <TrendingUp className="w-5 h-5 text-emerald-400" />
+            Estatísticas
+          </h3>
+          <div className="space-y-4">
+            <div className="flex justify-between items-center py-2 border-b border-slate-700/50">
+              <span className="text-slate-400">Total de entregas:</span>
+              <span className="font-bold text-white text-lg">{stats.total_deliveries}</span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-gray-600">Entregas hoje:</span>
-              <span className="font-bold text-gray-800">{stats.today_deliveries}</span>
+            <div className="flex justify-between items-center py-2 border-b border-slate-700/50">
+              <span className="text-slate-400">Entregas hoje:</span>
+              <span className="font-bold text-emerald-400">{stats.today_deliveries}</span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-gray-600">Entregas esta semana:</span>
-              <span className="font-bold text-gray-800">{stats.week_deliveries}</span>
+            <div className="flex justify-between items-center py-2 border-b border-slate-700/50">
+              <span className="text-slate-400">Entregas esta semana:</span>
+              <span className="font-bold text-white">{stats.week_deliveries}</span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-gray-600">Taxa de sucesso:</span>
-              <span className="font-bold text-green-600">{stats.success_rate}%</span>
+            <div className="flex justify-between items-center py-2 border-b border-slate-700/50">
+              <span className="text-slate-400">Taxa de sucesso:</span>
+              <span className="font-bold text-emerald-400">{stats.success_rate}%</span>
             </div>
             {stats.average_delivery_time_minutes && (
-              <div className="flex justify-between">
-                <span className="text-gray-600">Tempo médio:</span>
-                <span className="font-bold text-gray-800">{Math.round(stats.average_delivery_time_minutes)} min</span>
+              <div className="flex justify-between items-center py-2 border-b border-slate-700/50">
+                <span className="text-slate-400">Tempo médio:</span>
+                <span className="font-bold text-white">{Math.round(stats.average_delivery_time_minutes)} min</span>
               </div>
             )}
-            <div className="flex justify-between">
-              <span className="text-gray-600">Membro desde:</span>
-              <span className="font-bold text-gray-800">{memberSince}</span>
+            <div className="flex justify-between items-center py-2">
+              <span className="text-slate-400">Membro desde:</span>
+              <span className="font-bold text-white">{memberSince}</span>
             </div>
           </div>
         </div>
 
         {/* Contato */}
-        <div className="bg-white rounded-lg shadow p-6">
-          <h3 className="text-lg font-semibold text-gray-800 mb-4">📞 Contato</h3>
-          <div className="space-y-3">
+        <div className="bg-slate-800/70 backdrop-blur-lg rounded-2xl p-6 border border-slate-700/50 shadow-lg">
+          <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+            <Phone className="w-5 h-5 text-emerald-400" />
+            Contato
+          </h3>
+          <div className="space-y-4">
             <div>
-              <p className="text-sm text-gray-500">Username</p>
-              <p className="font-medium text-gray-800">{driver.phone}</p>
+              <p className="text-sm text-slate-400 mb-1">Telefone</p>
+              <p className="font-medium text-white">{driver.phone}</p>
             </div>
             <div>
-              <p className="text-sm text-gray-500">Email</p>
-              <p className="font-medium text-gray-800">{driver.email || 'Não informado'}</p>
+              <p className="text-sm text-slate-400 mb-1">Email</p>
+              <p className="font-medium text-white">{driver.email || 'Não informado'}</p>
             </div>
           </div>
         </div>
 
         {/* Veículo */}
-        <div className="bg-white rounded-lg shadow p-6">
-          <h3 className="text-lg font-semibold text-gray-800 mb-4">🚗 Veículo</h3>
-          <div className="space-y-3">
+        <div className="bg-slate-800/70 backdrop-blur-lg rounded-2xl p-6 border border-slate-700/50 shadow-lg">
+          <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+            <Car className="w-5 h-5 text-emerald-400" />
+            Veículo
+          </h3>
+          <div className="space-y-4">
             <div>
-              <p className="text-sm text-gray-500">Tipo</p>
-              <p className="font-medium text-gray-800">{driver.vehicle_type || 'Não informado'}</p>
+              <p className="text-sm text-slate-400 mb-1">Tipo</p>
+              <p className="font-medium text-white">{driver.vehicle_type || 'Não informado'}</p>
             </div>
             <div>
-              <p className="text-sm text-gray-500">Placa</p>
-              <p className="font-medium text-gray-800">{driver.license_plate || 'Não informado'}</p>
+              <p className="text-sm text-slate-400 mb-1">Placa</p>
+              <p className="font-medium text-white">{driver.license_plate || 'Não informado'}</p>
             </div>
           </div>
         </div>
@@ -164,38 +182,12 @@ export default function DriverProfile() {
         {/* Botão Sair */}
         <button
           onClick={handleLogout}
-          className="w-full bg-red-600 text-white py-4 rounded-lg font-semibold hover:bg-red-700 active:bg-red-800 text-lg"
+          className="w-full bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white py-4 rounded-xl font-semibold transition-all duration-200 shadow-lg shadow-red-500/30 hover:shadow-red-500/50 flex items-center justify-center gap-2"
         >
-          🚪 SAIR
+          <LogOut className="w-5 h-5" />
+          SAIR
         </button>
       </div>
-
-      {/* Bottom Navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg">
-        <div className="flex justify-around items-center h-16">
-          <button
-            onClick={() => navigate('/driver/dashboard')}
-            className="flex flex-col items-center justify-center flex-1 py-2 text-gray-600 hover:text-blue-600"
-          >
-            <span className="text-2xl">🏠</span>
-            <span className="text-xs font-medium">Início</span>
-          </button>
-          <button
-            onClick={() => navigate('/driver/history')}
-            className="flex flex-col items-center justify-center flex-1 py-2 text-gray-600 hover:text-blue-600"
-          >
-            <span className="text-2xl">📦</span>
-            <span className="text-xs font-medium">Histórico</span>
-          </button>
-          <button
-            onClick={() => navigate('/driver/profile')}
-            className="flex flex-col items-center justify-center flex-1 py-2 text-blue-600"
-          >
-            <span className="text-2xl">👤</span>
-            <span className="text-xs font-medium">Perfil</span>
-          </button>
-        </div>
-      </nav>
     </div>
   )
 }

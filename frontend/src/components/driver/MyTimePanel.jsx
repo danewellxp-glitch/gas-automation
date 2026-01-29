@@ -17,20 +17,8 @@ export default function MyTimePanel() {
   const fetchTimeData = async () => {
     try {
       setLoading(true)
-      const response = await fetch(
-        `http://192.168.10.156:8000/api/drivers/me/time-summary?period=${period}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      )
-      
-      if (response.ok) {
-        const data = await response.json()
-        setTimeData(data)
-      }
+      const data = await driverApi.getTimeSummary(period)
+      setTimeData(data)
     } catch (error) {
       console.error('Erro ao buscar dados de tempo:', error)
     } finally {

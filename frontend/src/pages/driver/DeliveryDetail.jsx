@@ -1,18 +1,20 @@
 /**
- * Página de Detalhes da Entrega
+ * Página de Detalhes da Entrega - Novo Estilo
  */
 
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
+import { ArrowLeft, Loader, MapPin, Phone, Package, DollarSign, Navigation, AlertCircle, CheckCircle } from 'lucide-react'
 import { driverApi } from '../../utils/driverApi'
+import '../../styles/driver-dashboard.css'
 
 const STATUS_CONFIG = {
-  assigned: { label: '🟦 Alocado', color: 'bg-yellow-100 text-yellow-800', nextAction: 'Retirei os Produtos', nextStatus: 'picked_up' },
-  picked_up: { label: '🟧 Produtos Retirados', color: 'bg-orange-100 text-orange-800', nextAction: 'Saí para Entrega', nextStatus: 'in_transit' },
-  in_transit: { label: '🟦 Em Trânsito', color: 'bg-blue-100 text-blue-800', nextAction: 'Cheguei no Local', nextStatus: 'arrived' },
-  arrived: { label: '🟪 Chegou no Local', color: 'bg-purple-100 text-purple-800', nextAction: 'Entregue', nextStatus: 'delivered' },
-  delivered: { label: '🟩 Entregue', color: 'bg-green-100 text-green-800', nextAction: null, nextStatus: null }
+  assigned: { label: 'Atribuída', color: 'bg-blue-500/20 text-blue-300 border-blue-500/30', nextAction: 'Retirei os Produtos', nextStatus: 'picked_up' },
+  picked_up: { label: 'Coletada', color: 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30', nextAction: 'Saí para Entrega', nextStatus: 'in_transit' },
+  in_transit: { label: 'Em Trânsito', color: 'bg-purple-500/20 text-purple-300 border-purple-500/30', nextAction: 'Cheguei no Local', nextStatus: 'arrived' },
+  arrived: { label: 'Chegou', color: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30', nextAction: 'Entregue', nextStatus: 'delivered' },
+  delivered: { label: 'Entregue', color: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30', nextAction: null, nextStatus: null }
 }
 
 export default function DeliveryDetail() {
@@ -29,6 +31,7 @@ export default function DeliveryDetail() {
     const fetchDelivery = async () => {
       try {
         setLoading(true)
+        setError('')
         // Buscar todas as entregas ativas e encontrar a específica
         const deliveries = await driverApi.getDeliveries('active')
         const found = deliveries.find(d => d.id === id)
@@ -40,7 +43,7 @@ export default function DeliveryDetail() {
         }
       } catch (err) {
         console.error('Erro ao buscar entrega:', err)
-        setError(err.message)
+        setError(err.message || 'Erro ao carregar entrega')
       } finally {
         setLoading(false)
       }
@@ -68,6 +71,8 @@ export default function DeliveryDetail() {
         `Status atualizado para ${config.nextStatus}`
       )
 
+      toast.success('Status atualizado com sucesso!')
+
       // Atualizar estado local
       setDelivery(prev => ({ ...prev, status: config.nextStatus }))
 
@@ -87,8 +92,9 @@ export default function DeliveryDetail() {
 
   // Ligar para cliente
   const handleCall = () => {
-    if (delivery?.customer_phone) {
-      window.location.href = `tel:${delivery.customer_phone}`
+    const phone = delivery?.customer_phone || delivery?.order?.telefone
+    if (phone) {
+      window.location.href = `tel:${phone}`
     }
   }
 
@@ -97,8 +103,10 @@ export default function DeliveryDetail() {
     if (!delivery?.delivery_address) return
 
     const addr = delivery.delivery_address
-    const address = `${addr.street}, ${addr.number}, ${addr.city}, ${addr.cep}`
-    window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`, '_blank')
+    const address = `${addr.street || ''}, ${addr.number || ''}, ${addr.city || ''}, ${addr.cep || ''}`.trim()
+    if (address) {
+      window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`, '_blank')
+    }
   }
 
   // Reportar problema
@@ -116,21 +124,24 @@ export default function DeliveryDetail() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-        <p className="text-gray-600">Carregando...</p>
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
+        <div className="text-center">
+          <Loader className="w-12 h-12 text-emerald-400 animate-spin mx-auto mb-4" />
+          <p className="text-slate-300 text-lg font-medium">Carregando...</p>
+        </div>
       </div>
     )
   }
 
   if (error || !delivery) {
     return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
-        <div className="bg-white rounded-lg shadow p-8 max-w-md w-full text-center">
-          <div className="text-4xl mb-4">⚠️</div>
-          <p className="text-gray-600 mb-4">{error || 'Entrega não encontrada'}</p>
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
+        <div className="bg-slate-800 rounded-2xl shadow-2xl p-8 max-w-md w-full text-center border border-slate-700/50">
+          <AlertCircle className="w-16 h-16 text-slate-400 mx-auto mb-4" />
+          <p className="text-slate-300 mb-4">{error || 'Entrega não encontrada'}</p>
           <button
             onClick={() => navigate('/driver/dashboard')}
-            className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700"
+            className="bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white px-6 py-3 rounded-xl font-semibold transition-all duration-200"
           >
             Voltar
           </button>
@@ -141,105 +152,174 @@ export default function DeliveryDetail() {
 
   const statusConfig = STATUS_CONFIG[delivery.status] || STATUS_CONFIG.assigned
 
-  return (
-    <div className="min-h-screen bg-gray-100 pb-6">
-      {/* Header */}
-      <div className="bg-white shadow-md p-4 mb-4">
-        <button
-          onClick={() => navigate('/driver/dashboard')}
-          className="text-blue-600 hover:text-blue-700 mb-2"
-        >
-          ← Voltar
-        </button>
-        <h1 className="text-2xl font-bold text-gray-800">Pedido #{delivery.order_number}</h1>
-      </div>
+  // Formatar endereço
+  let addressStr = 'Endereço não disponível'
+  if (delivery.delivery_address) {
+    const addr = delivery.delivery_address
+    const parts = []
+    if (addr.street) parts.push(addr.street)
+    if (addr.number) parts.push(addr.number)
+    if (addr.complement) parts.push(addr.complement)
+    if (parts.length > 0) {
+      addressStr = parts.join(', ')
+    }
+  } else if (delivery.delivery_address_str) {
+    addressStr = delivery.delivery_address_str
+  }
 
-      <div className="max-w-2xl mx-auto px-4 space-y-4">
+  const customerPhone = delivery.customer_phone || delivery.order?.telefone
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 pb-6">
+      {/* Header */}
+      <header className="bg-slate-800/80 backdrop-blur-lg border-b border-slate-700/50 sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-4 py-4">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => navigate('/driver/dashboard')}
+              className="w-10 h-10 bg-slate-700/50 hover:bg-slate-700 rounded-full flex items-center justify-center transition-all duration-200"
+            >
+              <ArrowLeft className="w-5 h-5 text-slate-300" />
+            </button>
+            <div>
+              <h1 className="text-white font-bold text-xl">Pedido #{delivery.order_number || delivery.id.slice(0, 8)}</h1>
+              <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${statusConfig.color} border mt-1`}>
+                {statusConfig.label}
+              </span>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <div className="max-w-2xl mx-auto px-4 py-6 space-y-6">
         {/* Status Atual */}
-        <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-lg font-semibold text-gray-800 mb-3">Status Atual</h2>
-          <span className={`inline-block px-4 py-2 rounded-full font-semibold ${statusConfig.color}`}>
+        <div className="bg-slate-800/70 backdrop-blur-lg rounded-2xl p-6 border border-slate-700/50 shadow-lg">
+          <h2 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
+            <CheckCircle className="w-5 h-5 text-emerald-400" />
+            Status Atual
+          </h2>
+          <span className={`inline-block px-4 py-2 rounded-full font-semibold ${statusConfig.color} border`}>
             {statusConfig.label}
           </span>
         </div>
 
         {/* Itens do Pedido */}
-        <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-lg font-semibold text-gray-800 mb-3">📦 Itens</h2>
-          <ul className="space-y-2">
-            {delivery.order_items?.map((item, index) => (
-              <li key={index} className="flex justify-between text-gray-700">
-                <span>• {item.quantity}x {item.product_name}</span>
-                <span className="font-medium">{item.product_code}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
+        {delivery.order_items && delivery.order_items.length > 0 && (
+          <div className="bg-slate-800/70 backdrop-blur-lg rounded-2xl p-6 border border-slate-700/50 shadow-lg">
+            <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+              <Package className="w-5 h-5 text-emerald-400" />
+              Itens
+            </h2>
+            <ul className="space-y-2">
+              {delivery.order_items.map((item, index) => (
+                <li key={index} className="flex justify-between items-center text-slate-300 py-2 border-b border-slate-700/50 last:border-0">
+                  <span>{item.quantity}x {item.product_name}</span>
+                  <span className="text-slate-400 text-sm">{item.product_code}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {/* Endereço de Entrega */}
-        <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-lg font-semibold text-gray-800 mb-3">📍 Endereço de Entrega</h2>
-          {delivery.delivery_address ? (
-            <div className="text-gray-700 space-y-1">
-              <p>{delivery.delivery_address.street}, {delivery.delivery_address.number}</p>
-              {delivery.delivery_address.complement && <p>{delivery.delivery_address.complement}</p>}
-              <p>{delivery.delivery_address.bairro} - {delivery.delivery_address.city}</p>
-              <p>CEP: {delivery.delivery_address.cep}</p>
-            </div>
-          ) : (
-            <p className="text-gray-500">Endereço não disponível</p>
-          )}
+        <div className="bg-slate-800/70 backdrop-blur-lg rounded-2xl p-6 border border-slate-700/50 shadow-lg">
+          <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+            <MapPin className="w-5 h-5 text-emerald-400" />
+            Endereço de Entrega
+          </h2>
+          <div className="text-slate-300 space-y-1">
+            <p className="font-medium">{addressStr}</p>
+            {delivery.delivery_address && (
+              <>
+                {delivery.delivery_address.bairro && (
+                  <p className="text-slate-400">{delivery.delivery_address.bairro}</p>
+                )}
+                {delivery.delivery_address.city && (
+                  <p className="text-slate-400">{delivery.delivery_address.city}</p>
+                )}
+                {delivery.delivery_address.cep && (
+                  <p className="text-slate-400">CEP: {delivery.delivery_address.cep}</p>
+                )}
+              </>
+            )}
+            {delivery.bairro && !delivery.delivery_address?.bairro && (
+              <p className="text-slate-400">{delivery.bairro}</p>
+            )}
+          </div>
         </div>
 
         {/* Informações Adicionais */}
-        <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-lg font-semibold text-gray-800 mb-3">💰 Pagamento</h2>
-          <p className="text-gray-700">Total: <span className="font-bold text-green-600">R$ {delivery.order_total?.toFixed(2)}</span></p>
-          <p className="text-sm text-gray-500 mt-2">Status: Já pago ✅</p>
+        <div className="bg-slate-800/70 backdrop-blur-lg rounded-2xl p-6 border border-slate-700/50 shadow-lg">
+          <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+            <DollarSign className="w-5 h-5 text-emerald-400" />
+            Pagamento
+          </h2>
+          <p className="text-slate-300">
+            Total: <span className="font-bold text-emerald-400 text-xl">R$ {delivery.order_total?.toFixed(2) || '0.00'}</span>
+          </p>
+          <p className="text-sm text-emerald-400 mt-2 flex items-center gap-1">
+            <CheckCircle className="w-4 h-4" />
+            Status: Já pago
+          </p>
         </div>
 
         {delivery.notes && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6">
-            <h2 className="text-lg font-semibold text-gray-800 mb-2">📝 Observações</h2>
-            <p className="text-gray-700">{delivery.notes}</p>
+          <div className="bg-amber-500/20 border border-amber-500/30 rounded-2xl p-6 backdrop-blur-lg">
+            <h2 className="text-lg font-semibold text-amber-300 mb-2 flex items-center gap-2">
+              <AlertCircle className="w-5 h-5" />
+              Observações
+            </h2>
+            <p className="text-amber-200">{delivery.notes}</p>
           </div>
         )}
 
         {/* Ações */}
         <div className="space-y-3">
-          <button
-            onClick={handleCall}
-            className="w-full bg-green-600 text-white py-4 rounded-lg font-semibold hover:bg-green-700 active:bg-green-800 text-lg"
-          >
-            📞 LIGAR PARA CLIENTE
-          </button>
+          {customerPhone && (
+            <button
+              onClick={handleCall}
+              className="w-full bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white py-4 rounded-xl font-semibold transition-all duration-200 shadow-lg shadow-green-500/30 hover:shadow-green-500/50 flex items-center justify-center gap-2 text-lg"
+            >
+              <Phone className="w-5 h-5" />
+              LIGAR PARA CLIENTE
+            </button>
+          )}
 
           <button
             onClick={handleOpenMaps}
-            className="w-full bg-blue-600 text-white py-4 rounded-lg font-semibold hover:bg-blue-700 active:bg-blue-800 text-lg"
+            className="w-full bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 font-semibold py-4 rounded-xl transition-all duration-200 border border-blue-500/30 flex items-center justify-center gap-2 text-lg"
           >
-            🗺️ ABRIR NO MAPS
+            <Navigation className="w-5 h-5" />
+            ABRIR NO MAPS
           </button>
 
           {statusConfig.nextAction && (
             <button
               onClick={handleUpdateStatus}
               disabled={updating}
-              className={`w-full py-4 rounded-lg font-semibold text-white text-lg ${
+              className={`w-full py-4 rounded-xl font-semibold text-white text-lg transition-all duration-200 ${
                 updating
-                  ? 'bg-gray-400 cursor-not-allowed'
-                  : 'bg-blue-600 hover:bg-blue-700 active:bg-blue-800'
+                  ? 'bg-slate-600 cursor-not-allowed'
+                  : 'bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 shadow-lg shadow-emerald-500/30'
               }`}
             >
-              {updating ? '⏳ Atualizando...' : `✅ ${statusConfig.nextAction.toUpperCase()}`}
+              {updating ? (
+                <span className="flex items-center justify-center gap-2">
+                  <Loader className="w-5 h-5 animate-spin" />
+                  Atualizando...
+                </span>
+              ) : (
+                `✅ ${statusConfig.nextAction.toUpperCase()}`
+              )}
             </button>
           )}
 
           <button
             onClick={() => setShowProblemModal(true)}
-            className="w-full bg-red-600 text-white py-4 rounded-lg font-semibold hover:bg-red-700 active:bg-red-800 text-lg"
+            className="w-full bg-red-500/20 hover:bg-red-500/30 text-red-400 font-semibold py-4 rounded-xl transition-all duration-200 border border-red-500/30 flex items-center justify-center gap-2 text-lg"
           >
-            ⚠️ REPORTAR PROBLEMA
+            <AlertCircle className="w-5 h-5" />
+            REPORTAR PROBLEMA
           </button>
         </div>
       </div>
@@ -270,19 +350,25 @@ function ProblemModal({ onClose, onSubmit }) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
-        <h2 className="text-xl font-bold text-gray-800 mb-4">⚠️ Reportar Problema</h2>
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div 
+        className="bg-slate-800 rounded-3xl max-w-md w-full p-6 shadow-2xl animate-slide-up border border-slate-700/50"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+          <AlertCircle className="w-6 h-6 text-red-400" />
+          Reportar Problema
+        </h2>
         
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-slate-300 mb-2">
               Tipo de Problema
             </label>
             <select
               value={problemType}
               onChange={(e) => setProblemType(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500"
+              className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600 rounded-xl text-white focus:ring-2 focus:ring-red-500 focus:border-red-500"
             >
               <option value="customer_absent">Cliente Ausente</option>
               <option value="wrong_address">Endereço Errado</option>
@@ -293,14 +379,14 @@ function ProblemModal({ onClose, onSubmit }) {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-slate-300 mb-2">
               Descrição
             </label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={4}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500"
+              className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600 rounded-xl text-white placeholder-slate-500 focus:ring-2 focus:ring-red-500 focus:border-red-500"
               placeholder="Descreva o problema em detalhes..."
             />
           </div>
@@ -309,13 +395,13 @@ function ProblemModal({ onClose, onSubmit }) {
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
+              className="flex-1 px-4 py-3 bg-slate-700 text-white rounded-xl hover:bg-slate-600 transition-colors"
             >
               Cancelar
             </button>
             <button
               type="submit"
-              className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+              className="flex-1 px-4 py-3 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white rounded-xl transition-all duration-200 shadow-lg shadow-red-500/30"
             >
               Reportar
             </button>

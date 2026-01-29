@@ -1,10 +1,12 @@
 /**
- * Página de Histórico de Entregas
+ * Página de Histórico de Entregas - Novo Estilo
  */
 
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { Package, ArrowLeft, Loader, CheckCircle, XCircle, MapPin, Clock, DollarSign } from 'lucide-react'
 import { driverApi } from '../../utils/driverApi'
+import '../../styles/driver-dashboard.css'
 
 export default function DeliveryHistory() {
   const navigate = useNavigate()
@@ -31,77 +33,60 @@ export default function DeliveryHistory() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-        <p className="text-gray-600">Carregando histórico...</p>
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
+        <div className="text-center">
+          <Loader className="w-12 h-12 text-emerald-400 animate-spin mx-auto mb-4" />
+          <p className="text-slate-300 text-lg font-medium">Carregando histórico...</p>
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 pb-24">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 pb-24">
       {/* Header */}
-      <div className="bg-white shadow-md p-4 mb-4">
-        <button
-          onClick={() => navigate('/driver/dashboard')}
-          className="text-blue-600 hover:text-blue-700 mb-2"
-        >
-          ← Voltar
-        </button>
-        <h1 className="text-2xl font-bold text-gray-800">Histórico de Entregas</h1>
-      </div>
+      <header className="bg-slate-800/80 backdrop-blur-lg border-b border-slate-700/50 sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-4 py-4">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => navigate('/driver/dashboard')}
+              className="w-10 h-10 bg-slate-700/50 hover:bg-slate-700 rounded-full flex items-center justify-center transition-all duration-200"
+            >
+              <ArrowLeft className="w-5 h-5 text-slate-300" />
+            </button>
+            <div>
+              <h1 className="text-white font-bold text-xl">Histórico de Entregas</h1>
+              <p className="text-slate-400 text-sm">{deliveries.length} entrega(s) finalizada(s)</p>
+            </div>
+          </div>
+        </div>
+      </header>
 
-      <div className="max-w-2xl mx-auto px-4">
+      <div className="max-w-2xl mx-auto px-4 py-6">
         {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4">
+          <div className="bg-red-500/20 border border-red-500/30 text-red-300 px-4 py-3 rounded-xl mb-4 backdrop-blur-lg">
             {error}
           </div>
         )}
 
         {deliveries.length === 0 ? (
-          <div className="bg-white rounded-lg shadow p-8 text-center">
-            <div className="text-6xl mb-4">📭</div>
-            <h3 className="text-xl font-semibold text-gray-800 mb-2">
+          <div className="bg-slate-800/50 backdrop-blur-lg rounded-2xl p-12 border border-slate-700/30 text-center">
+            <Package className="w-16 h-16 text-slate-600 mx-auto mb-4" />
+            <h3 className="text-white font-semibold text-lg mb-2">
               Nenhuma entrega finalizada ainda
             </h3>
-            <p className="text-gray-500">
+            <p className="text-slate-400">
               Suas entregas concluídas aparecerão aqui
             </p>
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-4">
             {deliveries.map((delivery) => (
               <HistoryCard key={delivery.id} delivery={delivery} />
             ))}
           </div>
         )}
       </div>
-
-      {/* Bottom Navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg">
-        <div className="flex justify-around items-center h-16">
-          <button
-            onClick={() => navigate('/driver/dashboard')}
-            className="flex flex-col items-center justify-center flex-1 py-2 text-gray-600 hover:text-blue-600"
-          >
-            <span className="text-2xl">🏠</span>
-            <span className="text-xs font-medium">Início</span>
-          </button>
-          <button
-            onClick={() => navigate('/driver/history')}
-            className="flex flex-col items-center justify-center flex-1 py-2 text-blue-600"
-          >
-            <span className="text-2xl">📦</span>
-            <span className="text-xs font-medium">Histórico</span>
-          </button>
-          <button
-            onClick={() => navigate('/driver/profile')}
-            className="flex flex-col items-center justify-center flex-1 py-2 text-gray-600 hover:text-blue-600"
-          >
-            <span className="text-2xl">👤</span>
-            <span className="text-xs font-medium">Perfil</span>
-          </button>
-        </div>
-      </nav>
     </div>
   )
 }
@@ -109,8 +94,9 @@ export default function DeliveryHistory() {
 // Card de histórico
 function HistoryCard({ delivery }) {
   const isDelivered = delivery.status === 'delivered'
-  const statusIcon = isDelivered ? '✅' : '❌'
-  const statusColor = isDelivered ? 'text-green-600' : 'text-red-600'
+  const StatusIcon = isDelivered ? CheckCircle : XCircle
+  const statusColor = isDelivered ? 'text-emerald-400' : 'text-red-400'
+  const bgColor = isDelivered ? 'bg-emerald-500/20 border-emerald-500/30' : 'bg-red-500/20 border-red-500/30'
 
   const deliveryTime = delivery.delivered_at 
     ? new Date(delivery.delivered_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
@@ -120,40 +106,80 @@ function HistoryCard({ delivery }) {
     ? new Date(delivery.delivered_at).toLocaleDateString('pt-BR')
     : new Date(delivery.created_at).toLocaleDateString('pt-BR')
 
+  // Formatar endereço
+  let addressStr = 'Endereço não disponível'
+  if (delivery.delivery_address) {
+    const addr = delivery.delivery_address
+    const parts = []
+    if (addr.street) parts.push(addr.street)
+    if (addr.number) parts.push(addr.number)
+    if (parts.length > 0) {
+      addressStr = parts.join(', ')
+    }
+  } else if (delivery.delivery_address_str) {
+    addressStr = delivery.delivery_address_str
+  }
+
   return (
-    <div className="bg-white rounded-lg shadow p-4">
-      <div className="flex items-start justify-between mb-3">
-        <div>
-          <h3 className="font-semibold text-gray-800">
-            {statusIcon} Pedido #{delivery.order_number}
-          </h3>
-          <p className="text-sm text-gray-500">{deliveryDate} às {deliveryTime}</p>
+    <div className="bg-slate-800/70 backdrop-blur-lg rounded-2xl p-5 border border-slate-700/50 shadow-lg">
+      <div className="flex items-start justify-between mb-4">
+        <div className="flex-1">
+          <div className="flex items-center gap-2 mb-2">
+            <StatusIcon className={`w-5 h-5 ${statusColor}`} />
+            <h3 className="font-semibold text-white text-lg">
+              Pedido #{delivery.order_number || delivery.id.slice(0, 8)}
+            </h3>
+          </div>
+          <p className="text-sm text-slate-400">{deliveryDate} às {deliveryTime}</p>
         </div>
-        <span className={`font-bold ${statusColor}`}>
+        <span className={`px-3 py-1 rounded-full text-xs font-semibold ${bgColor} ${statusColor} border`}>
           {isDelivered ? 'Entregue' : 'Falhou'}
         </span>
       </div>
 
-      <div className="border-t pt-3 space-y-2">
-        <p className="text-sm text-gray-700">
-          📍 {delivery.bairro || 'Endereço não disponível'}
-        </p>
-        <p className="text-sm text-gray-700">
-          📦 {delivery.order_items?.length || 0} item(ns)
-        </p>
-        <p className="text-sm font-semibold text-gray-800">
-          💰 R$ {delivery.order_total?.toFixed(2) || '0.00'}
-        </p>
-        {delivery.actual_delivery_minutes && (
-          <p className="text-sm text-gray-600">
-            ⏱️ Tempo: {delivery.actual_delivery_minutes} min
+      <div className="space-y-2 pt-3 border-t border-slate-700/50">
+        <div className="flex items-start gap-2">
+          <MapPin className="w-4 h-4 text-slate-500 mt-1 flex-shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm text-slate-300">{addressStr}</p>
+            {delivery.bairro && (
+              <p className="text-xs text-slate-500 mt-1">{delivery.bairro}</p>
+            )}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Package className="w-4 h-4 text-slate-500" />
+          <p className="text-sm text-slate-300">
+            {delivery.order_items?.length || 0} item(ns)
           </p>
+        </div>
+
+        {delivery.order_total && (
+          <div className="flex items-center gap-2">
+            <DollarSign className="w-4 h-4 text-emerald-400" />
+            <p className="text-sm font-semibold text-emerald-400">
+              R$ {delivery.order_total.toFixed(2)}
+            </p>
+          </div>
+        )}
+
+        {delivery.actual_delivery_minutes && (
+          <div className="flex items-center gap-2">
+            <Clock className="w-4 h-4 text-slate-500" />
+            <p className="text-sm text-slate-400">
+              Tempo: {delivery.actual_delivery_minutes} min
+            </p>
+          </div>
         )}
       </div>
 
       {delivery.failure_reason && (
-        <div className="mt-3 p-2 bg-red-50 border border-red-200 rounded text-sm text-red-700">
-          ⚠️ {delivery.failure_reason}
+        <div className="mt-4 p-3 bg-red-500/20 border border-red-500/30 rounded-xl text-sm text-red-300">
+          <div className="flex items-start gap-2">
+            <XCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+            <p>{delivery.failure_reason}</p>
+          </div>
         </div>
       )}
     </div>

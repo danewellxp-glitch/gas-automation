@@ -1,12 +1,13 @@
 /**
- * Página de Acerto de Carga do Motorista
- * Permite registrar retornos e vendas do dia
+ * Página de Acerto de Carga do Motorista - Novo Estilo
  */
 
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
+import { Package, ArrowLeft, Loader, CheckCircle, AlertCircle } from 'lucide-react'
 import { driverApi } from '../../utils/driverApi'
+import '../../styles/driver-dashboard.css'
 
 export default function AcertoCarga() {
   const navigate = useNavigate()
@@ -22,9 +23,16 @@ export default function AcertoCarga() {
     const fetchCarga = async () => {
       try {
         setLoading(true)
+        setError('')
         const data = await driverApi.getCargaAtual()
 
-        if (!data.tem_carga) {
+        // Verificar se retornou dados válidos
+        if (!data || typeof data !== 'object') {
+          setError('Erro ao carregar dados da carga.')
+          return
+        }
+
+        if (!data.tem_carga || !data.carga) {
           setError('Você não possui uma carga ativa no momento.')
           return
         }
@@ -42,27 +50,36 @@ export default function AcertoCarga() {
         setCarga(data.carga)
 
         // Inicializar itens de acerto com valores padrão
-        const itensIniciais = data.carga.itens.map(item => ({
-          produto_id: item.produto_id,
-          produto_nome: item.produto_nome || 'Produto',
-          produto_codigo: item.produto_codigo || '',
-          qtd_saida: item.qtd_saida,
-          qtd_retorno_cheio: 0,
-          qtd_retorno_vazio: 0,
-          qtd_vendida: item.qtd_saida // Por padrão, assume que vendeu tudo
-        }))
-        setItensAcerto(itensIniciais)
+        if (data.carga.itens && Array.isArray(data.carga.itens)) {
+          const itensIniciais = data.carga.itens.map(item => ({
+            produto_id: item.produto_id,
+            produto_nome: item.produto_nome || 'Produto',
+            produto_codigo: item.produto_codigo || '',
+            qtd_saida: item.qtd_saida || 0,
+            qtd_retorno_cheio: 0,
+            qtd_retorno_vazio: 0,
+            qtd_vendida: item.qtd_saida || 0 // Por padrão, assume que vendeu tudo
+          }))
+          setItensAcerto(itensIniciais)
+        }
 
       } catch (err) {
         console.error('Erro ao carregar carga:', err)
-        setError(err.message)
+        // Se erro de autenticação, redirecionar
+        if (err.message && (err.message.includes('Sessão expirada') || err.message.includes('401'))) {
+          localStorage.removeItem('token')
+          localStorage.removeItem('user')
+          navigate('/driver/login')
+          return
+        }
+        setError(err.message || 'Erro ao carregar carga atual')
       } finally {
         setLoading(false)
       }
     }
 
     fetchCarga()
-  }, [])
+  }, [navigate])
 
   // Atualizar item de acerto
   const handleItemChange = (index, field, value) => {
@@ -134,10 +151,10 @@ export default function AcertoCarga() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
         <div className="text-center">
-          <div className="text-6xl mb-4">📦</div>
-          <p className="text-gray-600">Carregando carga...</p>
+          <Loader className="w-12 h-12 text-emerald-400 animate-spin mx-auto mb-4" />
+          <p className="text-slate-300 text-lg font-medium">Carregando carga...</p>
         </div>
       </div>
     )
@@ -145,14 +162,14 @@ export default function AcertoCarga() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
-        <div className="bg-white rounded-lg shadow-lg p-8 max-w-md w-full text-center">
-          <div className="text-6xl mb-4">📭</div>
-          <h2 className="text-xl font-bold text-gray-800 mb-4">Sem Carga Ativa</h2>
-          <p className="text-gray-600 mb-6">{error}</p>
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
+        <div className="bg-slate-800 rounded-2xl shadow-2xl p-8 max-w-md w-full text-center border border-slate-700/50">
+          <AlertCircle className="w-16 h-16 text-slate-400 mx-auto mb-4" />
+          <h2 className="text-xl font-bold text-white mb-4">Sem Carga Ativa</h2>
+          <p className="text-slate-400 mb-6">{error}</p>
           <button
             onClick={() => navigate('/driver/dashboard')}
-            className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700"
+            className="bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white px-6 py-3 rounded-xl font-semibold transition-all duration-200 shadow-lg shadow-emerald-500/30"
           >
             Voltar ao Dashboard
           </button>
@@ -162,26 +179,35 @@ export default function AcertoCarga() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 pb-24">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 pb-24">
       {/* Header */}
-      <div className="bg-white shadow-md p-4 mb-4">
-        <button
-          onClick={() => navigate('/driver/dashboard')}
-          className="text-blue-600 hover:text-blue-700 mb-2"
-        >
-          ← Voltar
-        </button>
-        <h1 className="text-2xl font-bold text-gray-800">Acerto de Carga</h1>
-        <p className="text-sm text-gray-500">
-          Saída: {carga?.data_saida ? new Date(carga.data_saida).toLocaleString('pt-BR') : 'N/A'}
-        </p>
-      </div>
+      <header className="bg-slate-800/80 backdrop-blur-lg border-b border-slate-700/50 sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-4 py-4">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => navigate('/driver/dashboard')}
+              className="w-10 h-10 bg-slate-700/50 hover:bg-slate-700 rounded-full flex items-center justify-center transition-all duration-200"
+            >
+              <ArrowLeft className="w-5 h-5 text-slate-300" />
+            </button>
+            <div>
+              <h1 className="text-white font-bold text-xl">Acerto de Carga</h1>
+              <p className="text-slate-400 text-sm">
+                Saída: {carga?.data_saida ? new Date(carga.data_saida).toLocaleString('pt-BR') : 'N/A'}
+              </p>
+            </div>
+          </div>
+        </div>
+      </header>
 
-      <div className="max-w-2xl mx-auto px-4 space-y-4">
+      <div className="max-w-2xl mx-auto px-4 py-6 space-y-6">
         {/* Instruções */}
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <h3 className="font-semibold text-blue-800 mb-2">Como fazer o acerto:</h3>
-          <ul className="text-sm text-blue-700 space-y-1">
+        <div className="bg-gradient-to-r from-blue-500/20 to-blue-600/20 backdrop-blur-lg rounded-2xl p-6 border border-blue-500/30 shadow-xl">
+          <h3 className="font-semibold text-blue-300 mb-3 flex items-center gap-2">
+            <Package className="w-5 h-5" />
+            Como fazer o acerto:
+          </h3>
+          <ul className="text-sm text-blue-200 space-y-2">
             <li>• Informe quantos produtos <strong>voltaram cheios</strong></li>
             <li>• Informe quantos <strong>vazios</strong> você trouxe de volta</li>
             <li>• O sistema calcula automaticamente o <strong>vendido</strong></li>
@@ -190,23 +216,23 @@ export default function AcertoCarga() {
 
         {/* Lista de Itens */}
         {itensAcerto.map((item, index) => (
-          <div key={item.produto_id} className="bg-white rounded-lg shadow p-4">
-            <div className="flex justify-between items-start mb-3">
+          <div key={item.produto_id} className="bg-slate-800/70 backdrop-blur-lg rounded-2xl p-6 border border-slate-700/50 shadow-lg">
+            <div className="flex justify-between items-start mb-4">
               <div>
-                <h3 className="font-semibold text-gray-800">{item.produto_nome}</h3>
+                <h3 className="font-semibold text-white text-lg">{item.produto_nome}</h3>
                 {item.produto_codigo && (
-                  <span className="text-sm text-gray-500">{item.produto_codigo}</span>
+                  <span className="text-sm text-slate-400">{item.produto_codigo}</span>
                 )}
               </div>
-              <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">
+              <span className="bg-emerald-500/20 text-emerald-300 px-4 py-2 rounded-full text-sm font-medium border border-emerald-500/30">
                 Saiu: {item.qtd_saida}
               </span>
             </div>
 
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-3 gap-4">
               {/* Retornou Cheio */}
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">
+                <label className="block text-xs font-medium text-slate-400 mb-2">
                   Retornou Cheio
                 </label>
                 <input
@@ -216,16 +242,15 @@ export default function AcertoCarga() {
                   value={item.qtd_retorno_cheio}
                   onChange={(e) => {
                     handleItemChange(index, 'qtd_retorno_cheio', e.target.value)
-                    // Recalcular vendido
                     setTimeout(() => calcularVendido(index), 0)
                   }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-center text-lg font-semibold focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-3 bg-slate-700/50 border border-slate-600 rounded-xl text-center text-lg font-semibold text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
 
               {/* Retornou Vazio */}
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">
+                <label className="block text-xs font-medium text-slate-400 mb-2">
                   Vazios Trocados
                 </label>
                 <input
@@ -233,13 +258,13 @@ export default function AcertoCarga() {
                   min="0"
                   value={item.qtd_retorno_vazio}
                   onChange={(e) => handleItemChange(index, 'qtd_retorno_vazio', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-center text-lg font-semibold focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-3 bg-slate-700/50 border border-slate-600 rounded-xl text-center text-lg font-semibold text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
 
               {/* Vendido (calculado) */}
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">
+                <label className="block text-xs font-medium text-slate-400 mb-2">
                   Vendido
                 </label>
                 <input
@@ -248,14 +273,15 @@ export default function AcertoCarga() {
                   max={item.qtd_saida}
                   value={item.qtd_vendida}
                   onChange={(e) => handleItemChange(index, 'qtd_vendida', e.target.value)}
-                  className="w-full px-3 py-2 border border-green-300 rounded-lg text-center text-lg font-semibold bg-green-50 text-green-700 focus:ring-2 focus:ring-green-500"
+                  className="w-full px-3 py-3 bg-emerald-500/20 border border-emerald-500/30 rounded-xl text-center text-lg font-semibold text-emerald-300 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
                 />
               </div>
             </div>
 
             {/* Validação visual */}
             {item.qtd_vendida + item.qtd_retorno_cheio !== item.qtd_saida && (
-              <p className="text-xs text-orange-600 mt-2">
+              <p className="text-xs text-amber-400 mt-3 flex items-center gap-1">
+                <AlertCircle className="w-4 h-4" />
                 Atenção: Vendido ({item.qtd_vendida}) + Retorno Cheio ({item.qtd_retorno_cheio}) = {item.qtd_vendida + item.qtd_retorno_cheio} (Saída: {item.qtd_saida})
               </p>
             )}
@@ -263,40 +289,43 @@ export default function AcertoCarga() {
         ))}
 
         {/* Observações */}
-        <div className="bg-white rounded-lg shadow p-4">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+        <div className="bg-slate-800/70 backdrop-blur-lg rounded-2xl p-6 border border-slate-700/50 shadow-lg">
+          <label className="block text-sm font-medium text-slate-300 mb-3">
             Observações (opcional)
           </label>
           <textarea
             value={observacoes}
             onChange={(e) => setObservacoes(e.target.value)}
             rows={3}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+            className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600 rounded-xl text-white placeholder-slate-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             placeholder="Ex: Cliente X não estava em casa, produto Y danificado..."
           />
         </div>
 
         {/* Resumo */}
-        <div className="bg-gray-800 text-white rounded-lg shadow p-4">
-          <h3 className="font-semibold mb-3">Resumo do Acerto</h3>
+        <div className="bg-gradient-to-r from-slate-800/90 to-slate-700/90 backdrop-blur-lg rounded-2xl p-6 border border-slate-600/30 shadow-xl">
+          <h3 className="font-semibold text-white mb-4 flex items-center gap-2">
+            <CheckCircle className="w-5 h-5 text-emerald-400" />
+            Resumo do Acerto
+          </h3>
           <div className="grid grid-cols-3 gap-4 text-center">
-            <div>
-              <p className="text-2xl font-bold text-blue-400">
+            <div className="bg-blue-500/20 rounded-xl p-4 border border-blue-500/30">
+              <p className="text-3xl font-bold text-blue-300">
                 {itensAcerto.reduce((sum, i) => sum + i.qtd_saida, 0)}
               </p>
-              <p className="text-xs text-gray-400">Saíram</p>
+              <p className="text-xs text-slate-400 mt-1">Saíram</p>
             </div>
-            <div>
-              <p className="text-2xl font-bold text-green-400">
+            <div className="bg-emerald-500/20 rounded-xl p-4 border border-emerald-500/30">
+              <p className="text-3xl font-bold text-emerald-300">
                 {itensAcerto.reduce((sum, i) => sum + i.qtd_vendida, 0)}
               </p>
-              <p className="text-xs text-gray-400">Vendidos</p>
+              <p className="text-xs text-slate-400 mt-1">Vendidos</p>
             </div>
-            <div>
-              <p className="text-2xl font-bold text-yellow-400">
+            <div className="bg-amber-500/20 rounded-xl p-4 border border-amber-500/30">
+              <p className="text-3xl font-bold text-amber-300">
                 {itensAcerto.reduce((sum, i) => sum + i.qtd_retorno_cheio, 0)}
               </p>
-              <p className="text-xs text-gray-400">Retornaram</p>
+              <p className="text-xs text-slate-400 mt-1">Retornaram</p>
             </div>
           </div>
         </div>
@@ -305,13 +334,20 @@ export default function AcertoCarga() {
         <button
           onClick={handleSubmit}
           disabled={submitting}
-          className={`w-full py-4 rounded-lg font-semibold text-white text-lg ${
+          className={`w-full py-4 rounded-xl font-semibold text-white text-lg transition-all duration-200 shadow-lg ${
             submitting
-              ? 'bg-gray-400 cursor-not-allowed'
-              : 'bg-green-600 hover:bg-green-700 active:bg-green-800'
+              ? 'bg-slate-600 cursor-not-allowed'
+              : 'bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 shadow-emerald-500/30 hover:shadow-emerald-500/50'
           }`}
         >
-          {submitting ? 'Finalizando...' : 'FINALIZAR ACERTO'}
+          {submitting ? (
+            <span className="flex items-center justify-center gap-2">
+              <Loader className="w-5 h-5 animate-spin" />
+              Finalizando...
+            </span>
+          ) : (
+            'FINALIZAR ACERTO'
+          )}
         </button>
       </div>
     </div>

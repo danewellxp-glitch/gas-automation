@@ -27,6 +27,16 @@ export function getAuthHeaders() {
  */
 export async function apiRequest(endpoint, options = {}) {
   const url = buildApiEndpoint(endpoint)
+  const token = localStorage.getItem('token')
+  
+  // Verificar se tem token antes de fazer requisição
+  if (!token && !options.skipAuth) {
+    console.warn('Nenhum token encontrado, redirecionando para login')
+    localStorage.removeItem('token')
+    window.location.href = '/login'
+    throw new Error('Sessão expirada. Por favor, faça login novamente.')
+  }
+  
   const headers = {
     ...getAuthHeaders(),
     ...options.headers
@@ -38,8 +48,18 @@ export async function apiRequest(endpoint, options = {}) {
   })
 
   if (!response.ok) {
+    // Se for 401, pode ser token expirado ou inválido
+    if (response.status === 401) {
+      // Tentar limpar token e redirecionar para login
+      localStorage.removeItem('token')
+      localStorage.removeItem('access_token')
+      localStorage.removeItem('user')
+      const error = await response.json().catch(() => ({}))
+      throw new Error(error.detail || 'Sessão expirada. Por favor, faça login novamente.')
+    }
+    
     const error = await response.json().catch(() => ({}))
-    throw new Error(error.detail || `Erro: ${response.status}`)
+    throw new Error(error.detail || error.message || `Erro: ${response.status}`)
   }
 
   return response.json()

@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Gas Driver</string>
+    <string name="title_activity_main">Gas Driver</string>
+    <string name="package_name">com.gasautomation.driver</string>
+    <string name="custom_url_scheme">com.gasautomation.driver</string>
+</resources>
