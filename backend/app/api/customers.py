@@ -2,7 +2,7 @@
 API de Clientes.
 """
 
-from typing import Optional
+from typing import Optional, List, Dict, Tuple
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -18,7 +18,7 @@ from app.schemas.customer import CustomerCreate, CustomerResponse, CustomerUpdat
 router = APIRouter()
 
 
-@router.get("", response_model=list[CustomerResponse])
+@router.get("", response_model=List[CustomerResponse])
 async def list_customers(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),

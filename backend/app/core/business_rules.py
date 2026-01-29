@@ -5,7 +5,7 @@ Centraliza validações, cálculos e políticas de negócio.
 
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Optional
+from typing import Optional, List, Dict, Tuple
 from datetime import datetime, time
 
 from app.config import settings
@@ -54,7 +54,7 @@ class BusinessRules:
     # Usar ProductService ou buscar diretamente do banco
 
     # Taxas de entrega por bairro
-    DELIVERY_FEES: dict[str, DeliveryFee] = {
+    DELIVERY_FEES: Dict[str, DeliveryFee] = {
         "centro": DeliveryFee("Centro", Decimal("0.00"), 30),
         "boqueirão": DeliveryFee("Boqueirão", Decimal("5.00"), 35),
         "boqueirao": DeliveryFee("Boqueirão", Decimal("5.00"), 35),
@@ -106,7 +106,7 @@ class BusinessRules:
         return result.scalar_one_or_none()
 
     @classmethod
-    async def list_products(cls, db_session) -> list[Product]:
+    async def list_products(cls, db_session) -> List[Product]:
         """Lista todos os produtos disponíveis do banco de dados."""
         from sqlalchemy import select
         from app.models.product import Product
@@ -168,7 +168,7 @@ class BusinessRules:
         )
 
     @classmethod
-    def validate_quantity(cls, quantity: int) -> tuple[bool, str]:
+    def validate_quantity(cls, quantity: int) -> Tuple[bool, str]:
         """
         Valida quantidade do pedido.
 
@@ -184,7 +184,7 @@ class BusinessRules:
         return True, ""
 
     @classmethod
-    def validate_order_value(cls, total: Decimal) -> tuple[bool, str]:
+    def validate_order_value(cls, total: Decimal) -> Tuple[bool, str]:
         """
         Valida valor total do pedido.
 
@@ -200,7 +200,7 @@ class BusinessRules:
         return True, ""
 
     @classmethod
-    def validate_payment_method(cls, method: str) -> tuple[bool, str]:
+    def validate_payment_method(cls, method: str) -> Tuple[bool, str]:
         """
         Valida método de pagamento.
 

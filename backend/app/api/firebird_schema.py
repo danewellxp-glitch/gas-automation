@@ -6,7 +6,7 @@ Somente leitura - não modifica dados.
 """
 
 import logging
-from typing import Optional
+from typing import Optional, List, Dict, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
@@ -45,9 +45,9 @@ class ForeignKeyInfo(BaseModel):
 
 class TableDetailResponse(BaseModel):
     name: str
-    columns: list[ColumnInfo]
-    primary_key: list[str]
-    foreign_keys: list[ForeignKeyInfo]
+    columns: List[ColumnInfo]
+    primary_key: List[str]
+    foreign_keys: List[ForeignKeyInfo]
 
 
 # ==================== Endpoints ====================
@@ -104,7 +104,7 @@ async def firebird_status(
         }
 
 
-@router.get("/tables", response_model=list[TableInfo])
+@router.get("/tables", response_model=List[TableInfo])
 async def list_tables(
     current_user: User = Depends(get_current_user),
 ):

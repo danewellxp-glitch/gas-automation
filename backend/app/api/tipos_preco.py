@@ -5,7 +5,7 @@ Gerencia modalidades de preço (varejo, atacado, funcionário, revenda).
 
 from datetime import date
 from decimal import Decimal
-from typing import Optional
+from typing import Optional, List, Dict, Tuple
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -29,7 +29,7 @@ router = APIRouter()
 
 # ==================== TIPOS DE PREÇO ====================
 
-@router.get("", response_model=list[TipoPrecoResponse])
+@router.get("", response_model=List[TipoPrecoResponse])
 async def list_tipos_preco(
     ativos_only: bool = Query(True, description="Apenas tipos ativos"),
     db: AsyncSession = Depends(get_db),
@@ -159,7 +159,7 @@ async def delete_tipo_preco(
 
 # ==================== PREÇOS POR PRODUTO ====================
 
-@router.get("/produtos/precos", response_model=list[ProdutoPrecoResponse])
+@router.get("/produtos/precos", response_model=List[ProdutoPrecoResponse])
 async def list_produto_precos(
     produto_id: Optional[UUID] = Query(None, description="Filtrar por produto"),
     tipo_preco_id: Optional[UUID] = Query(None, description="Filtrar por tipo"),

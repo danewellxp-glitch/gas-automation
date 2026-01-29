@@ -29,7 +29,8 @@ from app.api import admin_users
 from app.api import admin_errors
 from app.api import admin_system_health
 from app.api import admin_debug
-from app.api import images, tipos_preco, vasilhames, locations, exports, firebird_schema, rpa
+from app.api import owner_dashboard
+from app.api import images, tipos_preco, vasilhames, locations, exports, firebird_schema, rpa, daily_summary, promotions, whatsapp_broadcast
 
 # Importar serviços para delivery system
 try:
@@ -184,11 +185,10 @@ app = FastAPI(
 
     ## Funcionalidades
 
-    - **Webhooks**: Recebe mensagens do WhatsApp (WAHA) e notificações de pagamento (Asaas)
+    - **Webhooks**: Recebe mensagens do WhatsApp (WAHA)
     - **Pedidos**: CRUD completo de pedidos
     - **Clientes**: Gerenciamento de clientes
     - **Produtos**: Catálogo de produtos (P13, P20, P45)
-    - **Pagamentos**: Integração com Asaas (Pix, Cartão, Boleto)
     - **Analytics**: Métricas e relatórios
     - **WebSocket**: Atualizações em tempo real
     """,
@@ -275,7 +275,7 @@ async def api_info():
         "debug": settings.debug,
         "features": {
             "whatsapp": True,
-            "payments": bool(settings.asaas_api_key),
+            "payments": False,
             "ai": True,
             "firebird": settings.firebird_enabled,
         },
@@ -374,6 +374,7 @@ app.include_router(admin_users.router, prefix="/api", tags=["Admin Users"])
 app.include_router(admin_system_health.router, prefix="/api", tags=["Admin System Health"])
 app.include_router(admin_errors.router, prefix="/api", tags=["Admin Errors"])
 app.include_router(admin_debug.router, prefix="/api", tags=["Admin Debug"])
+app.include_router(owner_dashboard.router, prefix="/api", tags=["Owner Dashboard"])
 app.include_router(chatbot.router, prefix="/api/chatbot", tags=["Chatbot"])
 app.include_router(drivers.router, prefix="/api/drivers", tags=["Drivers"])
 app.include_router(cargas.router, prefix="/api/cargas", tags=["Cargas"])
@@ -384,6 +385,9 @@ app.include_router(locations.router, prefix="/api/locations", tags=["Locations"]
 app.include_router(exports.router, prefix="/api/exports", tags=["Exports"])
 app.include_router(firebird_schema.router, prefix="/api/firebird", tags=["Firebird Schema"])
 app.include_router(rpa.router, prefix="/api/rpa", tags=["RPA Gasmaster"])
+app.include_router(daily_summary.router, prefix="/api/daily-summary", tags=["Daily Summary"])
+app.include_router(promotions.router, prefix="/api/promotions", tags=["Promotions"])
+app.include_router(whatsapp_broadcast.router, prefix="/api/whatsapp", tags=["WhatsApp Broadcast"])
 
 
 # ==================== AUDIT LOGS (rota direta para compatibilidade) ====================
@@ -401,6 +405,36 @@ async def get_audit_logs_direct(
     """
     from app.api.users import list_audit_logs
     return await list_audit_logs(limit=limit, offset=offset, current_user=user, session=session)
+
+
+@app.get("/api/audit-logs/summary", tags=["Audit"])
+async def get_audit_logs_summary_direct(
+    limit: int = 100,
+    offset: int = 0,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+):
+    """
+    Lista logs de auditoria com contagens por categoria.
+    Rota direta para compatibilidade com frontend.
+    """
+    from app.api.users import audit_logs_summary
+
+    return await audit_logs_summary(limit=limit, offset=offset, current_user=user, session=session)
+
+
+@app.get("/api/audit-logs/{log_id}", tags=["Audit"])
+async def get_audit_log_detail_direct(
+    log_id: int,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+):
+    """
+    Retorna um audit log específico (para modal de detalhes).
+    """
+    from app.api.users import get_audit_log
+
+    return await get_audit_log(log_id=log_id, current_user=user, session=session)
 
 
 # ==================== DASHBOARD STATISTICS ENDPOINTS ====================

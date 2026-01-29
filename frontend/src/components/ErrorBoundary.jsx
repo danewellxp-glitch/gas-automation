@@ -13,6 +13,9 @@ class ErrorBoundary extends Component {
   componentDidCatch(error, errorInfo) {
     // Log do erro para debug
     console.error('ErrorBoundary caught:', error, errorInfo)
+    console.error('Error stack:', error?.stack)
+    console.error('Error message:', error?.message)
+    console.error('Component stack:', errorInfo.componentStack)
   }
 
   handleReload = () => {
@@ -32,9 +35,21 @@ class ErrorBoundary extends Component {
             <h1 className="text-2xl font-bold text-gray-800 mb-4">
               Algo deu errado
             </h1>
-            <p className="text-gray-600 mb-6">
+            <p className="text-gray-600 mb-4">
               Ocorreu um erro inesperado. Por favor, tente novamente.
             </p>
+            {process.env.NODE_ENV === 'development' && this.state.error && (
+              <div className="bg-red-50 border border-red-200 rounded p-3 mb-4 text-left">
+                <p className="text-xs font-mono text-red-800 break-all">
+                  {this.state.error.toString()}
+                </p>
+                {this.state.error.stack && (
+                  <pre className="text-xs text-red-700 mt-2 overflow-auto max-h-32">
+                    {this.state.error.stack}
+                  </pre>
+                )}
+              </div>
+            )}
             <div className="flex gap-3 justify-center">
               <button
                 onClick={this.handleReload}

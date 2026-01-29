@@ -46,3 +46,6 @@ fdb==2.0.2
 # Utilities
 python-dateutil==2.9.0.post0
 pytz==2025.2
+
+# PDF Export
+reportlab==4.2.5

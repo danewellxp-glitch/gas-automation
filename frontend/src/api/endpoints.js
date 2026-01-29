@@ -79,7 +79,6 @@ export const ENDPOINTS = {
 
   // Webhooks
   WEBHOOKS: {
-    ASAAS: `${API_BASE_URL}/api/webhooks/asaas`,
     WAHA: `${API_BASE_URL}/api/webhooks/waha`,
   },
 

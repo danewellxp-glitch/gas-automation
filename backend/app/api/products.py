@@ -3,7 +3,7 @@ API de Produtos.
 CRUD de produtos (botijões de gás).
 """
 
-from typing import Optional
+from typing import Optional, List, Dict, Tuple
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -22,7 +22,7 @@ from app.schemas.product import (
 router = APIRouter()
 
 
-@router.get("", response_model=list[ProductResponse])
+@router.get("", response_model=List[ProductResponse])
 async def list_products(
     active_only: bool = Query(True, description="Apenas produtos ativos"),
     db: AsyncSession = Depends(get_db),
@@ -45,7 +45,7 @@ async def list_products(
     return products
 
 
-@router.get("/active", response_model=list[ProductBrief])
+@router.get("/active", response_model=List[ProductBrief])
 async def list_active_products(
     db: AsyncSession = Depends(get_db),
 ):

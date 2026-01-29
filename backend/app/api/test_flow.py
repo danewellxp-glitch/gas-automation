@@ -4,7 +4,7 @@ Permite testar o fluxo de conversa sem precisar do WhatsApp.
 """
 
 import logging
-from typing import Optional
+from typing import Optional, List, Dict, Tuple
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -29,7 +29,7 @@ class SimulateMessageResponse(BaseModel):
     success: bool
     current_state: str
     new_state: str
-    responses: list[dict]
+    responses: List[dict]
     context: dict
     error: Optional[str] = None
 

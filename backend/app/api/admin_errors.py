@@ -6,7 +6,7 @@ Central de Logs & Erros (baseado em banco).
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import Optional, List, Dict, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
@@ -51,7 +51,7 @@ class CreateIncidentRequest(BaseModel):
     incident_id: Optional[str] = None
 
 
-@router.get("", response_model=list[ErrorEventResponse])
+@router.get("", response_model=List[ErrorEventResponse])
 async def list_errors(
     service: Optional[str] = None,
     error_type: Optional[str] = None,

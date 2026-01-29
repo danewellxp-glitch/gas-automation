@@ -11,7 +11,22 @@
  */
 import logger from '../utils/logger'
 
-const WS_URL = import.meta.env.VITE_WS_URL || 'ws://192.168.10.156:8000/ws'
+// Construir URL base do WebSocket
+const getWSBaseUrl = () => {
+  const envUrl = import.meta.env.VITE_WS_URL
+  if (envUrl) {
+    // Se já tem /ws no final, usar como está
+    if (envUrl.endsWith('/ws')) {
+      return envUrl
+    }
+    // Se não tem, adicionar /ws
+    return `${envUrl}/ws`
+  }
+  // Padrão
+  return 'ws://192.168.10.156:8000/ws'
+}
+
+const WS_URL = getWSBaseUrl()
 const RECONNECT_DELAY = 3000
 const MAX_RECONNECT_ATTEMPTS = 10
 
@@ -43,6 +58,13 @@ class SharedWebSocketService {
   }
 
   init() {
+    // Verificar se há token antes de inicializar
+    const token = localStorage.getItem('access_token') || localStorage.getItem('token')
+    if (!token) {
+      logger.warn('[SharedWebSocket] Sem token, não inicializando WebSocket')
+      return
+    }
+
     // Verificar suporte a BroadcastChannel
     if (typeof BroadcastChannel === 'undefined') {
       logger.warn('BroadcastChannel não suportado. Cada aba terá sua própria conexão.')
@@ -171,9 +193,11 @@ class SharedWebSocketService {
       return
     }
     
-    // WS_URL já inclui /ws, então o endpoint é /ws/dashboard
+    // Construir URL corretamente: WS_URL já inclui /ws, então adicionar /dashboard
     // Se WS_URL = 'ws://192.168.10.156:8000/ws', então url = 'ws://192.168.10.156:8000/ws/dashboard'
-    const url = `${WS_URL}/dashboard?token=${token}`
+    // Garantir que não há duplicação de barras
+    const baseUrl = WS_URL.endsWith('/') ? WS_URL.slice(0, -1) : WS_URL
+    const url = `${baseUrl}/dashboard?token=${encodeURIComponent(token)}`
     
     logger.log(`[Leader Tab ${this.tabId}] Conectando WebSocket:`, url.replace(token, 'TOKEN_HIDDEN'))
 
@@ -228,8 +252,19 @@ class SharedWebSocketService {
       }
 
       this.ws.onerror = (error) => {
-        logger.error(`[Leader Tab ${this.tabId}] Erro WebSocket:`, error)
+        // Não logar o erro completo para evitar poluição do console
+        // Apenas logar que houve erro (sem detalhes do evento)
+        logger.error(`[Leader Tab ${this.tabId}] Erro WebSocket`)
         this.emit('error', { error })
+        
+        // Não tentar reconectar imediatamente em caso de erro
+        // O onclose vai lidar com a reconexão
+        // Mas também não fazer spam de tentativas se não há token
+        const token = localStorage.getItem('access_token') || localStorage.getItem('token')
+        if (!token) {
+          logger.warn(`[Leader Tab ${this.tabId}] Sem token, cancelando reconexão`)
+          return
+        }
       }
     } catch (error) {
       logger.error('[SharedWebSocket] Erro ao criar WebSocket:', error)

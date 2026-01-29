@@ -5,7 +5,7 @@ Gerencia botijões emprestados aos clientes.
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional
+from typing import Optional, List, Dict, Tuple
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -34,7 +34,7 @@ router = APIRouter()
 
 # ==================== VASILHAMES (TIPOS) ====================
 
-@router.get("", response_model=list[VasilhameResponse])
+@router.get("", response_model=List[VasilhameResponse])
 async def list_vasilhames(
     ativos_only: bool = Query(True, description="Apenas vasilhames ativos"),
     db: AsyncSession = Depends(get_db),
@@ -431,7 +431,7 @@ async def registrar_devolucao(
 
 # ==================== MOVIMENTAÇÕES ====================
 
-@router.get("/movimentacoes/{customer_id}", response_model=list[MovimentacaoResponse])
+@router.get("/movimentacoes/{customer_id}", response_model=List[MovimentacaoResponse])
 async def get_movimentacoes_cliente(
     customer_id: UUID,
     limit: int = Query(50, le=100),

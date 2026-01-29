@@ -6,7 +6,7 @@ Suporta upload/download de comprovantes, fotos e documentos.
 import io
 import logging
 from datetime import timedelta
-from typing import BinaryIO, Optional
+from typing import BinaryIO, Optional, List, Dict, Tuple
 from urllib.parse import urlparse
 
 from app.config import settings
@@ -275,7 +275,7 @@ class MinIOClient:
         bucket: str,
         prefix: str = "",
         recursive: bool = True,
-    ) -> list[str]:
+    ) -> List[str]:
         """
         Lista arquivos em um bucket.
 

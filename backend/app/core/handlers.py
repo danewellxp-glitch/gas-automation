@@ -5,7 +5,7 @@ Cada handler processa a mensagem e retorna o próximo estado.
 
 import logging
 import re
-from typing import Optional
+from typing import Optional, List, Dict, Tuple
 from decimal import Decimal
 
 from sqlalchemy import select
@@ -18,7 +18,6 @@ from app.core.flow_engine import MessageResponse, ProcessedMessage
 from app.models.customer import Customer
 from app.models.product import Product
 from app.models.order import Order, OrderItem, OrderStatus
-from app.integrations.asaas import asaas_client, AsaasError
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +26,7 @@ logger = logging.getLogger(__name__)
 # Usar get_product() que busca do banco
 
 
-async def get_or_create_customer(phone: str) -> tuple[Customer, bool]:
+async def get_or_create_customer(phone: str) -> Tuple[Customer, bool]:
     """
     Busca ou cria cliente pelo telefone.
 
@@ -131,39 +130,8 @@ def format_currency(value: Decimal) -> str:
 
 
 async def _get_or_create_asaas_customer(customer: Customer) -> str:
-    """
-    Obtém ou cria cliente no Asaas e retorna o ID.
-    Atualiza o customer.asaas_customer_id no banco.
-    """
-    if customer.asaas_customer_id:
-        return customer.asaas_customer_id
-
-    try:
-        # Criar cliente no Asaas
-        asaas_customer = await asaas_client.get_or_create_customer(
-            name=customer.name or f"Cliente {customer.phone}",
-            cpf_cnpj=customer.cpf_cnpj,
-            email=customer.email,
-            phone=customer.phone,
-            external_reference=str(customer.id),
-        )
-
-        # Atualizar ID no banco local
-        async with AsyncSessionLocal() as db:
-            result = await db.execute(
-                select(Customer).where(Customer.id == customer.id)
-            )
-            db_customer = result.scalar_one_or_none()
-            if db_customer:
-                db_customer.asaas_customer_id = asaas_customer["id"]
-                await db.commit()
-
-        logger.info(f"Cliente Asaas criado/encontrado: {asaas_customer['id']} para customer {customer.id}")
-        return asaas_customer["id"]
-
-    except AsaasError as e:
-        logger.error(f"Erro ao criar cliente no Asaas: {e.message}")
-        raise
+    # Integração Asaas/Pix foi descontinuada.
+    raise RuntimeError("Asaas disabled")
 
 
 # ==================== HANDLERS ====================
@@ -584,7 +552,6 @@ async def handle_awaiting_address(
                     "Como deseja pagar?"
                 ),
                 buttons=[
-                    {"id": "pix", "text": "📱 Pix"},
                     {"id": "dinheiro", "text": "💵 Dinheiro"},
                     {"id": "cartao", "text": "💳 Cartão"},
                 ],
@@ -617,113 +584,23 @@ async def handle_awaiting_payment(
         )
     total = product.price * context.selected_quantity
 
-    # Pix
+    # Pix (DESCONTINUADO)
     if msg_lower in ["pix", "1"] or "pix" in msg_lower:
-        context.payment_method = "pix"
-
-        # Criar pedido no banco
-        order = await create_order(context, total)
-        context.order_id = str(order.id)
-
-        # Emitir evento WebSocket de novo pedido
-        try:
-            from app.api.websocket import emit_new_order
-            order_data = {
-                "id": str(order.id),
-                "order_number": order.order_number,
-                "customer_id": str(context.customer_id),
-                "status": order.status,
-                "total_amount": float(order.total_amount),
-                "payment_method": "pix",
-                "created_at": order.created_at.isoformat() if order.created_at else None,
-                "product": product["name"],
-                "quantity": context.selected_quantity,
-                "address": context.address.get("full_address", ""),
-            }
-            await emit_new_order(order_data)
-            logger.info(f"Evento WebSocket emitido para novo pedido: #{order.order_number}")
-        except Exception as e:
-            logger.error(f"Erro ao emitir evento WebSocket de novo pedido: {e}")
-
-        # Gerar QR Code Pix via Asaas (se configurado)
-        pix_payload = None
-        pix_qr_code = None
-
-        try:
-            # Buscar dados do cliente para Asaas
-            async with AsyncSessionLocal() as db:
-                result = await db.execute(
-                    select(Customer).where(Customer.id == context.customer_id)
-                )
-                customer = result.scalar_one_or_none()
-
-            if customer and customer.cpf_cnpj and settings.asaas_api_key:
-                # Criar pagamento PIX no Asaas
-                payment = await asaas_client.create_pix_payment(
-                    customer_id=customer.asaas_customer_id or await _get_or_create_asaas_customer(customer),
-                    value=total,
-                    description=f"Pedido #{order.order_number} - {product['name']}",
-                    external_reference=str(order.id),
-                )
-
-                # Armazenar payment_id no contexto
-                context.asaas_payment_id = payment["id"]
-                pix_payload = payment.get("pix", {}).get("payload", "")
-                pix_qr_code = payment.get("pix", {}).get("encodedImage", "")
-
-                # Atualizar pedido com payment_id
-                async with AsyncSessionLocal() as db:
-                    result = await db.execute(
-                        select(Order).where(Order.id == order.id)
-                    )
-                    db_order = result.scalar_one_or_none()
-                    if db_order:
-                        db_order.asaas_payment_id = payment["id"]
-                        await db.commit()
-
-                logger.info(f"PIX Asaas criado: {payment['id']} para pedido #{order.order_number}")
-            else:
-                logger.warning(f"Cliente sem CPF/CNPJ ou Asaas não configurado - usando PIX simulado")
-
-        except AsaasError as e:
-            logger.error(f"Erro ao criar PIX no Asaas: {e.message}")
-        except Exception as e:
-            logger.error(f"Erro inesperado ao criar PIX: {e}")
-
-        context.state = ConversationState.AWAITING_PIX
-
-        # Montar mensagem com PIX real ou simulado
-        if pix_payload:
-            pix_message = (
-                f"📱 *Pagamento via Pix*\n\n"
-                f"Valor: *{format_currency(total)}*\n\n"
-                f"Copie o código PIX abaixo:\n"
-                f"`{pix_payload}`\n\n"
-                "Após o pagamento, envie o comprovante ou digite *pago*."
-            )
-        else:
-            # Fallback: PIX simulado (chave CNPJ)
-            pix_message = (
-                f"📱 *Pagamento via Pix*\n\n"
-                f"Valor: *{format_currency(total)}*\n\n"
-                f"Chave Pix (CNPJ):\n`12.345.678/0001-90`\n\n"
-                f"Ou copie o código:\n"
-                f"`00020126580014br.gov.bcb.pix0136{context.order_id[:36]}`\n\n"
-                "Após o pagamento, envie o comprovante ou digite *pago*."
-            )
-
         return ProcessedMessage(
             context=context,
             responses=[
                 MessageResponse(
-                    text=pix_message,
+                    text=(
+                        "⚠️ Pagamento via Pix foi descontinuado.\n\n"
+                        "Por favor, escolha outra forma de pagamento:"
+                    ),
                     buttons=[
-                        {"id": "pix_pago", "text": "✅ Já paguei"},
-                        {"id": "cancelar", "text": "❌ Cancelar"},
+                        {"id": "dinheiro", "text": "💵 Dinheiro"},
+                        {"id": "cartao", "text": "💳 Cartão"},
                     ],
                 )
             ],
-            new_state=ConversationState.AWAITING_PIX,
+            new_state=ConversationState.AWAITING_PAYMENT,
         )
 
     # Dinheiro
@@ -805,7 +682,6 @@ async def handle_awaiting_payment(
             MessageResponse(
                 text="Por favor, escolha uma forma de pagamento:",
                 buttons=[
-                    {"id": "pix", "text": "📱 Pix"},
                     {"id": "dinheiro", "text": "💵 Dinheiro"},
                     {"id": "cartao", "text": "💳 Cartão"},
                 ],
@@ -822,160 +698,23 @@ async def handle_awaiting_pix(
     """
     Handler para confirmação de pagamento Pix.
     """
-    msg_lower = message.lower().strip()
-
-    # Buscar produto do banco de dados
-    product = await get_product(context.selected_product)
-    if not product:
-        return ProcessedMessage(
-            context=context,
-            responses=[
-                MessageResponse(
-                    text="❌ Produto não encontrado. Por favor, escolha um produto válido."
-                )
-            ],
-            new_state=ConversationState.AWAITING_PRODUCT,
-        )
-    total = product.price * context.selected_quantity
-
-    # Pagamento confirmado
-    if msg_lower in ["pago", "paguei", "pix_pago", "1"] or "pag" in msg_lower:
-        # Verificar pagamento via Asaas (se configurado)
-        payment_confirmed = False
-        payment_status = None
-
-        if hasattr(context, 'asaas_payment_id') and context.asaas_payment_id and settings.asaas_api_key:
-            try:
-                payment_status = await asaas_client.get_payment_status(context.asaas_payment_id)
-                payment_confirmed = payment_status in ["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH"]
-                logger.info(f"Status PIX Asaas: {payment_status} para {context.asaas_payment_id}")
-            except AsaasError as e:
-                logger.error(f"Erro ao verificar PIX no Asaas: {e.message}")
-            except Exception as e:
-                logger.error(f"Erro inesperado ao verificar PIX: {e}")
-
-        # Se não está confirmado via Asaas, assumir que foi pago (fallback)
-        # Em produção, você pode querer ser mais rigoroso
-        if not payment_confirmed and payment_status and payment_status not in ["RECEIVED", "CONFIRMED"]:
-            return ProcessedMessage(
-                context=context,
-                responses=[
-                    MessageResponse(
-                        text=(
-                            "⏳ *Pagamento ainda não identificado*\n\n"
-                            f"Status atual: {payment_status or 'Aguardando'}\n\n"
-                            "Por favor, aguarde alguns instantes e confirme novamente, "
-                            "ou envie o comprovante de pagamento."
-                        ),
-                        buttons=[
-                            {"id": "pix_pago", "text": "🔄 Verificar novamente"},
-                            {"id": "cancelar", "text": "❌ Cancelar"},
-                        ],
-                    )
-                ],
-                new_state=ConversationState.AWAITING_PIX,
-            )
-
-        # Atualizar pedido
-        async with AsyncSessionLocal() as db:
-            result = await db.execute(
-                select(Order).where(Order.id == context.order_id)
-            )
-            order = result.scalar_one_or_none()
-            if order:
-                order.status = OrderStatus.PAID.value
-                await db.commit()
-                order_number = order.order_number
-
-        context.state = ConversationState.ORDER_CONFIRMED
-
-        return ProcessedMessage(
-            context=context,
-            responses=[
-                MessageResponse(
-                    text=(
-                        f"✅ *Pagamento Confirmado!*\n\n"
-                        f"📦 Pedido #{order_number}\n"
-                        f"Produto: {context.selected_quantity}x {product['name']}\n"
-                        f"Total: *{format_currency(total)}* ✓\n\n"
-                        f"📍 Entrega em: {context.address.get('full_address', context.address.get('bairro', 'Endereço cadastrado'))}\n"
-                        f"⏱️ Previsão: *{settings.default_delivery_time_minutes} minutos*\n\n"
-                        "🚚 Seu pedido já está sendo preparado!"
-                    ),
-                    footer="Obrigado pela preferência! 🔥",
-                )
-            ],
-            new_state=ConversationState.ORDER_CONFIRMED,
-        )
-
-    # Cancelar
-    if msg_lower in ["cancelar", "cancela", "2"]:
-        # Cancelar pedido no banco de dados
-        order_number = None
-        try:
-            async with AsyncSessionLocal() as db:
-                result = await db.execute(
-                    select(Order).where(Order.id == context.order_id)
-                )
-                order = result.scalar_one_or_none()
-                if order:
-                    order.status = OrderStatus.CANCELLED.value
-                    order_number = order.order_number
-                    await db.commit()
-                    logger.info(f"Pedido #{order_number} cancelado pelo cliente")
-
-            # Cancelar cobrança no Asaas (se existir)
-            if hasattr(context, 'asaas_payment_id') and context.asaas_payment_id and settings.asaas_api_key:
-                try:
-                    await asaas_client.cancel_payment(context.asaas_payment_id)
-                    logger.info(f"Cobrança Asaas cancelada: {context.asaas_payment_id}")
-                except AsaasError as e:
-                    logger.error(f"Erro ao cancelar cobrança no Asaas: {e.message}")
-                except Exception as e:
-                    logger.error(f"Erro inesperado ao cancelar cobrança: {e}")
-
-            # Emitir evento WebSocket de pedido cancelado
-            try:
-                from app.api.websocket import emit_order_update
-                await emit_order_update(
-                    order_id=context.order_id,
-                    status=OrderStatus.CANCELLED.value,
-                    order_data={"order_number": order_number}
-                )
-            except Exception as e:
-                logger.error(f"Erro ao emitir evento de cancelamento: {e}")
-
-        except Exception as e:
-            logger.error(f"Erro ao cancelar pedido: {e}")
-
-        context.reset()
-
-        return ProcessedMessage(
-            context=context,
-            responses=[
-                MessageResponse(
-                    text=f"❌ Pedido{' #' + str(order_number) if order_number else ''} cancelado.\n\nDigite *menu* para fazer um novo pedido."
-                )
-            ],
-            new_state=ConversationState.START,
-        )
-
-    # Aguardando
+    # Pix foi descontinuado. Se alguém cair nesse estado (conversa antiga),
+    # voltamos para a seleção de pagamento sem quebrar o fluxo.
     return ProcessedMessage(
         context=context,
         responses=[
             MessageResponse(
                 text=(
-                    "⏳ Aguardando confirmação do pagamento...\n\n"
-                    "Após realizar o Pix, envie o comprovante ou digite *pago*."
+                    "⚠️ Pagamento via Pix foi descontinuado.\n\n"
+                    "Escolha uma forma de pagamento na entrega:"
                 ),
                 buttons=[
-                    {"id": "pix_pago", "text": "✅ Já paguei"},
-                    {"id": "cancelar", "text": "❌ Cancelar"},
+                    {"id": "dinheiro", "text": "💵 Dinheiro"},
+                    {"id": "cartao", "text": "💳 Cartão"},
                 ],
             )
         ],
-        new_state=ConversationState.AWAITING_PIX,
+        new_state=ConversationState.AWAITING_PAYMENT,
     )
 
 

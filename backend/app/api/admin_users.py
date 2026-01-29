@@ -11,7 +11,7 @@ import string
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field as PydField
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
@@ -43,12 +43,16 @@ async def _write_audit_log(
     action: str,
     actor_user_id: Optional[int],
     details: Optional[str] = None,
+    ip_address: Optional[str] = None,
+    user_agent: Optional[str] = None,
 ) -> None:
     audit = AuditLog(
         action=action,
         user_id=actor_user_id,
         details=details,
         timestamp=datetime.utcnow(),
+        ip_address=ip_address,
+        user_agent=user_agent,
     )
     session.add(audit)
     await session.commit()
@@ -97,6 +101,7 @@ async def admin_create_user(
     body: CreateUserRequest,
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
+    request: Request = None,
 ):
     _require_admin(current_user)
 
@@ -144,6 +149,9 @@ async def admin_create_user(
         action="USER_CREATE",
         actor_user_id=current_user.id,
         details=f"Created user_id={user.id} role={user.role}",
+        ip_address=(request.headers.get("x-forwarded-for", "").split(",")[0].strip() if request else None)
+        or (request.client.host if request and request.client else None),
+        user_agent=request.headers.get("user-agent") if request else None,
     )
 
     return {
@@ -168,6 +176,7 @@ async def admin_update_user(
     body: UpdateUserRequest,
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
+    request: Request = None,
 ):
     _require_admin(current_user)
 
@@ -220,6 +229,9 @@ async def admin_update_user(
         action="USER_UPDATE",
         actor_user_id=current_user.id,
         details=f"Updated user_id={user.id}",
+        ip_address=(request.headers.get("x-forwarded-for", "").split(",")[0].strip() if request else None)
+        or (request.client.host if request and request.client else None),
+        user_agent=request.headers.get("user-agent") if request else None,
     )
 
     return AdminUserResponse(
@@ -240,6 +252,7 @@ async def admin_reset_password(
     user_id: int,
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
+    request: Request = None,
 ):
     _require_admin(current_user)
 
@@ -263,6 +276,9 @@ async def admin_reset_password(
         action="PASSWORD_RESET",
         actor_user_id=current_user.id,
         details=f"Reset password for user_id={user.id}",
+        ip_address=(request.headers.get("x-forwarded-for", "").split(",")[0].strip() if request else None)
+        or (request.client.host if request and request.client else None),
+        user_agent=request.headers.get("user-agent") if request else None,
     )
 
     return {"user_id": user.id, "temporary_password": temporary_password}

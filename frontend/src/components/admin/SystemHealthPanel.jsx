@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Activity, RefreshCcw, Server, Database, MessageSquare, RotateCw, CreditCard, AlertCircle, CheckCircle2, XCircle } from 'lucide-react'
+import { Activity, RefreshCcw, Server, Database, MessageSquare, RotateCw, AlertCircle, CheckCircle2, XCircle } from 'lucide-react'
 import { apiRequest } from '../../utils/api'
 
 function Badge({ status }) {
@@ -35,7 +35,6 @@ function ServiceCard({ service }) {
       postgres: Database,
       waha: MessageSquare,
       firebird_sync: RotateCw,
-      asaas: CreditCard
     }
     return icons[key] || Activity
   }
@@ -47,7 +46,6 @@ function ServiceCard({ service }) {
       postgres: 'PostgreSQL',
       waha: 'WAHA (WhatsApp)',
       firebird_sync: 'Firebird Sync',
-      asaas: 'Asaas (Pagamentos)'
     }
     return names[key] || key
   }
@@ -167,30 +165,6 @@ function ServiceCard({ service }) {
               <div className="flex items-center gap-2 text-sm text-gray-600">
                 <CheckCircle2 className="h-4 w-4 text-green-600" />
                 <span>Serviço de sincronização operacional</span>
-              </div>
-            )}
-          </div>
-        )
-
-      case 'asaas':
-        return (
-          <div className="space-y-2">
-            {service.status === 'not_configured' ? (
-              <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
-                <div className="flex items-start gap-2">
-                  <AlertCircle className="h-4 w-4 text-gray-500 mt-0.5 flex-shrink-0" />
-                  <div className="flex-1">
-                    <div className="text-xs font-medium text-gray-700">Não configurado</div>
-                    <div className="mt-1 text-xs text-gray-500">
-                      Configure as credenciais da API Asaas nas variáveis de ambiente
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2 text-sm text-gray-600">
-                <CheckCircle2 className="h-4 w-4 text-green-600" />
-                <span>Integração de pagamentos operacional</span>
               </div>
             )}
           </div>

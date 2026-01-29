@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import time
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any, Optional, List, Dict, Tuple
 
 import httpx
 from fastapi import APIRouter, Depends, status
@@ -17,7 +17,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth import get_current_user
 from app.config import settings
 from app.database import get_db, redis_manager
-from app.integrations.asaas import AsaasClient, AsaasError
 from app.integrations.waha import WAHAClient
 from app.models.auth_models import User
 
@@ -40,11 +39,11 @@ def _require_admin(user: User) -> None:
 async def system_health(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
-) -> dict[str, Any]:
+) -> Dict[str, Any]:
     _require_admin(current_user)
 
     now = datetime.now(timezone.utc).isoformat()
-    health: dict[str, Any] = {
+    health: Dict[str, Any] = {
         "status": "healthy",
         "timestamp": now,
         "uptime_seconds": int(time.time() - APP_STARTED_AT),
@@ -55,7 +54,7 @@ async def system_health(
     health["services"]["backend"] = {"status": "online"}
 
     # ==================== Redis ====================
-    redis_result: dict[str, Any] = {}
+    redis_result: Dict[str, Any] = {}
     try:
         t0 = time.perf_counter()
         await redis_manager.client.ping()
@@ -78,7 +77,7 @@ async def system_health(
     health["services"]["redis"] = redis_result
 
     # ==================== PostgreSQL ====================
-    pg_result: dict[str, Any] = {}
+    pg_result: Dict[str, Any] = {}
     try:
         await session.execute(text("SELECT 1"))
         active_conn = await session.execute(text("SELECT count(*) FROM pg_stat_activity"))
@@ -90,7 +89,7 @@ async def system_health(
     health["services"]["postgres"] = pg_result
 
     # ==================== WAHA ====================
-    waha_result: dict[str, Any] = {}
+    waha_result: Dict[str, Any] = {}
     try:
         client = WAHAClient(timeout=10)
         status_data = await client.get_session_status()
@@ -113,7 +112,7 @@ async def system_health(
     health["services"]["waha"] = waha_result
 
     # ==================== Firebird Sync Service ====================
-    sync_result: dict[str, Any] = {}
+    sync_result: Dict[str, Any] = {}
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
             resp = await client.get(f"{settings.sync_service_url.rstrip('/')}/status")
@@ -124,24 +123,6 @@ async def system_health(
         health["status"] = "degraded"
         sync_result.update({"status": "offline", "error": str(e)})
     health["services"]["firebird_sync"] = sync_result
-
-    # ==================== Asaas ====================
-    asaas_result: dict[str, Any] = {}
-    if not settings.asaas_api_key:
-        asaas_result.update({"status": "not_configured"})
-    else:
-        try:
-            client = AsaasClient(timeout=10)
-            # request leve
-            await client._request("GET", "/customers", params={"limit": 1})
-            asaas_result.update({"status": "online"})
-        except AsaasError as e:
-            health["status"] = "degraded"
-            asaas_result.update({"status": "degraded", "error": str(e), "status_code": e.status_code})
-        except Exception as e:
-            health["status"] = "degraded"
-            asaas_result.update({"status": "offline", "error": str(e)})
-    health["services"]["asaas"] = asaas_result
 
     return health
 

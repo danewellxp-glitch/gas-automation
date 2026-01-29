@@ -5,7 +5,7 @@ CRUD e gestão de pedidos.
 
 import asyncio
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Optional, List, Dict
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -22,6 +22,7 @@ from app.models.tipo_preco import TipoPreco, ProdutoPreco
 from app.models.auth_models import User
 from app.auth import get_current_user
 from app.services.firebird_export_service import export_order_to_firebird, FirebirdExportError
+from app.services.event_publisher import event_publisher
 from app.schemas.order import (
     OrderBrief,
     OrderCreate,
@@ -31,7 +32,7 @@ from app.schemas.order import (
     PaginatedOrdersResponse,
 )
 
-from datetime import date
+from datetime import date, timezone
 from decimal import Decimal
 from sqlalchemy import or_
 import logging
@@ -50,6 +51,119 @@ async def _export_order_after_delivered(order_id: UUID) -> None:
         logger.warning(f"Exportação Firebird não realizada para pedido {order_id}: {e}")
     except Exception as e:
         logger.exception(f"Erro inesperado exportando pedido {order_id} para Firebird: {e}")
+
+
+async def _notify_order_status_change(order: Order, old_status: str, new_status: str) -> None:
+    """Notifica cliente sobre mudança de status do pedido via WhatsApp."""
+    try:
+        # Mapear status para eventos
+        event_map = {
+            OrderStatus.PAID.value: "order.paid",
+            OrderStatus.PREPARING.value: "order.preparing",
+            OrderStatus.DISPATCHED.value: "order.dispatched",
+            OrderStatus.DELIVERED.value: "order.delivered",
+            OrderStatus.CANCELLED.value: "order.cancelled",
+        }
+        
+        event_type = event_map.get(new_status)
+        if not event_type:
+            return
+        
+        # Obter dados do cliente
+        customer_phone = order.customer.phone if order.customer else None
+        customer_email = order.customer.email if order.customer else None
+        
+        # Publicar evento para notification-service
+        await event_publisher.publish_order_event(
+            event_type=event_type,
+            order_id=str(order.id),
+            order_number=order.order_number,
+            customer_id=str(order.customer_id),
+            customer_phone=customer_phone,
+            customer_email=customer_email,
+            status=new_status,
+        )
+        
+    except Exception as e:
+        logger.error(f"Erro ao notificar mudança de status: {e}", exc_info=True)
+
+
+async def _notify_operators_order_update(order: Order, old_status: str, new_status: str) -> None:
+    """Notifica operadores sobre atualização de pedido via WebSocket."""
+    try:
+        from app.api.websocket import UserRole
+        
+        # Broadcast para operadores e admins
+        message = {
+            "type": "order_update",
+            "order_id": str(order.id),
+            "order_number": order.order_number,
+            "status": new_status,
+            "old_status": old_status,
+            "customer_name": order.customer.name if order.customer else None,
+            "total_amount": float(order.total_amount),
+            "bairro": order.delivery_bairro,
+        }
+        
+        # Enviar para operadores (filtrar por bairro se necessário)
+        # Obter instância do connection manager
+        from app.api.websocket import manager as ws_manager
+        if order.delivery_bairro:
+            await ws_manager.broadcast_to_neighborhood(message, order.delivery_bairro)
+        else:
+            await ws_manager.broadcast_to_role(message, UserRole.OPERATOR)
+        
+        # Enviar para admins também
+        await ws_manager.broadcast_to_role(message, UserRole.ADMIN)
+        
+    except Exception as e:
+        logger.error(f"Erro ao notificar operadores: {e}", exc_info=True)
+
+
+async def _notify_new_order(order: Order) -> None:
+    """Notifica operadores sobre novo pedido pendente."""
+    try:
+        from app.api.websocket import UserRole
+        
+        # Publicar evento para notification-service
+        customer_phone = order.customer.phone if order.customer else None
+        customer_email = order.customer.email if order.customer else None
+        
+        await event_publisher.publish_order_event(
+            event_type="order.created",
+            order_id=str(order.id),
+            order_number=order.order_number,
+            customer_id=str(order.customer_id),
+            customer_phone=customer_phone,
+            customer_email=customer_email,
+            status=order.status,
+        )
+        
+        # Notificar operadores via WebSocket
+        message = {
+            "type": "new_order",
+            "order": {
+                "id": str(order.id),
+                "order_number": order.order_number,
+                "status": order.status,
+                "customer_name": order.customer.name if order.customer else None,
+                "total_amount": float(order.total_amount),
+                "bairro": order.delivery_bairro,
+                "created_at": order.created_at.isoformat() if order.created_at else None,
+            },
+        }
+        
+        # Obter instância do connection manager
+        from app.api.websocket import manager as ws_manager
+        if order.delivery_bairro:
+            await ws_manager.broadcast_to_neighborhood(message, order.delivery_bairro)
+        else:
+            await ws_manager.broadcast_to_role(message, UserRole.OPERATOR)
+        
+        await ws_manager.broadcast_to_role(message, UserRole.ADMIN)
+        
+    except Exception as e:
+        logger.error(f"Erro ao notificar novo pedido: {e}", exc_info=True)
 
 
 async def get_preco_produto(
@@ -163,7 +277,7 @@ async def list_orders(
     )
 
 
-@router.get("/today", response_model=list[OrderBrief])
+@router.get("/today", response_model=List[OrderBrief])
 async def list_today_orders(
     status: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
@@ -187,7 +301,7 @@ async def list_today_orders(
     return [OrderBrief.from_order(o) for o in orders]
 
 
-@router.get("/pending", response_model=list[OrderBrief])
+@router.get("/pending", response_model=List[OrderBrief])
 async def list_pending_orders(
     db: AsyncSession = Depends(get_db),
 ):
@@ -265,10 +379,22 @@ async def create_order(
 
     Normalmente criado pelo flow engine do bot.
     
+    DESATIVADO: Criação manual de pedidos está desabilitada por padrão.
+    Para reativar, defina MANUAL_ORDER_CREATION_ENABLED=true no .env
+    
     Usa transação atômica para garantir consistência:
     - Se qualquer operação falhar, tudo é revertido (via get_db rollback)
     - Pedido e itens são criados juntos
     """
+    # Verificar se criação manual está habilitada
+    if not settings.manual_order_creation_enabled:
+        raise HTTPException(
+            status_code=403,
+            detail="Criação manual de pedidos está desabilitada. "
+                   "Pedidos devem ser criados apenas através do bot/flow engine. "
+                   "Para reativar, defina MANUAL_ORDER_CREATION_ENABLED=true no .env"
+        )
+    
     try:
         # Verificar se cliente existe
         customer = await db.execute(
@@ -372,6 +498,9 @@ async def create_order(
         )
         order = result.scalar_one()
 
+        # Notificar operadores sobre novo pedido
+        asyncio.create_task(_notify_new_order(order))
+
         return order
         
     except HTTPException:
@@ -456,7 +585,11 @@ async def update_order_status(
         )
 
     # Atualizar status e timestamps
-    order.status = data.status
+    # Se mudando para PAID, registrar quem aprovou
+    if data.status == OrderStatus.PAID.value and old_status == OrderStatus.PENDING.value:
+        order.update_status(data.status, approved_by=current_user.id)
+    else:
+        order.update_status(data.status)
 
     if data.status == OrderStatus.CANCELLED.value and data.reason:
         order.cancellation_reason = data.reason
@@ -464,7 +597,11 @@ async def update_order_status(
     await db.commit()
     await db.refresh(order)
 
-    # TODO: Notificar cliente via WhatsApp sobre mudança de status
+    # Notificar cliente via WhatsApp sobre mudança de status
+    asyncio.create_task(_notify_order_status_change(order, old_status, data.status))
+
+    # Notificar operadores via WebSocket sobre mudança de status
+    asyncio.create_task(_notify_operators_order_update(order, old_status, data.status))
 
     # Exportar para Firebird quando entregue (best-effort, assíncrono)
     if (
@@ -623,9 +760,33 @@ async def approve_order(
     # Atualizar status para 'paid' (aprovado e pago)
     order.status = OrderStatus.PAID.value
     order.paid_at = datetime.now()
+    order.approved_by = current_user.id
+    
+    # Calcular tempo de aprovação
+    if order.created_at:
+        approval_time = (datetime.now(timezone.utc) - order.created_at).total_seconds()
+    else:
+        approval_time = None
     
     await db.commit()
     await db.refresh(order)
+    
+    # Registrar aprovação no EventLog para tracking
+    try:
+        from app.services.operator_tracking_service import operator_tracking_service
+        # Criar nova sessão para o tracking (não usar a mesma sessão)
+        from app.database import AsyncSessionLocal
+        async def _log_approval():
+            async with AsyncSessionLocal() as tracking_db:
+                await operator_tracking_service.log_order_approval(
+                    tracking_db,
+                    operator_id=current_user.id,
+                    order_id=order.id,
+                    approval_time_seconds=approval_time,
+                )
+        asyncio.create_task(_log_approval())
+    except Exception as e:
+        logger.warning(f"Erro ao registrar aprovação no tracking: {e}")
     
     return order
 

@@ -2,13 +2,6 @@
 Integrações externas do sistema.
 """
 
-from app.integrations.asaas import (
-    AsaasClient,
-    AsaasError,
-    asaas_client,
-    check_payment_status,
-    create_pix_payment,
-)
 from app.integrations.firebird import (
     FirebirdClient,
     FirebirdError,
@@ -41,12 +34,6 @@ __all__ = [
     "send_message",
     "send_buttons",
     "send_image",
-    # Asaas
-    "AsaasClient",
-    "AsaasError",
-    "asaas_client",
-    "create_pix_payment",
-    "check_payment_status",
     # Firebird
     "FirebirdClient",
     "FirebirdError",

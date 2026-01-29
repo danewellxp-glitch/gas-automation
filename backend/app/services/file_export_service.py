@@ -437,7 +437,7 @@ class FileExportService:
         self,
         order_id: UUID,
         format: ExportFormat = ExportFormat.CSV,
-    ) -> tuple[str, str]:
+    ) -> Tuple[str, str]:
         """
         Exporta um único pedido.
 
@@ -461,7 +461,7 @@ class FileExportService:
         exclude_exported: bool = True,
         save_to_file: bool = True,
         mark_as_exported: bool = True,
-    ) -> tuple[str, str, int]:
+    ) -> Tuple[str, str, int]:
         """
         Exporta lote de pedidos.
 
@@ -511,7 +511,7 @@ class FileExportService:
         orders: List[ExportedOrder],
         format: ExportFormat,
         single: bool = False,
-    ) -> tuple[str, str]:
+    ) -> Tuple[str, str]:
         """Gera conteúdo e nome do arquivo."""
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 
@@ -598,7 +598,7 @@ file_export_service = FileExportService()
 async def export_order_to_file(
     order_id: UUID,
     format: ExportFormat = ExportFormat.CSV,
-) -> tuple[str, str]:
+) -> Tuple[str, str]:
     """Exporta pedido individual para arquivo."""
     return await file_export_service.export_order(order_id, format)
 
@@ -607,7 +607,7 @@ async def export_delivered_orders_to_file(
     format: ExportFormat = ExportFormat.CSV,
     date_from: Optional[datetime] = None,
     date_to: Optional[datetime] = None,
-) -> tuple[str, str, int]:
+) -> Tuple[str, str, int]:
     """Exporta pedidos entregues para arquivo."""
     return await file_export_service.export_orders_batch(
         format=format,

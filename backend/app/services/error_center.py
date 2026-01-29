@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import hashlib
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any, Optional, List, Dict, Tuple
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,7 +25,7 @@ async def upsert_error_event(
     service: str,
     error_type: str,
     message: str,
-    details: Optional[dict[str, Any]] = None,
+    details: Optional[Dict[str, Any]] = None,
 ) -> ErrorEvent:
     fp = make_fingerprint(service=service, error_type=error_type, message=message)
     now = datetime.now(timezone.utc)

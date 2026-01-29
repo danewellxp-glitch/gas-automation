@@ -4,7 +4,7 @@ Define os estados do fluxo de pedido e as transições válidas.
 """
 
 from enum import Enum
-from typing import Optional
+from typing import Optional, List
 from dataclasses import dataclass, field
 from datetime import datetime
 
@@ -113,7 +113,7 @@ class StateTransition:
         return to_state in valid_next
 
     @classmethod
-    def get_valid_transitions(cls, state: ConversationState) -> list[ConversationState]:
+    def get_valid_transitions(cls, state: ConversationState) -> List[ConversationState]:
         """Retorna transições válidas a partir de um estado."""
         return cls.VALID_TRANSITIONS.get(state, [])
 

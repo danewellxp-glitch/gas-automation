@@ -12,7 +12,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any, Optional, List, Dict, Tuple
 from uuid import UUID
 
 import anyio
@@ -60,7 +60,7 @@ class _OrderSnapshot:
     customer_id: UUID
     customer_phone: str
     customer_firebird_id: Optional[int]
-    items: list[_OrderSnapshotItem]
+    items: List[_OrderSnapshotItem]
 
 
 class FirebirdOrderExporter:
@@ -126,7 +126,7 @@ class FirebirdOrderExporter:
                 return int(v)
         return value
 
-    def _map_product_code(self, code: str) -> list[str]:
+    def _map_product_code(self, code: str) -> List[str]:
         """
         Gera variações do código para tentar localizar no Firebird.
         Ex: P13 -> [P13, P-13]
@@ -154,7 +154,7 @@ class FirebirdOrderExporter:
                 return int(prod["firebird_id"])
         return None
 
-    def export_snapshot(self, snap: _OrderSnapshot) -> tuple[int, Optional[int]]:
+    def export_snapshot(self, snap: _OrderSnapshot) -> Tuple[int, Optional[int]]:
         """
         Executa exportação no Firebird (sincrono).
 
@@ -176,7 +176,7 @@ class FirebirdOrderExporter:
             item_cols = self._get_table_columns(conn, trade_item_table)
 
             # Montar insert TRADE com colunas existentes
-            trade_values: dict[str, Any] = {}
+            trade_values: Dict[str, Any] = {}
             if "PESSOA_ID" in trade_cols:
                 trade_values["PESSOA_ID"] = resolved_customer_id
             if "DTEMISSAO" in trade_cols:
@@ -238,7 +238,7 @@ class FirebirdOrderExporter:
                     if not item_id:
                         raise FirebirdExportError(f"Produto não encontrado no Firebird: {it.product_code}")
 
-                    item_values: dict[str, Any] = {}
+                    item_values: Dict[str, Any] = {}
                     if "TRADE_ID" in item_cols:
                         item_values["TRADE_ID"] = trade_id
                     if "ITEM_ID" in item_cols:

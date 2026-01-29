@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { LayoutDashboard, Users, FileText, Settings, Plus, RefreshCcw, KeyRound, Activity, Bug, Wrench } from 'lucide-react'
+import { LayoutDashboard, Users, FileText, Settings, Plus, RefreshCcw, KeyRound, Activity, Bug, Wrench, MessageSquare } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import { apiRequest } from '../../utils/api'
 import FlowbiteLayout from '../../components/flowbite/FlowbiteLayout'
@@ -16,6 +16,7 @@ import SystemSettings from '../../components/admin/SystemSettings'
 import SystemHealthPanel from '../../components/admin/SystemHealthPanel'
 import ErrorCenterPanel from '../../components/admin/ErrorCenterPanel'
 import DebugToolsPanel from '../../components/admin/DebugToolsPanel'
+import WhatsAppBroadcast from '../../components/WhatsAppBroadcast'
 
 const VALID_ROLES = [
   { value: 'admin', label: 'Admin', description: 'Acesso total ao sistema' },
@@ -213,6 +214,7 @@ export default function AdminDashboard() {
       pageTitle="Admin"
       userEmail={user?.email || ''}
       onLogout={logout}
+      activeNavKey={activeView}
       navItems={[
         { key: 'dashboard', type: 'button', label: 'Dashboard', icon: LayoutDashboard, onClick: () => setActiveView('dashboard') },
         { key: 'users', type: 'button', label: 'Usuários', icon: Users, onClick: () => setActiveView('users') },
@@ -220,11 +222,13 @@ export default function AdminDashboard() {
         { key: 'errors', type: 'button', label: 'Logs & Erros', icon: Bug, onClick: () => setActiveView('errors') },
         { key: 'debug', type: 'button', label: 'Debug Tools', icon: Wrench, onClick: () => setActiveView('debug') },
         { key: 'reports', type: 'button', label: 'Relatórios', icon: FileText, onClick: () => setActiveView('reports') },
+        { key: 'whatsapp-broadcast', type: 'button', label: 'Disparo WhatsApp', icon: MessageSquare, onClick: () => setActiveView('whatsapp-broadcast') },
         { key: 'settings', type: 'button', label: 'Configurações', icon: Settings, onClick: () => setActiveView('settings') },
       ]}
     >
       {/* Renderizar view baseada no estado */}
       {activeView === 'dashboard' && <DashboardOverview />}
+      {activeView === 'whatsapp-broadcast' && <WhatsAppBroadcast />}
 
       {activeView === 'system-health' && <SystemHealthPanel />}
 
@@ -235,6 +239,8 @@ export default function AdminDashboard() {
       {activeView === 'reports' && <AuditLogsPanel />}
 
       {activeView === 'settings' && <SystemSettings />}
+
+      {activeView === 'whatsapp-broadcast' && <WhatsAppBroadcast />}
 
       {activeView === 'users' && (
         <>

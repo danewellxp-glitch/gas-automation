@@ -11,10 +11,10 @@ from __future__ import annotations
 import secrets
 from datetime import datetime, timezone
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any, Optional, List, Dict, Tuple
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
@@ -42,12 +42,16 @@ async def _write_audit_log(
     action: str,
     actor_user_id: Optional[int],
     details: Optional[str] = None,
+    ip_address: Optional[str] = None,
+    user_agent: Optional[str] = None,
 ) -> None:
     audit = AuditLog(
         action=action,
         user_id=actor_user_id,
         details=details,
         timestamp=datetime.utcnow(),
+        ip_address=ip_address,
+        user_agent=user_agent,
     )
     session.add(audit)
     await session.commit()
@@ -92,6 +96,7 @@ async def simulate_message_admin(
     body: SimulateMessageRequest,
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
+    request: Request = None,
 ):
     _require_admin(current_user)
     await _require_confirm(body.confirm_token, body.confirm_text, current_user=current_user)
@@ -116,6 +121,9 @@ async def simulate_message_admin(
         action="DEBUG_SIMULATE_MESSAGE",
         actor_user_id=current_user.id,
         details=f"phone={body.phone} current_state={current_state} new_state={result.new_state.value}",
+        ip_address=(request.headers.get("x-forwarded-for", "").split(",")[0].strip() if request else None)
+        or (request.client.host if request and request.client else None),
+        user_agent=request.headers.get("user-agent") if request else None,
     )
 
     return {
@@ -149,11 +157,20 @@ async def reset_context_admin(
     body: ResetContextRequest,
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
+    request: Request = None,
 ):
     _require_admin(current_user)
     await _require_confirm(body.confirm_token, body.confirm_text, current_user=current_user)
     await redis_manager.delete_conversation_state(phone)
-    await _write_audit_log(session, action="DEBUG_RESET_CONTEXT", actor_user_id=current_user.id, details=f"phone={phone}")
+    await _write_audit_log(
+        session,
+        action="DEBUG_RESET_CONTEXT",
+        actor_user_id=current_user.id,
+        details=f"phone={phone}",
+        ip_address=(request.headers.get("x-forwarded-for", "").split(",")[0].strip() if request else None)
+        or (request.client.host if request and request.client else None),
+        user_agent=request.headers.get("user-agent") if request else None,
+    )
     return {"phone": phone, "message": "Contexto resetado com sucesso"}
 
 
@@ -162,7 +179,7 @@ async def list_flow_states_admin(
     current_user: User = Depends(get_current_user),
 ):
     _require_admin(current_user)
-    states: dict[str, Any] = {}
+    states: Dict[str, Any] = {}
     for st in ConversationState:
         transitions = StateTransition.get_valid_transitions(st)
         states[st.value] = {"name": st.name, "valid_transitions": [t.value for t in transitions]}
@@ -198,7 +215,7 @@ async def redis_inspect(
         if len(keys) >= limit:
             break
 
-    values: dict[str, Any] = {}
+    values: Dict[str, Any] = {}
     for k in keys:
         values[k] = await redis_manager.client.get(k)
 
@@ -218,6 +235,7 @@ async def create_fake_order(
     body: CreateFakeOrderRequest,
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
+    request: Request = None,
 ):
     _require_admin(current_user)
     await _require_confirm(body.confirm_token, body.confirm_text, current_user=current_user)
@@ -244,7 +262,7 @@ async def create_fake_order(
     order = Order(
         customer_id=customer.id,
         status=OrderStatus.PENDING.value,
-        payment_method="pix",
+        payment_method="cash",
         total_amount=subtotal,
         delivery_address=customer.address,
         delivery_bairro=(customer.address or {}).get("bairro") if customer.address else None,
@@ -270,6 +288,9 @@ async def create_fake_order(
         action="DEBUG_CREATE_FAKE_ORDER",
         actor_user_id=current_user.id,
         details=f"order_id={order.id} phone={body.phone} product={product.code} qty={qty}",
+        ip_address=(request.headers.get("x-forwarded-for", "").split(",")[0].strip() if request else None)
+        or (request.client.host if request and request.client else None),
+        user_agent=request.headers.get("user-agent") if request else None,
     )
 
     return {"order_id": str(order.id), "order_number": order.order_number, "status": order.status, "total_amount": str(order.total_amount)}
@@ -277,7 +298,7 @@ async def create_fake_order(
 
 class ReexecuteStateMachineRequest(BaseModel):
     phone: str
-    messages: list[str] = Field(..., min_length=1, max_length=30)
+    messages: List[str] = Field(..., min_length=1, max_length=30)
     confirm_token: str
     confirm_text: str
 
@@ -287,6 +308,7 @@ async def reexecute_state_machine(
     body: ReexecuteStateMachineRequest,
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
+    request: Request = None,
 ):
     _require_admin(current_user)
     await _require_confirm(body.confirm_token, body.confirm_text, current_user=current_user)
@@ -313,6 +335,9 @@ async def reexecute_state_machine(
         action="DEBUG_REEXECUTE_STATE_MACHINE",
         actor_user_id=current_user.id,
         details=f"phone={body.phone} steps={len(steps)}",
+        ip_address=(request.headers.get("x-forwarded-for", "").split(",")[0].strip() if request else None)
+        or (request.client.host if request and request.client else None),
+        user_agent=request.headers.get("user-agent") if request else None,
     )
 
     return {"phone": body.phone, "steps": steps, "final_context": final_ctx.to_dict()}
@@ -329,6 +354,7 @@ async def raise_error_for_testing(
     body: RaiseErrorRequest,
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
+    request: Request = None,
 ):
     """
     Endpoint controlado para forçar um erro 500 e validar a Central de Erros.
@@ -336,6 +362,14 @@ async def raise_error_for_testing(
     """
     _require_admin(current_user)
     await _require_confirm(body.confirm_token, body.confirm_text, current_user=current_user)
-    await _write_audit_log(session, action="DEBUG_RAISE_ERROR", actor_user_id=current_user.id, details=body.message)
+    await _write_audit_log(
+        session,
+        action="DEBUG_RAISE_ERROR",
+        actor_user_id=current_user.id,
+        details=body.message,
+        ip_address=(request.headers.get("x-forwarded-for", "").split(",")[0].strip() if request else None)
+        or (request.client.host if request and request.client else None),
+        user_agent=request.headers.get("user-agent") if request else None,
+    )
     raise RuntimeError(body.message)
 

@@ -3,7 +3,7 @@ Configuração de conexões com banco de dados PostgreSQL e Redis.
 """
 
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator, List
+from typing import AsyncGenerator, List, Optional, Union
 
 import redis.asyncio as aioredis
 from sqlalchemy.ext.asyncio import (
@@ -73,7 +73,7 @@ class RedisManager:
     """Gerenciador de conexão Redis."""
 
     def __init__(self):
-        self._redis: aioredis.Redis | None = None
+        self._redis: Optional[aioredis.Redis] = None
 
     async def connect(self) -> None:
         """Estabelece conexão com Redis."""
@@ -100,7 +100,7 @@ class RedisManager:
 
     # Métodos de conveniência para estado de conversa
 
-    async def get_conversation_state(self, phone: str) -> dict | None:
+    async def get_conversation_state(self, phone: str) -> Optional[dict]:
         """Obtém estado da conversa de um cliente."""
         import json
         data = await self._redis.get(f"chat:{phone}")
@@ -112,7 +112,7 @@ class RedisManager:
         self,
         phone: str,
         state: dict,
-        ttl: int | None = None
+        ttl: Optional[int] = None
     ) -> None:
         """Define estado da conversa de um cliente."""
         import json

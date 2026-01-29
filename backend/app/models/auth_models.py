@@ -50,8 +50,11 @@ class AuditLog(SQLModel, table=True):
     action: str
     user_id: Optional[int] = None
     conversation_id: Optional[int] = None
-    timestamp: datetime = Field(default_factory=lambda: datetime.now())
+    # Guardar como UTC (naive) e serializar como UTC (+00:00) na API
+    timestamp: datetime = Field(default_factory=lambda: datetime.utcnow())
     details: Optional[str] = None
+    ip_address: Optional[str] = None
+    user_agent: Optional[str] = None
 
 class BotInteraction(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)

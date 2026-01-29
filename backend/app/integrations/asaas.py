@@ -8,7 +8,7 @@ Documentação: https://docs.asaas.com/
 import logging
 from datetime import datetime, timedelta
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any, Optional, List, Dict, Tuple
 
 import httpx
 
@@ -399,7 +399,7 @@ class AsaasClient:
     async def configure_webhook(
         self,
         url: str,
-        events: list[str] = None,
+        events: List[str] = None,
         enabled: bool = True,
     ) -> dict:
         """

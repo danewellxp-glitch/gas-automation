@@ -1,11 +1,11 @@
 """Users API endpoints for role management and audit logs"""
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import desc
+from sqlalchemy import and_, desc, func, or_
 from sqlmodel import select
 from pydantic import BaseModel
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 from app.database import get_db
 from app.models.auth_models import User, AuditLog
@@ -178,9 +178,43 @@ class AuditLogResponse(BaseModel):
     details: Optional[str]
     timestamp: datetime
     user_email: Optional[str] = None
+    user_role: Optional[str] = None
+    ip_address: Optional[str] = None
+    user_agent: Optional[str] = None
+    category: Optional[str] = None
 
     class Config:
         from_attributes = True
+
+
+class AuditLogCounts(BaseModel):
+    all: int
+    admin: int
+    operator: int
+    system: int
+
+
+class AuditLogsSummaryResponse(BaseModel):
+    total: int
+    counts: AuditLogCounts
+    items: List[AuditLogResponse]
+
+
+def _ensure_utc(dt: datetime) -> datetime:
+    # DB usa TIMESTAMP WITHOUT TIME ZONE. Tratamos como UTC e retornamos com tz explícito.
+    if dt is None:
+        return dt
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
+def _categorize_audit_log(user_id: Optional[int], user_role: Optional[str]) -> str:
+    if not user_id:
+        return "system"
+    if user_role in ["admin", "owner"]:
+        return "admin"
+    return "operator"
 
 
 @router.get("/audit-logs", response_model=List[AuditLogResponse], tags=["audit"])
@@ -218,6 +252,7 @@ async def list_audit_logs(
     response = []
     for log in logs:
         user_email = None
+        user_role = None
         if log.user_id:
             user_result = await session.execute(
                 select(User).where(User.id == log.user_id)
@@ -225,6 +260,7 @@ async def list_audit_logs(
             user = user_result.scalar_one_or_none()
             if user:
                 user_email = user.email
+                user_role = user.role
 
         response.append(AuditLogResponse(
             id=log.id,
@@ -232,11 +268,130 @@ async def list_audit_logs(
             user_id=log.user_id,
             conversation_id=log.conversation_id,
             details=log.details,
-            timestamp=log.timestamp,
-            user_email=user_email
+            timestamp=_ensure_utc(log.timestamp),
+            user_email=user_email,
+            user_role=user_role,
+            ip_address=getattr(log, "ip_address", None),
+            user_agent=getattr(log, "user_agent", None),
+            category=_categorize_audit_log(log.user_id, user_role),
         ))
 
     return response
+
+
+@router.get("/audit-logs/summary", response_model=AuditLogsSummaryResponse, tags=["audit"])
+async def audit_logs_summary(
+    limit: int = 100,
+    offset: int = 0,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+):
+    if current_user.role not in ["admin", "owner"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Apenas admins e owners podem acessar logs de auditoria",
+        )
+
+    # Items (com join para email/role)
+    stmt = (
+        select(AuditLog, User.email, User.role)
+        .outerjoin(User, User.id == AuditLog.user_id)
+        .order_by(desc(AuditLog.timestamp))
+        .offset(offset)
+        .limit(limit)
+    )
+    result = await session.execute(stmt)
+    rows = result.all()
+
+    items: List[AuditLogResponse] = []
+    for log, email, role in rows:
+        items.append(
+            AuditLogResponse(
+                id=log.id,
+                action=log.action,
+                user_id=log.user_id,
+                conversation_id=log.conversation_id,
+                details=log.details,
+                timestamp=_ensure_utc(log.timestamp),
+                user_email=email,
+                user_role=role,
+                ip_address=getattr(log, "ip_address", None),
+                user_agent=getattr(log, "user_agent", None),
+                category=_categorize_audit_log(log.user_id, role),
+            )
+        )
+
+    # Counts
+    total_stmt = select(func.count()).select_from(AuditLog)
+    total = int((await session.execute(total_stmt)).scalar() or 0)
+
+    system_stmt = select(func.count()).select_from(AuditLog).where(AuditLog.user_id.is_(None))
+    system_count = int((await session.execute(system_stmt)).scalar() or 0)
+
+    admin_stmt = (
+        select(func.count())
+        .select_from(AuditLog)
+        .join(User, User.id == AuditLog.user_id)
+        .where(User.role.in_(["admin", "owner"]))
+    )
+    admin_count = int((await session.execute(admin_stmt)).scalar() or 0)
+
+    operator_stmt = (
+        select(func.count())
+        .select_from(AuditLog)
+        .outerjoin(User, User.id == AuditLog.user_id)
+        .where(
+            and_(
+                AuditLog.user_id.is_not(None),
+                or_(User.role.is_(None), User.role.notin_(["admin", "owner"])),
+            )
+        )
+    )
+    operator_count = int((await session.execute(operator_stmt)).scalar() or 0)
+
+    return AuditLogsSummaryResponse(
+        total=total,
+        counts=AuditLogCounts(all=total, admin=admin_count, operator=operator_count, system=system_count),
+        items=items,
+    )
+
+
+@router.get("/audit-logs/{log_id}", response_model=AuditLogResponse, tags=["audit"])
+async def get_audit_log(
+    log_id: int,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+):
+    if current_user.role not in ["admin", "owner"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Apenas admins e owners podem acessar logs de auditoria",
+        )
+
+    stmt = (
+        select(AuditLog, User.email, User.role)
+        .outerjoin(User, User.id == AuditLog.user_id)
+        .where(AuditLog.id == log_id)
+    )
+    res = await session.execute(stmt)
+    row = res.first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Audit log not found")
+
+    log, email, role = row
+    return AuditLogResponse(
+        id=log.id,
+        action=log.action,
+        user_id=log.user_id,
+        conversation_id=log.conversation_id,
+        details=log.details,
+        timestamp=_ensure_utc(log.timestamp),
+        user_email=email,
+        user_role=role,
+        ip_address=getattr(log, "ip_address", None),
+        user_agent=getattr(log, "user_agent", None),
+        category=_categorize_audit_log(log.user_id, role),
+    )
 
 
 async def create_audit_log(
@@ -252,7 +407,7 @@ async def create_audit_log(
         user_id=user_id,
         conversation_id=conversation_id,
         details=details,
-        timestamp=datetime.now()
+        timestamp=datetime.utcnow()
     )
     session.add(audit)
     await session.commit()

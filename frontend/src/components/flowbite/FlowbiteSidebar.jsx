@@ -1,18 +1,22 @@
 import { NavLink } from 'react-router-dom'
 
-function SidebarItem({ item, onClick }) {
+function SidebarItem({ item, onClick, isActive }) {
   const Icon = item.icon
   const isButton = item.type === 'button'
 
   const base =
-    'flex items-center rounded-lg p-2 text-base font-normal text-gray-900 hover:bg-gray-100'
+    'flex items-center rounded-lg p-2 text-base font-normal text-gray-900 hover:bg-gray-100 transition-colors'
   const active = 'bg-gray-100'
 
   if (isButton) {
     return (
-      <button type="button" onClick={onClick} className={base}>
-        {Icon ? <Icon className="h-5 w-5 text-gray-500" /> : null}
-        <span className="ml-3">{item.label}</span>
+      <button 
+        type="button" 
+        onClick={onClick} 
+        className={`${base} ${isActive ? active : ''}`}
+      >
+        {Icon ? <Icon className={`h-5 w-5 ${isActive ? 'text-primary-600' : 'text-gray-500'}`} /> : null}
+        <span className={`ml-3 ${isActive ? 'font-semibold text-gray-900' : ''}`}>{item.label}</span>
       </button>
     )
   }
@@ -35,6 +39,7 @@ export default function FlowbiteSidebar({
   footer = null,
   isMobileOpen = false,
   onCloseMobile,
+  activeKey = null,
 }) {
   return (
     <aside
@@ -53,6 +58,7 @@ export default function FlowbiteSidebar({
               <li key={item.key}>
                 <SidebarItem
                   item={item}
+                  isActive={activeKey === item.key}
                   onClick={() => {
                     onCloseMobile?.()
                     item.onClick?.()

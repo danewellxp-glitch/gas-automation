@@ -111,6 +111,12 @@ class Settings(BaseSettings):
         "Umbará",
         "Xaxim"
     ]
+    
+    # Controle de funcionalidades
+    manual_order_creation_enabled: bool = Field(
+        default=False,
+        description="Permite criação manual de pedidos via API. False = apenas via bot/flow engine"
+    )
 
     @field_validator('cors_origins')
     @classmethod

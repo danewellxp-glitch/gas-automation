@@ -2,7 +2,7 @@
 Modelo de log de tempo dos entregadores.
 """
 
-from datetime import datetime, date, timezone
+from datetime import datetime, date as date_type, timezone
 from typing import Optional
 import uuid as uuid_pkg
 
@@ -58,7 +58,7 @@ class DriverTimeLog(Base):
     )
     
     # Data do log (para facilitar queries)
-    date: Mapped[date] = mapped_column(
+    date: Mapped[date_type] = mapped_column(
         Date,
         nullable=False,
         index=True

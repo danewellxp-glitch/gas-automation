@@ -17,6 +17,7 @@ export default function FlowbiteLayout({
   userEmail = '',
   onLogout,
   children,
+  activeNavKey = null,
 }) {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false)
 
@@ -60,6 +61,7 @@ export default function FlowbiteLayout({
         footer={sidebarFooter}
         isMobileOpen={isMobileSidebarOpen}
         onCloseMobile={() => setIsMobileSidebarOpen(false)}
+        activeKey={activeNavKey}
       />
 
       {/* Content */}

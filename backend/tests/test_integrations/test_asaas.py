@@ -3,19 +3,9 @@ Testes para integração com Asaas.
 """
 
 import pytest
-from decimal import Decimal
-from unittest.mock import AsyncMock, patch, MagicMock
-from uuid import uuid4
 
-from app.integrations.asaas import (
-    AsaasClient,
-    AsaasError,
-    asaas_client,
-    create_pix_payment,
-    check_payment_status,
-)
-from app.services.payment_service import PaymentService, payment_service
-from app.models.payment import PaymentMethod, PaymentStatus
+# Integração Asaas/Pix foi descontinuada.
+pytest.skip("Asaas/Pix descontinuado: testes desativados", allow_module_level=True)
 
 
 # ==================== Fixtures ====================

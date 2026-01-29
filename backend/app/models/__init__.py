@@ -16,6 +16,7 @@ from app.models.payment import Payment, PaymentMethod as PaymentMethodType, Paym
 from app.models.product import Product
 from app.models.tipo_preco import TipoPreco, ProdutoPreco
 from app.models.vasilhame import Vasilhame, ClienteVasilhame, MovimentacaoVasilhame
+from app.models.promotion import Promotion
 
 __all__ = [
     # Auth Models
@@ -66,4 +67,6 @@ __all__ = [
     "Vasilhame",
     "ClienteVasilhame",
     "MovimentacaoVasilhame",
+    # Promotion
+    "Promotion",
 ]

@@ -6,7 +6,7 @@ Integração com Asaas para Pix, Cartão de Crédito e Boleto.
 import logging
 from datetime import datetime, timezone
 from decimal import Decimal
-from typing import Optional
+from typing import Optional, List, Dict, Tuple
 from uuid import UUID
 
 from sqlalchemy import select
@@ -361,7 +361,9 @@ class PaymentService:
             if order and order.status == OrderStatus.PENDING.value:
                 order.status = OrderStatus.PAID.value
                 order.paid_at = datetime.now(timezone.utc)
-                logger.info(f"Pedido {order.id} atualizado para PAID")
+                # approved_by não é definido aqui pois é aprovação automática via webhook
+                # (não há operador específico aprovando manualmente)
+                logger.info(f"Pedido {order.id} atualizado para PAID (via webhook)")
 
             await db.commit()
 
@@ -429,7 +431,7 @@ class PaymentService:
         self,
         db: AsyncSession,
         order_id: UUID,
-    ) -> list[Payment]:
+    ) -> List[Payment]:
         """Lista todos os pagamentos de um pedido."""
         result = await db.execute(
             select(Payment)

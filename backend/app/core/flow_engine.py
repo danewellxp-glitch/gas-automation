@@ -5,7 +5,7 @@ Gerencia o fluxo de conversa e delega para handlers específicos.
 
 import logging
 from dataclasses import dataclass
-from typing import Optional, Callable, Awaitable
+from typing import Optional, Callable, Awaitable, List, Dict
 from datetime import datetime
 
 from app.config import settings
@@ -22,7 +22,7 @@ class MessageResponse:
     """Resposta a ser enviada ao usuário."""
 
     text: str
-    buttons: Optional[list[dict]] = None
+    buttons: Optional[List[Dict]] = None
     image_url: Optional[str] = None
     image_base64: Optional[str] = None
     footer: Optional[str] = None
@@ -36,7 +36,7 @@ class ProcessedMessage:
     """Resultado do processamento de uma mensagem."""
 
     context: ConversationContext
-    responses: list[MessageResponse]
+    responses: List[MessageResponse]
     new_state: ConversationState
     success: bool = True
     error: Optional[str] = None
@@ -58,7 +58,7 @@ class FlowEngine:
     """
 
     def __init__(self):
-        self._handlers: dict[ConversationState, StateHandler] = {}
+        self._handlers: Dict[ConversationState, StateHandler] = {}
         self._register_handlers()
 
     def _register_handlers(self) -> None:
@@ -293,7 +293,7 @@ class FlowEngine:
     async def send_responses(
         self,
         phone: str,
-        responses: list[MessageResponse],
+        responses: List[MessageResponse],
     ) -> None:
         """Envia as respostas ao cliente via WAHA."""
         for response in responses:

@@ -7,7 +7,7 @@ Alternativa para cenários onde o Firebird é somente leitura.
 
 import logging
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List, Dict, Tuple
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -77,7 +77,7 @@ async def list_export_formats():
     }
 
 
-@router.get("/files", response_model=list[ExportedFileInfo])
+@router.get("/files", response_model=List[ExportedFileInfo])
 async def list_exported_files(
     format: Optional[str] = Query(None, description="Filtrar por formato (csv, xml, gasmaster_txt)"),
     limit: int = Query(50, ge=1, le=200, description="Limite de arquivos"),

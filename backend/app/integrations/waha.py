@@ -5,7 +5,7 @@ Gerencia envio e recebimento de mensagens via WhatsApp.
 
 import base64
 import logging
-from typing import Optional
+from typing import Optional, List, Dict
 
 import httpx
 
@@ -151,9 +151,9 @@ class WAHAClient:
         self,
         phone: str,
         text: str,
-        buttons: list[dict],
+        buttons: List[Dict],
         footer: Optional[str] = None,
-    ) -> dict:
+    ) -> Dict:
         """
         Envia mensagem com botões interativos.
 
@@ -199,9 +199,9 @@ class WAHAClient:
         self,
         phone: str,
         text: str,
-        buttons: list[dict],
+        buttons: List[Dict],
         footer: Optional[str] = None,
-    ) -> dict:
+    ) -> Dict:
         """Fallback: envia botões como texto com opções numeradas."""
         options_text = "\n".join(
             f"{i+1}. {btn['text']}" for i, btn in enumerate(buttons)
@@ -217,8 +217,8 @@ class WAHAClient:
         phone: str,
         text: str,
         button_text: str,
-        sections: list[dict],
-    ) -> dict:
+        sections: List[Dict],
+    ) -> Dict:
         """
         Envia mensagem com lista de seleção.
 
@@ -253,7 +253,7 @@ class WAHAClient:
         image_url: Optional[str] = None,
         image_base64: Optional[str] = None,
         caption: Optional[str] = None,
-    ) -> dict:
+    ) -> Dict:
         """
         Envia imagem.
 
@@ -295,7 +295,7 @@ class WAHAClient:
         document_url: str,
         filename: str,
         caption: Optional[str] = None,
-    ) -> dict:
+    ) -> Dict:
         """Envia documento (PDF, etc)."""
         client = await self._get_client()
         chat_id = self._format_phone(phone)
@@ -370,7 +370,7 @@ async def send_message(phone: str, text: str) -> dict:
 async def send_buttons(
     phone: str,
     text: str,
-    buttons: list[dict],
+    buttons: List[Dict],
     footer: Optional[str] = None,
 ) -> dict:
     """Envia mensagem com botões."""

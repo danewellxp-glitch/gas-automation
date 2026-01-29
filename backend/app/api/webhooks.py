@@ -1,5 +1,7 @@
 """
-Webhook handlers para WAHA (WhatsApp) e Asaas (Pagamentos).
+Webhook handlers para WAHA (WhatsApp).
+
+Nota: integração Asaas/Pix foi descontinuada (não utilizada).
 """
 
 import logging
@@ -12,7 +14,6 @@ from app.config import settings
 from app.database import get_db, redis_manager, AsyncSessionLocal
 from app.models.event_log import EventLog
 from app.schemas.webhook import (
-    AsaasWebhookPayload,
     WAHAMessage,
     WAHAWebhookPayload,
 )
@@ -261,102 +262,6 @@ async def process_location_message(phone: str, location: dict, message_id: str =
         logger.error(f"Erro ao processar localização no flow: {e}", exc_info=True)
 
 
-# ==================== Asaas (Pagamentos) Webhooks ====================
-
-@router.post("/asaas")
-async def asaas_webhook(
-    request: Request,
-    background_tasks: BackgroundTasks,
-):
-    """
-    Recebe webhooks do Asaas (Gateway de Pagamentos).
-
-    Eventos suportados:
-    - PAYMENT_CONFIRMED: Pagamento confirmado
-    - PAYMENT_RECEIVED: Pagamento recebido (boleto)
-    - PAYMENT_OVERDUE: Pagamento vencido
-    - PAYMENT_REFUNDED: Pagamento estornado
-    """
-    try:
-        body = await request.json()
-        logger.info(f"Webhook Asaas recebido: {body.get('event')}")
-
-        # Validar token se configurado
-        if settings.asaas_webhook_token:
-            token = request.headers.get("asaas-access-token")
-            if token != settings.asaas_webhook_token:
-                logger.warning("Token de webhook Asaas inválido")
-                raise HTTPException(status_code=401, detail="Invalid webhook token")
-
-        event = body.get("event", "")
-        payment = body.get("payment", {})
-
-        if not payment:
-            return {"status": "ignored", "reason": "no_payment_data"}
-
-        # Processar em background
-        background_tasks.add_task(
-            process_payment_webhook,
-            event=event,
-            payment=payment,
-        )
-
-        return {"status": "processing"}
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Erro no webhook Asaas: {e}")
-        return {"status": "error", "message": str(e)}
-
-
-async def process_payment_webhook(event: str, payment: dict):
-    """
-    Processa webhook de pagamento em background.
-    """
-    try:
-        payment_id = payment.get("id")
-        external_ref = payment.get("externalReference")  # Nosso order_id
-        status = payment.get("status")
-        value = payment.get("value")
-
-        logger.info(
-            f"Processando pagamento: {payment_id} - {event} - "
-            f"Status: {status} - Valor: {value} - Order: {external_ref}"
-        )
-
-        # Importar aqui para evitar import circular
-        from app.services.payment_service import payment_service
-
-        if event in ["PAYMENT_CONFIRMED", "PAYMENT_RECEIVED"]:
-            # Pagamento aprovado
-            await payment_service.handle_payment_confirmed(
-                asaas_payment_id=payment_id,
-                order_id=external_ref,
-                payment_data=payment,
-            )
-
-        elif event == "PAYMENT_OVERDUE":
-            # Pagamento vencido
-            await payment_service.handle_payment_overdue(
-                asaas_payment_id=payment_id,
-                order_id=external_ref,
-            )
-
-        elif event == "PAYMENT_REFUNDED":
-            # Pagamento estornado
-            await payment_service.handle_payment_refunded(
-                asaas_payment_id=payment_id,
-                order_id=external_ref,
-            )
-
-        else:
-            logger.info(f"Evento de pagamento ignorado: {event}")
-
-    except Exception as e:
-        logger.error(f"Erro ao processar webhook de pagamento: {e}")
-
-
 # ==================== Health Check ====================
 
 @router.get("/health")
@@ -365,5 +270,4 @@ async def webhooks_health():
     return {
         "status": "healthy",
         "waha_webhook": "/webhooks/waha",
-        "asaas_webhook": "/webhooks/asaas",
     }

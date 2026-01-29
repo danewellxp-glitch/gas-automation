@@ -211,6 +211,15 @@ class Order(BaseModel):
         String(500),
         nullable=True,
     )
+    
+    # Tracking de aprovação
+    approved_by: Mapped[Optional[int]] = mapped_column(
+        Integer,
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+        comment="ID do operador/admin que aprovou o pedido (mudou status para PAID)"
+    )
 
     # Relacionamentos
     customer: Mapped["Customer"] = relationship(
@@ -259,13 +268,15 @@ class Order(BaseModel):
         """Recalcula o total baseado nos itens."""
         return sum(item.subtotal for item in self.items)
 
-    def update_status(self, new_status: str) -> None:
+    def update_status(self, new_status: str, approved_by: Optional[int] = None) -> None:
         """Atualiza status e timestamps relacionados."""
         self.status = new_status
 
         now = datetime.utcnow()
         if new_status == OrderStatus.PAID.value:
             self.paid_at = now
+            if approved_by is not None:
+                self.approved_by = approved_by
         elif new_status == OrderStatus.DISPATCHED.value:
             self.dispatched_at = now
         elif new_status == OrderStatus.DELIVERED.value:

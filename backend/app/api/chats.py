@@ -2,7 +2,7 @@
 API de Chats - Gerenciamento de conversas WhatsApp.
 """
 
-from typing import Optional
+from typing import Optional, List, Dict, Tuple
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -65,7 +65,7 @@ class ConversationMessageOut(BaseModel):
     isFromCurrentUser: bool = False
 
 
-@router.get("", response_model=list[ChatOut])
+@router.get("", response_model=List[ChatOut])
 async def list_chats(
     db: AsyncSession = Depends(get_db),
 ):
@@ -130,7 +130,7 @@ async def list_chats(
     return chats
 
 
-@router.get("/{phone}/messages", response_model=list[MessageOut])
+@router.get("/{phone}/messages", response_model=List[MessageOut])
 async def get_chat_messages(
     phone: str,
     limit: int = 50,
@@ -227,14 +227,14 @@ async def reset_chat_context(phone: str):
 
 # ===== ENDPOINTS PARA COMPATIBILIDADE COM PAINEL OPERADOR =====
 
-@router.get("/my-conversations", response_model=list[ConversationOut])
+@router.get("/my-conversations", response_model=List[ConversationOut])
 async def list_my_conversations(db: AsyncSession = Depends(get_db)):
     """Lista conversas atribuídas ao operador atual."""
     # Por enquanto retorna todas as conversas (sem sistema de atribuição implementado)
     return await list_conversations_operator(db)
 
 
-@router.get("/conversations", response_model=list[ConversationOut])
+@router.get("/conversations", response_model=List[ConversationOut])
 async def list_conversations_operator(db: AsyncSession = Depends(get_db)):
     """Lista todas as conversas disponíveis (endpoint alternativo)."""
     conversations = []
@@ -281,7 +281,7 @@ async def assign_conversation(conversation_id: str, db: AsyncSession = Depends(g
     return {"success": True, "message": f"Conversa {conversation_id} atribuída"}
 
 
-@router.get("/conversations/{conversation_id}/messages", response_model=list[ConversationMessageOut])
+@router.get("/conversations/{conversation_id}/messages", response_model=List[ConversationMessageOut])
 async def get_conversation_messages_operator(
     conversation_id: str,
     limit: int = 50,

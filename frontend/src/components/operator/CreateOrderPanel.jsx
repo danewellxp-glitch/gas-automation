@@ -625,7 +625,6 @@ export default function CreateOrderPanel() {
                 required
               >
                 <option value="dinheiro">💵 Dinheiro</option>
-                <option value="pix">📱 PIX</option>
                 <option value="cartao_credito">💳 Cartão de Crédito</option>
                 <option value="cartao_debito">💳 Cartão de Débito</option>
               </select>
