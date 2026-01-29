@@ -4,7 +4,7 @@
  */
 
 import { useState, useEffect } from 'react'
-import { LayoutDashboard, Package, RefreshCcw, MessageSquare, AlertTriangle, Clock } from 'lucide-react'
+import { LayoutDashboard, Package, RefreshCcw, MessageSquare, AlertTriangle, Clock, Truck, CheckCircle } from 'lucide-react'
 
 export default function OperatorDashboardOverview() {
   const [metrics, setMetrics] = useState(null)
@@ -20,13 +20,14 @@ export default function OperatorDashboardOverview() {
   const fetchMetrics = async () => {
     try {
       setLoading(true)
-      
+
       // Buscar métricas em paralelo usando api.js
       const apiUrl = import.meta.env.VITE_API_URL || 'http://192.168.10.156:8000/api'
       const token = localStorage.getItem('token')
-      
-      const [ordersRes, conversationsRes] = await Promise.all([
-        fetch(`${apiUrl}/orders/pending`, {
+
+      // Buscar pedidos de hoje (contém todos os status) e conversas
+      const [todayOrdersRes, conversationsRes] = await Promise.all([
+        fetch(`${apiUrl}/orders/today`, {
           headers: { 'Authorization': `Bearer ${token}` }
         }),
         fetch(`${apiUrl}/my-conversations`, {
@@ -34,14 +35,16 @@ export default function OperatorDashboardOverview() {
         })
       ])
 
-      const orders = ordersRes.ok ? await ordersRes.json() : []
+      const todayOrders = todayOrdersRes.ok ? await todayOrdersRes.json() : []
       const conversations = conversationsRes.ok ? await conversationsRes.json() : []
 
       setMetrics({
         orders: {
-          pending: orders.filter(o => o.status === 'pending').length,
-          processing: orders.filter(o => o.status === 'preparing').length,
-          total: orders.length
+          pending: todayOrders.filter(o => o.status === 'pending').length,
+          processing: todayOrders.filter(o => o.status === 'preparing').length,
+          dispatched: todayOrders.filter(o => o.status === 'dispatched').length,
+          delivered: todayOrders.filter(o => o.status === 'delivered').length,
+          total: todayOrders.length
         },
         conversations: {
           active: conversations.length, // Todas as conversas são consideradas ativas
@@ -81,13 +84,13 @@ export default function OperatorDashboardOverview() {
         <p className="text-sm text-gray-600">Pedidos e conversas em andamento</p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-sm text-gray-500">Pedidos pendentes</p>
+              <p className="text-sm text-gray-500">Pendentes</p>
               <p className="mt-1 text-3xl font-semibold text-gray-900">{metrics.orders.pending}</p>
-              <p className="mt-1 text-xs text-gray-500">Aguardando aprovação</p>
+              <p className="mt-1 text-xs text-gray-500">Aguardando aprovacao</p>
             </div>
             <div className="rounded-lg bg-amber-50 p-3 text-amber-700">
               <Clock className="h-5 w-5" />
@@ -111,12 +114,12 @@ export default function OperatorDashboardOverview() {
         <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-sm text-gray-500">Conversas ativas</p>
-              <p className="mt-1 text-3xl font-semibold text-gray-900">{metrics.conversations.active}</p>
-              <p className="mt-1 text-xs text-gray-500">Total de conversas</p>
+              <p className="text-sm text-gray-500">Em rota</p>
+              <p className="mt-1 text-3xl font-semibold text-gray-900">{metrics.orders.dispatched || 0}</p>
+              <p className="mt-1 text-xs text-gray-500">Saiu para entrega</p>
             </div>
-            <div className="rounded-lg bg-green-50 p-3 text-green-700">
-              <MessageSquare className="h-5 w-5" />
+            <div className="rounded-lg bg-purple-50 p-3 text-purple-700">
+              <Truck className="h-5 w-5" />
             </div>
           </div>
         </div>
@@ -124,7 +127,20 @@ export default function OperatorDashboardOverview() {
         <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-sm text-gray-500">Total pedidos</p>
+              <p className="text-sm text-gray-500">Entregues</p>
+              <p className="mt-1 text-3xl font-semibold text-gray-900">{metrics.orders.delivered || 0}</p>
+              <p className="mt-1 text-xs text-gray-500">Finalizados hoje</p>
+            </div>
+            <div className="rounded-lg bg-green-50 p-3 text-green-700">
+              <CheckCircle className="h-5 w-5" />
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="text-sm text-gray-500">Total hoje</p>
               <p className="mt-1 text-3xl font-semibold text-gray-900">{metrics.orders.total}</p>
               <p className="mt-1 text-xs text-gray-500">Todos os status</p>
             </div>
@@ -137,17 +153,19 @@ export default function OperatorDashboardOverview() {
 
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-          <h3 className="text-base font-semibold text-gray-900">Pedidos</h3>
-          <p className="text-sm text-gray-500">Resumo</p>
+          <h3 className="text-base font-semibold text-gray-900">Pedidos de Hoje</h3>
+          <p className="text-sm text-gray-500">Resumo por status</p>
           <div className="mt-4 space-y-2">
             {[
-              { label: 'Pendentes', value: metrics.orders.pending },
-              { label: 'Em preparo', value: metrics.orders.processing },
-              { label: 'Total', value: metrics.orders.total },
+              { label: 'Pendentes', value: metrics.orders.pending, color: 'text-amber-600' },
+              { label: 'Em preparo', value: metrics.orders.processing, color: 'text-primary-600' },
+              { label: 'Em rota', value: metrics.orders.dispatched || 0, color: 'text-purple-600' },
+              { label: 'Entregues', value: metrics.orders.delivered || 0, color: 'text-green-600' },
+              { label: 'Total', value: metrics.orders.total, color: 'text-gray-900' },
             ].map((row) => (
               <div key={row.label} className="flex items-center justify-between rounded-lg bg-gray-50 p-3">
                 <span className="text-sm font-medium text-gray-700">{row.label}</span>
-                <span className="text-sm font-semibold text-gray-900">{row.value}</span>
+                <span className={`text-sm font-semibold ${row.color}`}>{row.value}</span>
               </div>
             ))}
           </div>

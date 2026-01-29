@@ -12,6 +12,7 @@ import FlowbiteLayout from '../../components/flowbite/FlowbiteLayout'
 import OperatorDashboardOverview from '../../components/operator/OperatorDashboardOverview'
 import PendingOrdersPanel from '../../components/operator/PendingOrdersPanel'
 import CreateOrderPanel from '../../components/operator/CreateOrderPanel'
+import OrderHistoryPanel from '../../components/operator/OrderHistoryPanel'
 
 // Lazy load do mapa (componente pesado)
 const DeliveryMap = lazy(() => import('../../components/map/DeliveryMap'))
@@ -51,13 +52,7 @@ export default function OperatorDashboard() {
         </div>
       )}
 
-      {activeView === 'history' && (
-        <div className="rounded-lg border border-gray-200 bg-white p-8 text-center shadow-sm">
-          <h2 className="text-2xl font-semibold text-gray-900 mb-2">Histórico</h2>
-          <p className="text-gray-600 mb-6">Visualize pedidos e conversas anteriores.</p>
-          <p className="text-sm text-gray-500">Em desenvolvimento</p>
-        </div>
-      )}
+      {activeView === 'history' && <OrderHistoryPanel />}
 
       {activeView === 'map' && <MapView />}
     </FlowbiteLayout>
