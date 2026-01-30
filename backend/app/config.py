@@ -83,7 +83,6 @@ class Settings(BaseSettings):
         "http://localhost:3000",
         "http://localhost:3003",
         "https://localhost",
-        "capacitor://localhost",
         "http://localhost",
         "http://192.168.10.156:3001",
         "http://192.168.10.156:3003",
