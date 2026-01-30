@@ -108,6 +108,13 @@ class Driver(BaseModel):
         comment="Se o entregador está ativo no sistema"
     )
 
+    # Push Notifications
+    push_token: Mapped[Optional[str]] = mapped_column(
+        String(255),
+        nullable=True,
+        comment="FCM token para push notifications"
+    )
+
     # Timestamps
     last_online: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True),

@@ -51,6 +51,11 @@ class DriverLocationUpdate(BaseModel):
     longitude: float = Field(..., ge=-180, le=180, description="Longitude GPS")
 
 
+class DriverPushTokenUpdate(BaseModel):
+    """Schema para registrar token FCM de push notification."""
+    push_token: str = Field(..., min_length=10, max_length=255, description="FCM device token")
+
+
 class DriverResponse(DriverBase):
     """Schema de resposta com todos os dados do entregador."""
     id: UUID

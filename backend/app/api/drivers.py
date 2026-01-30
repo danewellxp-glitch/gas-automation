@@ -26,6 +26,7 @@ from app.schemas.driver import (
     DriverBrief,
     DriverCreate,
     DriverLocationUpdate,
+    DriverPushTokenUpdate,
     DriverResponse,
     DriverStats,
     DriverStatusUpdate,
@@ -147,8 +148,37 @@ async def update_my_location(
     session.add(driver)
     await session.commit()
     await session.refresh(driver)
-    
+
     return driver
+
+
+@router.put("/me/push-token")
+async def update_my_push_token(
+    token_update: DriverPushTokenUpdate,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db)
+):
+    """
+    Registra token FCM para push notifications.
+
+    Requires: role = "driver"
+    """
+    if current_user.role != "driver":
+        raise HTTPException(status_code=403, detail="Acesso restrito a entregadores")
+
+    result = await session.execute(
+        select(Driver).where(Driver.phone == current_user.username)
+    )
+    driver = result.scalar_one_or_none()
+
+    if not driver:
+        raise HTTPException(status_code=404, detail="Perfil de entregador não encontrado")
+
+    driver.push_token = token_update.push_token
+    session.add(driver)
+    await session.commit()
+
+    return {"message": "Token registrado com sucesso"}
 
 
 @router.get("/me/deliveries", response_model=List[dict])
