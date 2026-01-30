@@ -6,8 +6,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import {
   MessageSquare, Send, RefreshCw, User, Bot, Phone,
-  UserCheck, UserX, CheckCircle, Clock, AlertCircle,
-  Search, Filter, X
+  UserCheck, CheckCircle, Clock, AlertCircle
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import {
@@ -323,7 +322,7 @@ function ChatWindow({ conversation, messages, loading, onSend, onAssign, onEnd, 
               type="text"
               value={inputMessage}
               onChange={(e) => setInputMessage(e.target.value)}
-              onKeyPress={handleKeyPress}
+              onKeyDown={handleKeyPress}
               placeholder="Digite sua mensagem..."
               disabled={sending}
               className="flex-1 px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent disabled:opacity-50 transition-all"
@@ -354,6 +353,9 @@ export default function ConversationsPanel() {
   const [loadingConversations, setLoadingConversations] = useState(true)
   const [loadingMessages, setLoadingMessages] = useState(false)
   const [filter, setFilter] = useState('all')
+
+  // Ref para evitar stale closure no WebSocket
+  const selectedConversationRef = useRef(selectedConversation)
 
   // Carregar conversas
   const loadConversations = useCallback(async () => {
@@ -397,13 +399,19 @@ export default function ConversationsPanel() {
     }
   }, [selectedConversation, loadMessages])
 
+  // Manter ref atualizada para evitar stale closure
+  useEffect(() => {
+    selectedConversationRef.current = selectedConversation
+  }, [selectedConversation])
+
   // WebSocket: nova mensagem
   const handleNewMessage = useCallback((data) => {
     console.log('Nova mensagem via WebSocket:', data)
     loadConversations()
 
-    // Se for da conversa selecionada, adicionar mensagem
-    if (selectedConversation && data.conversation_id === selectedConversation.id) {
+    // Usar ref para evitar stale closure
+    const currentConversation = selectedConversationRef.current
+    if (currentConversation && data.conversation_id === currentConversation.id) {
       setMessages(prev => [...prev, {
         id: Date.now().toString(),
         content: data.message || data.content,
@@ -411,7 +419,7 @@ export default function ConversationsPanel() {
         timestamp: new Date().toISOString()
       }])
     }
-  }, [selectedConversation, loadConversations])
+  }, [loadConversations])
 
   useSharedWebSocketEvent('new_message', handleNewMessage)
 
@@ -435,15 +443,20 @@ export default function ConversationsPanel() {
   const handleSendMessage = async (message) => {
     if (!selectedConversation) return
 
-    await replyConversation(selectedConversation.id, message)
+    // Chamar API primeiro
+    const result = await replyConversation(selectedConversation.id, message)
 
-    // Adicionar mensagem localmente
-    setMessages(prev => [...prev, {
-      id: Date.now().toString(),
-      content: message,
-      sender: 'agent',
-      timestamp: new Date().toISOString()
-    }])
+    // Só adicionar mensagem localmente se API retornou sucesso
+    if (result.success) {
+      setMessages(prev => [...prev, {
+        id: Date.now().toString(),
+        content: message,
+        sender: 'agent',
+        timestamp: new Date().toISOString()
+      }])
+    } else {
+      throw new Error(result.message || 'Erro ao enviar mensagem')
+    }
   }
 
   // Encerrar conversa

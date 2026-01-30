@@ -4,7 +4,8 @@
  */
 
 import { useState, useEffect } from 'react'
-import { LayoutDashboard, Package, RefreshCcw, MessageSquare, AlertTriangle, Clock, Truck, CheckCircle } from 'lucide-react'
+import { Package, RefreshCcw, Clock, Truck, CheckCircle } from 'lucide-react'
+import { getOrdersToday, getMyConversations } from '../../services/api'
 
 export default function OperatorDashboardOverview() {
   const [metrics, setMetrics] = useState(null)
@@ -22,21 +23,10 @@ export default function OperatorDashboardOverview() {
       setLoading(true)
 
       // Buscar métricas em paralelo usando api.js
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://192.168.10.156:8000/api'
-      const token = localStorage.getItem('token')
-
-      // Buscar pedidos de hoje (contém todos os status) e conversas
-      const [todayOrdersRes, conversationsRes] = await Promise.all([
-        fetch(`${apiUrl}/orders/today`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        }),
-        fetch(`${apiUrl}/my-conversations`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        })
+      const [todayOrders, conversations] = await Promise.all([
+        getOrdersToday().catch(() => []),
+        getMyConversations().catch(() => [])
       ])
-
-      const todayOrders = todayOrdersRes.ok ? await todayOrdersRes.json() : []
-      const conversations = conversationsRes.ok ? await conversationsRes.json() : []
 
       setMetrics({
         orders: {

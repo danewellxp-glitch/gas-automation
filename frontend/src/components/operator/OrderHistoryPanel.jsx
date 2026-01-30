@@ -4,7 +4,7 @@
  */
 
 import { useState, useEffect } from 'react'
-import { Search, RefreshCcw, ChevronLeft, ChevronRight, Filter, X, Eye } from 'lucide-react'
+import { RefreshCcw, ChevronLeft, ChevronRight, Filter, X, Eye } from 'lucide-react'
 import { getOrdersPaginated } from '../../services/api'
 
 const STATUS_OPTIONS = [

@@ -2,6 +2,7 @@
 API de Chats - Gerenciamento de conversas WhatsApp.
 """
 
+import logging
 from typing import Optional, List, Dict, Tuple
 from datetime import datetime
 
@@ -16,7 +17,32 @@ from app.models.event_log import EventLog
 from app.integrations.waha import waha_client
 from app.api.websocket import emit_new_message
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
+
+
+# ===== ENDPOINT DE DIAGNÓSTICO (deve vir antes das rotas com parâmetros) =====
+
+@router.get("/waha-status")
+async def get_waha_status():
+    """Verifica status da conexão WAHA."""
+    try:
+        status = await waha_client.get_session_status()
+        return {
+            "success": True,
+            "waha_url": waha_client.base_url,
+            "session_name": waha_client.session_name,
+            "status": status
+        }
+    except Exception as e:
+        logger.error(f"Erro ao verificar status WAHA: {e}")
+        return {
+            "success": False,
+            "waha_url": waha_client.base_url,
+            "session_name": waha_client.session_name,
+            "error": str(e)
+        }
 
 
 class MessageOut(BaseModel):
@@ -123,7 +149,7 @@ async def list_chats(
                 context_data = await redis.hgetall(f"conversation:{phone}")
                 state = context_data.get("state", "start") if context_data else "start"
             except Exception as e:
-                print(f"Erro ao buscar estado do Redis para {phone}: {e}")
+                logger.warning(f"Erro ao buscar estado do Redis para {phone}: {e}")
 
         chat = ChatOut(
             phone=phone,
@@ -182,7 +208,14 @@ async def send_message(
         chat_id = phone if "@" in phone else f"{phone}@c.us"
 
         # Enviar via WAHA
+        logger.info(f"Enviando mensagem manual para {chat_id}")
         result = await waha_client.send_text(chat_id, request.message)
+
+        if not result:
+            logger.error(f"WAHA retornou resultado vazio para {chat_id}")
+            raise HTTPException(status_code=500, detail="Falha ao enviar mensagem - WAHA não respondeu")
+
+        logger.info(f"Mensagem manual enviada com sucesso para {chat_id}")
 
         # Log da mensagem enviada
         event = EventLog(
@@ -206,9 +239,11 @@ async def send_message(
 
         return {"success": True, "message": "Mensagem enviada", "result": result}
 
+    except HTTPException:
+        raise
     except Exception as e:
-        print(f"Erro ao enviar mensagem: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Erro ao enviar mensagem para {phone}: {e}")
+        raise HTTPException(status_code=500, detail=f"Erro ao enviar mensagem: {str(e)}")
 
 
 @router.get("/{phone}/context")
@@ -373,7 +408,15 @@ async def reply_to_conversation(
         chat_id = conversation_id if "@" in conversation_id else f"{conversation_id}@c.us"
 
         # Enviar via WAHA
+        logger.info(f"Enviando mensagem para {chat_id}: {request.message[:50]}...")
         result = await waha_client.send_text(chat_id, request.message)
+
+        # Verificar se WAHA retornou sucesso
+        if not result:
+            logger.error(f"WAHA retornou resultado vazio para {chat_id}")
+            raise HTTPException(status_code=500, detail="Falha ao enviar mensagem - WAHA não respondeu")
+
+        logger.info(f"Mensagem enviada com sucesso para {chat_id}")
 
         # Log da mensagem enviada
         event = EventLog(
@@ -397,9 +440,11 @@ async def reply_to_conversation(
 
         return {"success": True, "message": "Mensagem enviada", "result": result}
 
+    except HTTPException:
+        raise
     except Exception as e:
-        print(f"Erro ao enviar mensagem: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Erro ao enviar mensagem para {conversation_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Erro ao enviar mensagem: {str(e)}")
 
 
 @router.post("/conversations/{conversation_id}/end")
@@ -414,11 +459,14 @@ async def end_conversation(conversation_id: str, db: AsyncSession = Depends(get_
         phone = conversation_id
         redis = redis_manager.client
 
+        logger.info(f"Encerrando conversa {phone}")
+
         # 1. Resetar estado no Redis para 'start'
         if redis:
             await redis.hset(f"conversation:{phone}", "state", "start")
             # Limpar dados temporários do atendimento humano
             await redis.hdel(f"conversation:{phone}", "assigned_operator")
+            logger.info(f"Estado resetado para 'start' no Redis para {phone}")
 
         # 2. Enviar mensagem ao cliente informando que voltou ao bot
         chat_id = phone if "@" in phone else f"{phone}@c.us"
@@ -429,10 +477,13 @@ async def end_conversation(conversation_id: str, db: AsyncSession = Depends(get_
             "Digite *menu* para ver as opções disponíveis."
         )
 
+        waha_success = False
         try:
-            await waha_client.send_text(chat_id, message_to_client)
+            result = await waha_client.send_text(chat_id, message_to_client)
+            waha_success = bool(result)
+            logger.info(f"Mensagem de encerramento enviada para {chat_id}")
         except Exception as e:
-            print(f"Aviso: Não foi possível enviar mensagem de encerramento: {e}")
+            logger.warning(f"Não foi possível enviar mensagem de encerramento para {chat_id}: {e}")
 
         # 3. Registrar no EventLog
         event = EventLog(
@@ -441,7 +492,8 @@ async def end_conversation(conversation_id: str, db: AsyncSession = Depends(get_
             payload={
                 "phone": phone,
                 "action": "end_conversation",
-                "message": "Atendimento encerrado pelo operador"
+                "message": "Atendimento encerrado pelo operador",
+                "waha_sent": waha_success
             }
         )
         db.add(event)
@@ -458,8 +510,8 @@ async def end_conversation(conversation_id: str, db: AsyncSession = Depends(get_
         return {"success": True, "message": f"Conversa {conversation_id} encerrada e devolvida ao bot"}
 
     except Exception as e:
-        print(f"Erro ao encerrar conversa: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Erro ao encerrar conversa {conversation_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Erro ao encerrar conversa: {str(e)}")
 
 
 @router.post("/conversations/{conversation_id}/transfer-to-bot")
@@ -472,19 +524,24 @@ async def transfer_to_bot(conversation_id: str, db: AsyncSession = Depends(get_d
         phone = conversation_id
         redis = redis_manager.client
 
+        logger.info(f"Transferindo conversa {phone} para o bot")
+
         # 1. Verificar estado atual
         current_state = "start"
         if redis:
             context_data = await redis.hgetall(f"conversation:{phone}")
             current_state = context_data.get("state", "start") if context_data else "start"
+            logger.info(f"Estado atual de {phone}: {current_state}")
 
         # 2. Se está em talking_to_human, voltar para o estado anterior ou awaiting_product
+        new_state = current_state
         if current_state == "talking_to_human":
             # Tentar recuperar estado anterior ou usar awaiting_product como padrão
-            previous_state = "awaiting_product"
+            new_state = "awaiting_product"
             if redis:
-                await redis.hset(f"conversation:{phone}", "state", previous_state)
+                await redis.hset(f"conversation:{phone}", "state", new_state)
                 await redis.hdel(f"conversation:{phone}", "assigned_operator")
+                logger.info(f"Estado alterado de {current_state} para {new_state}")
 
         # 3. Enviar mensagem ao cliente
         chat_id = phone if "@" in phone else f"{phone}@c.us"
@@ -496,10 +553,13 @@ async def transfer_to_bot(conversation_id: str, db: AsyncSession = Depends(get_d
             "3️⃣ Falar com atendente"
         )
 
+        waha_success = False
         try:
-            await waha_client.send_text(chat_id, message_to_client)
+            result = await waha_client.send_text(chat_id, message_to_client)
+            waha_success = bool(result)
+            logger.info(f"Mensagem de transferência enviada para {chat_id}")
         except Exception as e:
-            print(f"Aviso: Não foi possível enviar mensagem de transferência: {e}")
+            logger.warning(f"Não foi possível enviar mensagem de transferência para {chat_id}: {e}")
 
         # 4. Registrar no EventLog
         event = EventLog(
@@ -509,7 +569,8 @@ async def transfer_to_bot(conversation_id: str, db: AsyncSession = Depends(get_d
                 "phone": phone,
                 "action": "transfer_to_bot",
                 "previous_state": current_state,
-                "new_state": "awaiting_product"
+                "new_state": new_state,
+                "waha_sent": waha_success
             }
         )
         db.add(event)
@@ -518,8 +579,8 @@ async def transfer_to_bot(conversation_id: str, db: AsyncSession = Depends(get_d
         return {"success": True, "message": f"Conversa {conversation_id} transferida para o bot"}
 
     except Exception as e:
-        print(f"Erro ao transferir para bot: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Erro ao transferir conversa {conversation_id} para bot: {e}")
+        raise HTTPException(status_code=500, detail=f"Erro ao transferir para bot: {str(e)}")
 
 
 @router.get("/bot-interactions")
