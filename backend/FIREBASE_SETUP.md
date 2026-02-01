@@ -11,8 +11,8 @@ O **backend precisa do service account**, não do `google-services.json`.
 
 ## Configuração
 
-1. **Obter o service account**  
-   Firebase Console → Project Settings → Service Accounts → **Generate new private key**  
+1. **Obter o service account**
+   Firebase Console → Project Settings → Service Accounts → **Generate new private key**
    Baixe o JSON (ex.: `gas-driver-404d8-firebase-adminsdk-xxxxx.json`).
 
 2. **Colocar no backend**

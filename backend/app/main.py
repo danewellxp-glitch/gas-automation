@@ -141,26 +141,8 @@ async def lifespan(app: FastAPI):
     metrics_task = asyncio.create_task(_metrics_updater(ws_manager, redis_ws_bridge))
     print("[OK] Monitor de métricas iniciado")
 
-    # Health check Ollama (não bloqueia inicialização)
-    try:
-        from app.integrations.ollama import ollama_client
-        if await ollama_client.is_available():
-            print(f"[OK] Ollama disponível ({settings.ollama_url})")
-        else:
-            print(f"[WARN] Ollama não disponível ({settings.ollama_url}) - IA desabilitada")
-    except Exception as e:
-        print(f"[WARN] Erro ao verificar Ollama: {e}")
-
-    # Health check Firebird (não bloqueia inicialização)
-    if settings.firebird_enabled:
-        try:
-            from app.integrations.firebird import firebird_client
-            if firebird_client.is_available:
-                print(f"[OK] Firebird configurado ({settings.firebird_host})")
-            else:
-                print(f"[WARN] Firebird não disponível (fdb não instalado ou não configurado)")
-        except Exception as e:
-            print(f"[WARN] Erro ao verificar Firebird: {e}")
+    # TODO: Pré-carregar modelo Ollama se necessário
+    # TODO: Verificar conexão com Firebird se habilitado
 
     yield
 
@@ -324,9 +306,9 @@ async def global_exception_handler(request: Request, exc: Exception):
                     "method": getattr(request, "method", None),
                 },
             )
-    except Exception as log_err:
+    except Exception:
         # Nunca falhar o handler por causa do error center
-        print(f"[WARN] Erro ao registrar no error center: {log_err}")
+        pass
 
     # Em produção, não expor detalhes do erro
     if settings.is_production:

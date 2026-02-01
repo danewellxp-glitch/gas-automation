@@ -3,6 +3,8 @@ import react from '@vitejs/plugin-react'
 
 export default defineConfig({
   plugins: [react()],
+  // Paths relativos para o APK (Capacitor) carregar corretamente com file://
+  base: './',
   build: {
     // Evita falhas quando `dist/` está com permissões/owner diferentes (ex: gerado por container)
     outDir: 'dist-build',

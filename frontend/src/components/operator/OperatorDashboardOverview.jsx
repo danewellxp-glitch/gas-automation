@@ -3,22 +3,16 @@
  * Métricas de atendimento e pedidos
  */
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Package, RefreshCcw, Clock, Truck, CheckCircle } from 'lucide-react'
 import { getOrdersToday, getMyConversations } from '../../services/api'
+import { useSharedWebSocketEvent } from '../../hooks/useSharedWebSocket'
 
 export default function OperatorDashboardOverview() {
   const [metrics, setMetrics] = useState(null)
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    fetchMetrics()
-    // Atualizar a cada 30 segundos
-    const interval = setInterval(fetchMetrics, 30000)
-    return () => clearInterval(interval)
-  }, [])
-
-  const fetchMetrics = async () => {
+  const fetchMetrics = useCallback(async () => {
     try {
       setLoading(true)
 
@@ -48,7 +42,17 @@ export default function OperatorDashboardOverview() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
+
+  useEffect(() => {
+    fetchMetrics()
+    // Atualizar a cada 30 segundos
+    const interval = setInterval(fetchMetrics, 30000)
+    return () => clearInterval(interval)
+  }, [fetchMetrics])
+
+  // Recarregar métricas quando pedido for atualizado (ex: delivered pelo driver)
+  useSharedWebSocketEvent('order_update', fetchMetrics)
 
   if (loading) {
     return (
