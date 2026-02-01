@@ -3,6 +3,7 @@
  */
 
 import { useState, useEffect } from 'react'
+import api from '../../services/api'
 
 export default function DriversMetricsPanel() {
   const [period, setPeriod] = useState('today')
@@ -16,20 +17,8 @@ export default function DriversMetricsPanel() {
   const fetchMetrics = async () => {
     try {
       setLoading(true)
-      const response = await fetch(
-        `http://192.168.10.156:8000/api/drivers/metrics/dashboard?period=${period}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      )
-      
-      if (response.ok) {
-        const data = await response.json()
-        setMetricsData(data)
-      }
+      const { data } = await api.get(`/drivers/metrics/dashboard`, { params: { period } })
+      setMetricsData(data)
     } catch (error) {
       console.error('Erro ao buscar métricas:', error)
     } finally {
@@ -137,7 +126,7 @@ export default function DriversMetricsPanel() {
                         )}
                       </p>
                       <p className="text-sm text-gray-500">
-                        {driver.vehicle_type} • ⭐ {driver.rating.toFixed(1)}
+                        {driver.vehicle_type || '-'} • ⭐ {(driver.rating ?? 0).toFixed(1)}
                       </p>
                     </div>
                   </div>
@@ -209,12 +198,12 @@ export default function DriversMetricsPanel() {
                               </span>
                             )}
                           </div>
-                          <div className="text-sm text-gray-500">⭐ {driver.rating.toFixed(1)}</div>
+                          <div className="text-sm text-gray-500">⭐ {(driver.rating ?? 0).toFixed(1)}</div>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`font-semibold ${statusColors[driver.current_status]}`}>
-                          {driver.current_status}
+                        <span className={`font-semibold ${statusColors[driver.current_status] || 'text-gray-600'}`}>
+                          {driver.current_status || '-'}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
