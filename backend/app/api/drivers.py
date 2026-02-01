@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from typing import List
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -15,6 +15,7 @@ from sqlalchemy.orm import selectinload
 logger = logging.getLogger(__name__)
 
 from app.auth import get_current_user
+from app.integrations.fcm_client import notify_driver_new_delivery
 from app.database import get_db
 from app.models.auth_models import User
 from app.models.delivery import Delivery, DeliveryStatus
@@ -560,6 +561,24 @@ async def accept_delivery(
     await session.commit()
     await session.refresh(delivery)
     
+    # Enviar push notification para o próprio driver (confirmação)
+    if driver.push_token:
+        try:
+            order_result = await session.execute(
+                select(Order).where(Order.id == delivery.order_id)
+            )
+            order = order_result.scalar_one_or_none()
+            order_number = order.order_number if order else str(delivery.order_id)[:8]
+
+            await notify_driver_new_delivery(
+                push_token=driver.push_token,
+                delivery_id=str(delivery.id),
+                bairro=delivery.bairro or "Sem bairro",
+                order_number=str(order_number),
+            )
+        except Exception as e:
+            logger.error(f"Erro ao enviar push: {e}")
+
     return {
         "id": str(delivery.id),
         "status": delivery.status,
