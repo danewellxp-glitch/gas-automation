@@ -3,17 +3,37 @@ Cliente FCM (Firebase Cloud Messaging) para push notifications.
 
 Usa Firebase Admin SDK com FCM V1 API.
 Autenticação via service account JSON.
+
+Import opcional: se firebase-admin não estiver instalado, o módulo carrega
+normalmente e as funções de push retornam False (push desabilitado).
 """
 
 import logging
+import os
 from typing import Optional
-
-import firebase_admin
-from firebase_admin import credentials, messaging
 
 logger = logging.getLogger(__name__)
 
 _initialized = False
+_firebase_available: Optional[bool] = None
+
+
+def _check_firebase_available() -> bool:
+    """Verifica se firebase-admin está instalado (import opcional)."""
+    global _firebase_available
+    if _firebase_available is not None:
+        return _firebase_available
+    try:
+        import firebase_admin  # noqa: F401
+        _firebase_available = True
+        return True
+    except ImportError:
+        logger.warning(
+            "firebase-admin não instalado. Push notifications desabilitadas. "
+            "Para habilitar: pip install firebase-admin"
+        )
+        _firebase_available = False
+        return False
 
 
 def _init_firebase():
@@ -22,12 +42,35 @@ def _init_firebase():
     if _initialized:
         return True
 
-    import os
-    cred_path = os.environ.get("FIREBASE_CREDENTIALS", "/app/firebase-credentials.json")
-
-    if not os.path.exists(cred_path):
-        logger.warning(f"Firebase credentials não encontrado em {cred_path}. Push desabilitado.")
+    if not _check_firebase_available():
         return False
+
+    import firebase_admin
+    from firebase_admin import credentials
+    import glob
+
+    cred_path = os.environ.get("FIREBASE_CREDENTIALS")
+    if cred_path:
+        if not os.path.exists(cred_path):
+            logger.warning(f"FIREBASE_CREDENTIALS aponta para arquivo inexistente: {cred_path}. Push desabilitado.")
+            return False
+    elif os.path.exists("/app/firebase-credentials.json"):
+        cred_path = "/app/firebase-credentials.json"  # Docker
+    elif os.path.exists("firebase-credentials.json"):
+        cred_path = os.path.abspath("firebase-credentials.json")  # CWD local
+    else:
+        # Fallback: buscar service account pelo nome padrão (gas-driver-*-firebase-adminsdk-*.json)
+        backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+        for base in ["/app", backend_dir]:
+            if os.path.isdir(base):
+                candidates = glob.glob(os.path.join(base, "gas-driver-*-firebase-adminsdk-*.json"))
+                if candidates:
+                    cred_path = candidates[0]
+                    logger.info(f"Usando credenciais Firebase: {cred_path}")
+                    break
+        if not cred_path or not os.path.exists(cred_path):
+            logger.warning("Firebase credentials não encontrado. Push desabilitado.")
+            return False
 
     try:
         cred = credentials.Certificate(cred_path)
@@ -60,6 +103,8 @@ async def send_push_notification(
     """
     if not _init_firebase():
         return False
+
+    from firebase_admin import messaging
 
     message = messaging.Message(
         notification=messaging.Notification(

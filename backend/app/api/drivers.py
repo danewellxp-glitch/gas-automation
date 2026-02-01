@@ -2,6 +2,7 @@
 API endpoints para Driver (Entregador).
 """
 
+import asyncio
 import logging
 from datetime import datetime, timedelta
 from typing import List
@@ -15,7 +16,14 @@ from sqlalchemy.orm import selectinload
 logger = logging.getLogger(__name__)
 
 from app.auth import get_current_user
-from app.integrations.fcm_client import notify_driver_new_delivery
+
+# Import opcional: fcm_client depende de firebase-admin; se falhar, push fica desabilitado
+try:
+    from app.integrations.fcm_client import notify_driver_new_delivery
+except ImportError as e:
+    logger.warning("fcm_client não disponível (firebase-admin): push desabilitado. %s", e)
+    notify_driver_new_delivery = None
+
 from app.integrations.waha import waha_client
 from app.database import get_db
 from app.models.auth_models import User
@@ -40,6 +48,7 @@ from app.schemas.driver import (
 )
 from app.services.driver_time_tracking_service import DriverTimeTrackingService
 from app.services.geocoding_service import geocode_address, haversine_distance_km
+from app.services.order_status_side_effects import on_order_delivered
 
 router = APIRouter()
 
@@ -584,6 +593,10 @@ async def update_delivery_status(
     await session.commit()
     await session.refresh(delivery)
 
+    # Side-effects quando entregue: WebSocket order_update e event publisher
+    if status_update.status == DeliveryStatus.DELIVERED.value:
+        asyncio.create_task(on_order_delivered(delivery.order_id))
+
     # Notificar cliente via WhatsApp
     try:
         # Buscar telefone do cliente via order → customer
@@ -708,7 +721,7 @@ async def accept_delivery(
     await session.refresh(delivery)
     
     # Enviar push notification para o próprio driver (confirmação)
-    if driver.push_token:
+    if driver.push_token and notify_driver_new_delivery:
         try:
             order_result = await session.execute(
                 select(Order).where(Order.id == delivery.order_id)

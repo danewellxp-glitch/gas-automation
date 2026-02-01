@@ -220,10 +220,12 @@ limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-# Configurar CORS
+# Configurar CORS (web + mobile Capacitor/Android)
+# allow_origin_regex: aceita capacitor://localhost e ionic://localhost (app mobile)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
+    allow_origin_regex=r"^(capacitor://|ionic://)localhost(:\d+)?$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

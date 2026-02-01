@@ -21,8 +21,12 @@ from app.models.product import Product
 from app.models.tipo_preco import TipoPreco, ProdutoPreco
 from app.models.auth_models import User
 from app.auth import get_current_user
-from app.services.firebird_export_service import export_order_to_firebird, FirebirdExportError
 from app.services.event_publisher import event_publisher
+from app.services.firebird_export_service import export_order_to_firebird, FirebirdExportError
+from app.services.order_status_side_effects import (
+    notify_order_status_change,
+    notify_operators_order_update,
+)
 from app.schemas.order import (
     OrderBrief,
     OrderCreate,
@@ -592,11 +596,11 @@ async def update_order_status(
     await db.commit()
     await db.refresh(order)
 
-    # Notificar cliente via WhatsApp sobre mudança de status
-    asyncio.create_task(_notify_order_status_change(order, old_status, data.status))
+    # Notificar cliente via event publisher
+    asyncio.create_task(notify_order_status_change(order, old_status, data.status))
 
     # Notificar operadores via WebSocket sobre mudança de status
-    asyncio.create_task(_notify_operators_order_update(order, old_status, data.status))
+    asyncio.create_task(notify_operators_order_update(order, old_status, data.status))
 
     # Exportar para Firebird quando entregue (best-effort, assíncrono)
     if (

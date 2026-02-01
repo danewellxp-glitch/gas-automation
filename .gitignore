@@ -117,4 +117,4 @@ coverage/
 
 # Claude
 .claude/
-backend/gas-driver-404d8-firebase-adminsdk-*.json
+**/gas-driver-*-firebase-adminsdk-*.json

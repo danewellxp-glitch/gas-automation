@@ -212,6 +212,8 @@ services:
       METRICS_TOKEN: ${METRICS_TOKEN}
       DEBUG: ${DEBUG:-false}
       ENVIRONMENT: ${ENVIRONMENT:-development}
+      # Firebase (push notifications) - use service account JSON, não google-services.json
+      FIREBASE_CREDENTIALS: ${FIREBASE_CREDENTIALS:-/app/firebase-credentials.json}
       # MinIO
       MINIO_ENDPOINT: minio:9000
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
