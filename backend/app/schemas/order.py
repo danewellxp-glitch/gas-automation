@@ -162,6 +162,16 @@ class OrderStatusUpdate(BaseSchema):
     reason: Optional[str] = Field(None, max_length=500, description="Motivo (para cancelamento)")
 
 
+class OrderRejectRequest(BaseSchema):
+    """Schema para rejeitar um pedido."""
+
+    reason: str = Field(
+        default="Rejeitado pelo operador",
+        max_length=500,
+        description="Motivo da rejeição"
+    )
+
+
 class PaginatedOrdersResponse(BaseSchema):
     """Resposta paginada de pedidos."""
     

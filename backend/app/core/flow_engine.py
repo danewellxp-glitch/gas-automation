@@ -166,8 +166,8 @@ class FlowEngine:
             if message_id:
                 try:
                     await waha_client.mark_as_read(phone, message_id)
-                except Exception:
-                    pass  # Não crítico
+                except Exception as e:
+                    logger.debug(f"Não foi possível marcar mensagem como lida: {e}")
 
             return result
 
@@ -226,17 +226,50 @@ class FlowEngine:
         # Cancelar
         if msg_lower in ["cancelar", "cancela"]:
             if context.order_id:
-                # TODO: Cancelar pedido no banco
-                context.reset()
-                return ProcessedMessage(
-                    context=context,
-                    responses=[
-                        MessageResponse(
-                            text="❌ Pedido cancelado.\n\nDigite *menu* para fazer um novo pedido."
+                # Cancelar pedido no banco
+                cancel_success = False
+                try:
+                    from app.models.order import Order, OrderStatus
+                    from sqlalchemy import select
+
+                    async with AsyncSessionLocal() as db:
+                        result = await db.execute(
+                            select(Order).where(Order.id == context.order_id)
                         )
-                    ],
-                    new_state=ConversationState.START,
-                )
+                        order = result.scalar_one_or_none()
+                        if order and order.status in [
+                            OrderStatus.PENDING.value,
+                            OrderStatus.PAID.value,
+                        ]:
+                            order.status = OrderStatus.CANCELLED.value
+                            order.cancellation_reason = "Cancelado pelo cliente via bot"
+                            await db.commit()
+                            cancel_success = True
+                            logger.info(f"Pedido {context.order_id} cancelado pelo cliente")
+                except Exception as e:
+                    logger.error(f"Erro ao cancelar pedido {context.order_id}: {e}")
+
+                context.reset()
+                if cancel_success:
+                    return ProcessedMessage(
+                        context=context,
+                        responses=[
+                            MessageResponse(
+                                text="❌ Pedido cancelado com sucesso.\n\nDigite *menu* para fazer um novo pedido."
+                            )
+                        ],
+                        new_state=ConversationState.START,
+                    )
+                else:
+                    return ProcessedMessage(
+                        context=context,
+                        responses=[
+                            MessageResponse(
+                                text="⚠️ Não foi possível cancelar o pedido. Entre em contato com um atendente.\n\nDigite *menu* para voltar."
+                            )
+                        ],
+                        new_state=ConversationState.START,
+                    )
             else:
                 context.reset()
                 return ProcessedMessage(
@@ -260,10 +293,10 @@ class FlowEngine:
                             "• *cancelar* - Cancelar pedido\n"
                             "• *atendente* - Falar com atendente\n\n"
                             "Produtos disponíveis:\n"
-                            "• *P13* - Botijão 13kg - R$ 110,00\n"
-                            "• *P20* - Botijão 20kg - R$ 150,00\n"
-                            "• *P45* - Botijão 45kg - R$ 280,00\n\n"
-                            "Para fazer um pedido, digite *menu*."
+                            "• *P13* - Botijão 13kg\n"
+                            "• *P20* - Botijão 20kg\n"
+                            "• *P45* - Botijão 45kg\n\n"
+                            "Digite *menu* para ver preços atualizados."
                         )
                     )
                 ],

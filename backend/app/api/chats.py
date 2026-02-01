@@ -100,13 +100,19 @@ class ConversationMessageOut(BaseModel):
     isFromCurrentUser: bool = False
 
 
-@router.get("", response_model=List[ChatOut])
-async def list_chats(
-    db: AsyncSession = Depends(get_db),
-):
-    """Lista todas as conversas ativas."""
-    chats = []
-    
+# ===== FUNÇÃO AUXILIAR PARA EVITAR DUPLICAÇÃO =====
+
+async def _fetch_chat_base_data(db: AsyncSession) -> Tuple[List[str], Dict[str, EventLog], Dict[str, Customer], Dict[str, str]]:
+    """
+    Busca dados base para listagem de chats/conversas.
+
+    Returns:
+        Tuple contendo:
+        - phones_ordered: Lista de telefones ordenados por última mensagem
+        - phone_last_event: Dict mapeando telefone -> último evento
+        - customers_by_phone: Dict mapeando telefone -> cliente
+        - phone_states: Dict mapeando telefone -> estado do Redis
+    """
     # Buscar todos os eventos de mensagem recebida
     result = await db.execute(
         select(EventLog)
@@ -114,53 +120,67 @@ async def list_chats(
         .order_by(desc(EventLog.created_at))
     )
     events = result.scalars().all()
-    
-    # Extrair telefones únicos em ordem de última mensagem
+
+    # Extrair telefones únicos em ordem de última mensagem e guardar último evento
     seen_phones = set()
     phones_ordered = []
+    phone_last_event = {}
     for event in events:
         phone = event.payload.get("phone")
         if phone and phone not in seen_phones:
             phones_ordered.append(phone)
             seen_phones.add(phone)
-    
-    for phone in phones_ordered:
-        # Buscar cliente
-        result = await db.execute(
-            select(Customer).where(Customer.phone == phone)
-        )
-        customer = result.scalar_one_or_none()
+            phone_last_event[phone] = event
 
-        # Buscar ultima mensagem do log
-        result = await db.execute(
-            select(EventLog)
-            .where(EventLog.event_type == "message_received")
-            .where(EventLog.payload["phone"].astext == phone)
-            .order_by(desc(EventLog.created_at))
-            .limit(1)
-        )
-        last_event = result.scalar_one_or_none()
-        
-        # Buscar estado do Redis
-        state = "start"
-        redis = redis_manager.client
-        if redis:
+    if not phones_ordered:
+        return [], {}, {}, {}
+
+    # Buscar todos os clientes em uma única query
+    customers_result = await db.execute(
+        select(Customer).where(Customer.phone.in_(phones_ordered))
+    )
+    customers_by_phone = {c.phone: c for c in customers_result.scalars().all()}
+
+    # Buscar estados do Redis (com fallback seguro)
+    redis = redis_manager.client
+    phone_states = {}
+    if redis:
+        for phone in phones_ordered:
             try:
                 context_data = await redis.hgetall(f"conversation:{phone}")
-                state = context_data.get("state", "start") if context_data else "start"
+                phone_states[phone] = context_data.get("state", "start") if context_data else "start"
             except Exception as e:
-                logger.warning(f"Erro ao buscar estado do Redis para {phone}: {e}")
+                logger.debug(f"Erro ao buscar estado Redis para {phone}: {e}")
+                phone_states[phone] = "start"
 
-        chat = ChatOut(
+    return phones_ordered, phone_last_event, customers_by_phone, phone_states
+
+
+@router.get("", response_model=List[ChatOut])
+async def list_chats(
+    db: AsyncSession = Depends(get_db),
+):
+    """Lista todas as conversas ativas."""
+    phones_ordered, phone_last_event, customers_by_phone, phone_states = await _fetch_chat_base_data(db)
+
+    if not phones_ordered:
+        return []
+
+    # Montar resposta
+    chats = []
+    for phone in phones_ordered:
+        customer = customers_by_phone.get(phone)
+        last_event = phone_last_event.get(phone)
+
+        chats.append(ChatOut(
             phone=phone,
             customer_name=customer.name if customer else None,
             customer_id=str(customer.id) if customer else None,
             last_message=last_event.payload.get("message") if last_event else None,
             last_message_time=last_event.created_at if last_event else None,
             unread_count=0,
-            state=state
-        )
-        chats.append(chat)
+            state=phone_states.get(phone, "start"),
+        ))
 
     return chats
 
@@ -279,48 +299,17 @@ async def list_my_conversations(db: AsyncSession = Depends(get_db)):
 @router.get("/conversations", response_model=List[ConversationOut])
 async def list_conversations_operator(db: AsyncSession = Depends(get_db)):
     """Lista todas as conversas disponíveis (endpoint alternativo)."""
+    phones_ordered, phone_last_event, customers_by_phone, phone_states = await _fetch_chat_base_data(db)
+
+    if not phones_ordered:
+        return []
+
+    # Montar resposta
     conversations = []
-
-    # Buscar todos os eventos de mensagem recebida
-    result = await db.execute(
-        select(EventLog)
-        .where(EventLog.event_type == "message_received")
-        .order_by(desc(EventLog.created_at))
-    )
-    events = result.scalars().all()
-
-    # Extrair telefones únicos em ordem de última mensagem
-    seen_phones = set()
-    phones_ordered = []
-    phone_last_event = {}
-    for event in events:
-        phone = event.payload.get("phone")
-        if phone:
-            if phone not in seen_phones:
-                phones_ordered.append(phone)
-                seen_phones.add(phone)
-                phone_last_event[phone] = event
-
-    # Buscar estado do Redis para cada conversa
-    redis = redis_manager.client
-
     for phone in phones_ordered:
-        # Buscar cliente
-        result = await db.execute(
-            select(Customer).where(Customer.phone == phone)
-        )
-        customer = result.scalar_one_or_none()
-
+        customer = customers_by_phone.get(phone)
         last_event = phone_last_event.get(phone)
-
-        # Buscar estado do Redis
-        state = "start"
-        if redis:
-            try:
-                context_data = await redis.hgetall(f"conversation:{phone}")
-                state = context_data.get("state", "start") if context_data else "start"
-            except Exception:
-                pass
+        state = phone_states.get(phone, "start")
 
         # Determinar status baseado no estado
         status = "waiting"
@@ -329,7 +318,7 @@ async def list_conversations_operator(db: AsyncSession = Depends(get_db)):
         elif state in ["order_confirmed", "tracking_order"]:
             status = "bot"
 
-        conversation = ConversationOut(
+        conversations.append(ConversationOut(
             id=phone,
             customer_number=phone,
             name=customer.name if customer else None,
@@ -340,9 +329,8 @@ async def list_conversations_operator(db: AsyncSession = Depends(get_db)):
             assigned_to_me=False,
             assigned_to_name=None,
             unread_count=0,
-            created_at=last_event.created_at if last_event else None
-        )
-        conversations.append(conversation)
+            created_at=last_event.created_at if last_event else None,
+        ))
 
     return conversations
 

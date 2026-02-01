@@ -674,45 +674,40 @@ async def get_owner_dashboard(
 
     # ==================== OPERATOR PERFORMANCE ====================
 
-    # Buscar operadores (role operator/admin) que têm atividade real
-    # Por enquanto, não temos campo "approved_by" no Order, então vamos:
-    # 1. Buscar apenas operadores que criaram/modificaram pedidos (via EventLog se existir)
-    # 2. Ou mostrar apenas operadores com atividade recente
-    
     # Buscar operadores (role operator/admin)
     operators_stmt = select(User).where(User.role.in_(["operator", "admin"]))
     operators_result = await session.execute(operators_stmt)
     operators = operators_result.scalars().all()
 
-    # Tentar buscar via EventLog se existir (para tracking real)
-    # Por enquanto, vamos contar pedidos criados/modificados no período
-    # como proxy para atividade do operador
-    
-    operator_performance = []
-    for op in operators:
-        # Contar pedidos aprovados por este operador no período
-        approved_stmt = select(func.count(Order.id)).where(
+    # Buscar contagem de aprovações por operador em UMA única query
+    approvals_stmt = (
+        select(Order.approved_by, func.count(Order.id).label("count"))
+        .where(
             and_(
-                Order.approved_by == op.id,
+                Order.approved_by.isnot(None),
                 Order.paid_at >= month_start,
                 Order.status != OrderStatus.CANCELLED.value,
             )
         )
-        approved_count = (await session.execute(approved_stmt)).scalar() or 0
-        
-        # Por enquanto, não temos tracking de tempo de resposta nem erros
-        # Isso pode ser implementado com EventLog/AuditLog
+        .group_by(Order.approved_by)
+    )
+    approvals_result = await session.execute(approvals_stmt)
+    approvals_by_user = {row.approved_by: row.count for row in approvals_result}
+
+    # Montar lista de performance usando o dict (sem queries adicionais)
+    operator_performance = []
+    for op in operators:
         operator_performance.append(
             OperatorPerformance(
                 user_id=op.id,
                 username=op.username,
                 email=op.email,
-                orders_approved=approved_count,
+                orders_approved=approvals_by_user.get(op.id, 0),
                 avg_response_time=None,
                 errors_count=0,
             )
         )
-    
+
     # Ordenar por pedidos aprovados (maior primeiro)
     operator_performance.sort(key=lambda x: x.orders_approved, reverse=True)
 
@@ -867,10 +862,20 @@ async def get_owner_dashboard(
         .limit(10)
     )
     top_customers_rows = await session.execute(top_customers_stmt)
+    top_customers_data = list(top_customers_rows)
+
+    # Buscar todos os clientes em uma única query
+    customer_ids = [row.customer_id for row in top_customers_data if row.customer_id]
+    customers_by_id = {}
+    if customer_ids:
+        customers_result = await session.execute(
+            select(Customer).where(Customer.id.in_(customer_ids))
+        )
+        customers_by_id = {c.id: c for c in customers_result.scalars().all()}
 
     top_customers_list = []
-    for row in top_customers_rows:
-        customer = await session.get(Customer, row.customer_id)
+    for row in top_customers_data:
+        customer = customers_by_id.get(row.customer_id)
         top_customers_list.append({
             "customer_id": str(row.customer_id),
             "name": customer.name if customer else "Cliente",

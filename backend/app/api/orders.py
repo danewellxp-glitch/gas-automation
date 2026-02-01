@@ -5,7 +5,7 @@ CRUD e gestão de pedidos.
 
 import asyncio
 from datetime import datetime, timedelta
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Tuple
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -26,6 +26,7 @@ from app.services.event_publisher import event_publisher
 from app.schemas.order import (
     OrderBrief,
     OrderCreate,
+    OrderRejectRequest,
     OrderResponse,
     OrderStatusUpdate,
     OrderUpdate,
@@ -53,6 +54,25 @@ async def _export_order_after_delivered(order_id: UUID) -> None:
         logger.exception(f"Erro inesperado exportando pedido {order_id} para Firebird: {e}")
 
 
+def _get_customer_contact(order: Order) -> Tuple[Optional[str], Optional[str]]:
+    """Extrai telefone e email do cliente do pedido."""
+    customer_phone = order.customer.phone if order.customer else None
+    customer_email = order.customer.email if order.customer else None
+    return customer_phone, customer_email
+
+
+async def _broadcast_to_operators_and_admins(message: dict, bairro: Optional[str] = None) -> None:
+    """Envia mensagem via WebSocket para operadores e admins."""
+    from app.api.websocket import UserRole, manager as ws_manager
+
+    if bairro:
+        await ws_manager.broadcast_to_neighborhood(message, bairro)
+    else:
+        await ws_manager.broadcast_to_role(message, UserRole.OPERATOR)
+
+    await ws_manager.broadcast_to_role(message, UserRole.ADMIN)
+
+
 async def _notify_order_status_change(order: Order, old_status: str, new_status: str) -> None:
     """Notifica cliente sobre mudança de status do pedido via WhatsApp."""
     try:
@@ -64,16 +84,13 @@ async def _notify_order_status_change(order: Order, old_status: str, new_status:
             OrderStatus.DELIVERED.value: "order.delivered",
             OrderStatus.CANCELLED.value: "order.cancelled",
         }
-        
+
         event_type = event_map.get(new_status)
         if not event_type:
             return
-        
-        # Obter dados do cliente
-        customer_phone = order.customer.phone if order.customer else None
-        customer_email = order.customer.email if order.customer else None
-        
-        # Publicar evento para notification-service
+
+        customer_phone, customer_email = _get_customer_contact(order)
+
         await event_publisher.publish_order_event(
             event_type=event_type,
             order_id=str(order.id),
@@ -83,7 +100,7 @@ async def _notify_order_status_change(order: Order, old_status: str, new_status:
             customer_email=customer_email,
             status=new_status,
         )
-        
+
     except Exception as e:
         logger.error(f"Erro ao notificar mudança de status: {e}", exc_info=True)
 
@@ -91,9 +108,6 @@ async def _notify_order_status_change(order: Order, old_status: str, new_status:
 async def _notify_operators_order_update(order: Order, old_status: str, new_status: str) -> None:
     """Notifica operadores sobre atualização de pedido via WebSocket."""
     try:
-        from app.api.websocket import UserRole
-        
-        # Broadcast para operadores e admins
         message = {
             "type": "order_update",
             "order_id": str(order.id),
@@ -104,18 +118,9 @@ async def _notify_operators_order_update(order: Order, old_status: str, new_stat
             "total_amount": float(order.total_amount),
             "bairro": order.delivery_bairro,
         }
-        
-        # Enviar para operadores (filtrar por bairro se necessário)
-        # Obter instância do connection manager
-        from app.api.websocket import manager as ws_manager
-        if order.delivery_bairro:
-            await ws_manager.broadcast_to_neighborhood(message, order.delivery_bairro)
-        else:
-            await ws_manager.broadcast_to_role(message, UserRole.OPERATOR)
-        
-        # Enviar para admins também
-        await ws_manager.broadcast_to_role(message, UserRole.ADMIN)
-        
+
+        await _broadcast_to_operators_and_admins(message, order.delivery_bairro)
+
     except Exception as e:
         logger.error(f"Erro ao notificar operadores: {e}", exc_info=True)
 
@@ -123,12 +128,9 @@ async def _notify_operators_order_update(order: Order, old_status: str, new_stat
 async def _notify_new_order(order: Order) -> None:
     """Notifica operadores sobre novo pedido pendente."""
     try:
-        from app.api.websocket import UserRole
-        
+        customer_phone, customer_email = _get_customer_contact(order)
+
         # Publicar evento para notification-service
-        customer_phone = order.customer.phone if order.customer else None
-        customer_email = order.customer.email if order.customer else None
-        
         await event_publisher.publish_order_event(
             event_type="order.created",
             order_id=str(order.id),
@@ -138,7 +140,7 @@ async def _notify_new_order(order: Order) -> None:
             customer_email=customer_email,
             status=order.status,
         )
-        
+
         # Notificar operadores via WebSocket
         message = {
             "type": "new_order",
@@ -152,16 +154,9 @@ async def _notify_new_order(order: Order) -> None:
                 "created_at": order.created_at.isoformat() if order.created_at else None,
             },
         }
-        
-        # Obter instância do connection manager
-        from app.api.websocket import manager as ws_manager
-        if order.delivery_bairro:
-            await ws_manager.broadcast_to_neighborhood(message, order.delivery_bairro)
-        else:
-            await ws_manager.broadcast_to_role(message, UserRole.OPERATOR)
-        
-        await ws_manager.broadcast_to_role(message, UserRole.ADMIN)
-        
+
+        await _broadcast_to_operators_and_admins(message, order.delivery_bairro)
+
     except Exception as e:
         logger.error(f"Erro ao notificar novo pedido: {e}", exc_info=True)
 
@@ -657,13 +652,16 @@ async def cancel_order(
             detail=f"Pedido com status {order.status} não pode ser cancelado"
         )
 
+    old_status = order.status
     order.status = OrderStatus.CANCELLED.value
     order.cancelled_at = datetime.utcnow()
     order.cancellation_reason = reason
 
     await db.commit()
 
-    # TODO: Se já pago, solicitar estorno no Asaas
+    # Asaas foi descontinuado - logar para estorno manual se necessário
+    if old_status != OrderStatus.PENDING.value:
+        logger.warning(f"Pedido {order_id} cancelado (status anterior: {old_status}). Verificar estorno manual.")
 
     return {"message": "Pedido cancelado", "id": str(order_id)}
 
@@ -794,7 +792,7 @@ async def approve_order(
 @router.post("/{order_id}/reject")
 async def reject_order(
     order_id: UUID,
-    reason: dict,  # {"reason": "motivo da rejeição"}
+    data: OrderRejectRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -807,30 +805,27 @@ async def reject_order(
         select(Order).where(Order.id == order_id)
     )
     order = result.scalar_one_or_none()
-    
+
     if not order:
         raise HTTPException(status_code=404, detail="Pedido não encontrado")
-    
+
     # Verificar se está pendente
     if order.status != OrderStatus.PENDING.value:
         raise HTTPException(
             status_code=400,
             detail=f"Pedido não pode ser rejeitado. Status atual: {order.status}"
         )
-    
-    # Extrair motivo
-    cancellation_reason = reason.get("reason", "Rejeitado pelo operador")
-    
+
     # Atualizar status para 'cancelled'
     order.status = OrderStatus.CANCELLED.value
     order.cancelled_at = datetime.now()
-    order.cancellation_reason = cancellation_reason
-    
+    order.cancellation_reason = data.reason
+
     await db.commit()
-    
+
     return {
         "success": True,
         "message": "Pedido rejeitado com sucesso",
         "order_id": str(order_id),
-        "reason": cancellation_reason
+        "reason": data.reason
     }

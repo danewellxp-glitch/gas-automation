@@ -16,7 +16,7 @@ from app.database import AsyncSessionLocal
 from app.core.state_machine import ConversationState, ConversationContext
 from app.core.flow_engine import MessageResponse, ProcessedMessage
 from app.models.customer import Customer
-from app.models.product import Product
+from app.models.product import Product, DEFAULT_PRODUCT_CODES, WEIGHT_TO_CODE, OPTION_TO_CODE
 from app.models.order import Order, OrderItem, OrderStatus
 
 logger = logging.getLogger(__name__)
@@ -89,26 +89,20 @@ def extract_product_code(message: str) -> Optional[str]:
     """Extrai código do produto da mensagem."""
     msg_upper = message.upper().strip()
 
-    # Procura por códigos específicos
-    for code in ["P13", "P20", "P45"]:
+    # Procura por códigos específicos (usa constantes centralizadas)
+    for code in DEFAULT_PRODUCT_CODES:
         if code in msg_upper:
             return code
 
-    # Procura por peso
-    if "13" in message:
-        return "P13"
-    if "20" in message:
-        return "P20"
-    if "45" in message:
-        return "P45"
+    # Procura por peso (usa mapeamento centralizado)
+    for weight, code in WEIGHT_TO_CODE.items():
+        if weight in message:
+            return code
 
-    # Procura por número de opção
-    if message.strip() == "1":
-        return "P13"
-    if message.strip() == "2":
-        return "P20"
-    if message.strip() == "3":
-        return "P45"
+    # Procura por número de opção (usa mapeamento centralizado)
+    option_code = OPTION_TO_CODE.get(message.strip())
+    if option_code:
+        return option_code
 
     return None
 
@@ -274,8 +268,8 @@ async def handle_awaiting_product(
         responses=[
             MessageResponse(
                 text=(
-                    f"✅ *{product['name']}* selecionado!\n"
-                    f"💰 Valor unitário: {format_currency(product['price'])}\n\n"
+                    f"✅ *{product.name}* selecionado!\n"
+                    f"💰 Valor unitário: {format_currency(product.price)}\n\n"
                     "Quantos botijões você deseja?"
                 ),
                 buttons=[
@@ -361,7 +355,7 @@ async def handle_awaiting_quantity(
                     MessageResponse(
                         text=(
                             f"📦 *Resumo do Pedido*\n\n"
-                            f"Produto: {product['name']}\n"
+                            f"Produto: {product.name}\n"
                             f"Quantidade: {quantity}\n"
                             f"Total: *{format_currency(total)}*\n\n"
                             f"📍 *Endereço de entrega:*\n{address_text}\n\n"
@@ -385,7 +379,7 @@ async def handle_awaiting_quantity(
             MessageResponse(
                 text=(
                     f"📦 Você selecionou:\n"
-                    f"*{quantity}x {product['name']}*\n"
+                    f"*{quantity}x {product.name}*\n"
                     f"Total: *{format_currency(total)}*\n\n"
                     "📍 Por favor, informe o *endereço completo* para entrega:\n\n"
                     "_Exemplo: Rua das Flores, 123 - Boqueirão_"
@@ -623,7 +617,7 @@ async def handle_awaiting_payment(
                 "total_amount": float(order.total_amount),
                 "payment_method": "cash",
                 "created_at": order.created_at.isoformat() if order.created_at else None,
-                "product": product["name"],
+                "product": product.name,
                 "quantity": context.selected_quantity,
                 "address": context.address.get("full_address", ""),
             }
@@ -639,7 +633,7 @@ async def handle_awaiting_payment(
                     text=(
                         f"✅ *Pedido Confirmado!*\n\n"
                         f"📦 Pedido #{order.order_number}\n"
-                        f"Produto: {context.selected_quantity}x {product['name']}\n"
+                        f"Produto: {context.selected_quantity}x {product.name}\n"
                         f"Total: *{format_currency(total)}*\n"
                         f"Pagamento: 💵 Dinheiro na entrega\n\n"
                         f"📍 Entrega em: {context.address.get('full_address', context.address.get('bairro', 'Endereço cadastrado'))}\n"
@@ -779,7 +773,7 @@ async def handle_confirming_order(
                 "total_amount": float(order.total_amount),
                 "payment_method": context.payment_method,
                 "created_at": order.created_at.isoformat() if order.created_at else None,
-                "product": product["name"],
+                "product": product.name,
                 "quantity": context.selected_quantity,
                 "address": context.address.get("full_address", ""),
             }
@@ -795,7 +789,7 @@ async def handle_confirming_order(
                     text=(
                         f"✅ *Pedido Confirmado!*\n\n"
                         f"📦 Pedido #{order.order_number}\n"
-                        f"Produto: {context.selected_quantity}x {product['name']}\n"
+                        f"Produto: {context.selected_quantity}x {product.name}\n"
                         f"Total: *{format_currency(total)}*\n"
                         f"Pagamento: 💳 Cartão na entrega\n\n"
                         f"📍 Entrega em: {context.address.get('full_address', context.address.get('bairro', 'Endereço cadastrado'))}\n"
@@ -970,17 +964,14 @@ async def create_order(
     total: Decimal,
 ) -> Order:
     """Cria pedido no banco de dados."""
-    # Buscar produto do banco de dados
-    product = await get_product(context.selected_product)
-    if not product:
-        raise ValueError(f"Produto {context.selected_product} não encontrado")
-
     async with AsyncSessionLocal() as db:
-        # Produto já foi buscado acima
+        # Buscar produto do banco de dados
         result = await db.execute(
             select(Product).where(Product.code == context.selected_product)
         )
-        db_product = result.scalar_one_or_none()
+        product = result.scalar_one_or_none()
+        if not product:
+            raise ValueError(f"Produto {context.selected_product} não encontrado")
 
         # Criar pedido
         order = Order(
@@ -998,9 +989,9 @@ async def create_order(
         item = OrderItem(
             order_id=order.id,
             product_code=context.selected_product,
-            product_name=product["name"],
+            product_name=product.name,
             quantity=context.selected_quantity,
-            unit_price=product["price"],
+            unit_price=product.price,
             subtotal=total,
         )
         db.add(item)

@@ -185,8 +185,8 @@ async def process_whatsapp_message(message: WAHAMessage):
                 message.phone,
                 "Desculpe, ocorreu um erro. Digite *menu* para recomeçar."
             )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Não foi possível enviar mensagem de erro para {message.phone}: {e}")
 
 
 async def process_location_message(phone: str, location: dict, message_id: str = None):

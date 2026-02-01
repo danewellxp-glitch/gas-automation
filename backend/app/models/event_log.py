@@ -98,6 +98,8 @@ class EventLog(Base):
     __table_args__ = (
         Index("ix_event_logs_type_entity", "event_type", "entity_type"),
         Index("ix_event_logs_entity_created", "entity_type", "entity_id", "created_at"),
+        # Índice para queries JSONB por phone (usado em chats.py)
+        Index("ix_event_logs_payload_phone", payload["phone"].astext),
     )
 
     def __repr__(self) -> str:

@@ -97,3 +97,22 @@ class Product(BaseModel):
 # NOTA: Produtos devem ser sincronizados do Firebird (Gerente.fdb)
 # Não usar dados hardcoded em produção
 # Para sincronização inicial, usar: backend/scripts/sync_products_from_firebird.py
+
+
+# ===== CONSTANTES DE PRODUTO =====
+# Códigos padrão de produtos (usados para detecção em mensagens)
+DEFAULT_PRODUCT_CODES = ["P13", "P20", "P45"]
+
+# Mapeamento de peso -> código
+WEIGHT_TO_CODE = {
+    "13": "P13",
+    "20": "P20",
+    "45": "P45",
+}
+
+# Mapeamento de opção numérica -> código (para menu do bot)
+OPTION_TO_CODE = {
+    "1": "P13",
+    "2": "P20",
+    "3": "P45",
+}

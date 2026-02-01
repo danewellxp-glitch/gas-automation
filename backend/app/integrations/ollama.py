@@ -98,7 +98,8 @@ class OllamaClient:
             client = await self._get_client()
             response = await client.get("/api/tags")
             return response.status_code == 200
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Ollama não disponível: {e}")
             return False
 
     async def generate(
@@ -274,7 +275,8 @@ JSON:"""
         try:
             response = await self.generate(prompt=prompt, temperature=0.1, max_tokens=50)
             return self._parse_json_response(response)
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Erro ao classificar sentimento: {e}")
             return {"sentiment": "neutral", "confidence": 0.5}
 
     def _parse_json_response(self, response: str) -> dict:
