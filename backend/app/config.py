@@ -71,9 +71,6 @@ class Settings(BaseSettings):
     firebird_trade_bxestoque: Optional[str] = None  # 'S'/'N' ou 1/0 conforme schema
     firebird_trade_bxfinanc: Optional[str] = None   # 'S'/'N' ou 1/0 conforme schema
 
-    # Firebase Cloud Messaging (Push Notifications)
-    fcm_server_key: Optional[str] = None
-
     # MinIO (Object Storage)
     minio_endpoint: Optional[str] = None
     minio_access_key: str = "minioadmin"

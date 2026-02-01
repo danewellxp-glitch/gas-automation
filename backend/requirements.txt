@@ -43,6 +43,9 @@ numpy==1.26.4  # Versão compatível com opencv-python-headless 4.8.1.78
 # Firebird (Sistema Legado)
 fdb==2.0.2
 
+# Firebase (Push Notifications)
+firebase-admin==6.6.0
+
 # Utilities
 python-dateutil==2.9.0.post0
 pytz==2025.2

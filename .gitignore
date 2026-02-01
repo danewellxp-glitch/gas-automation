@@ -94,6 +94,7 @@ docker-compose.override.yml
 secrets/
 *.pem
 *.key
+firebase-credentials.json
 
 # Temporary files
 tmp/

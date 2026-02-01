@@ -1,20 +1,43 @@
 """
 Cliente FCM (Firebase Cloud Messaging) para push notifications.
 
-Usa a FCM Legacy HTTP API para enviar notificações.
-A server key é obtida no Firebase Console > Project Settings > Cloud Messaging.
+Usa Firebase Admin SDK com FCM V1 API.
+Autenticação via service account JSON.
 """
 
 import logging
 from typing import Optional
 
-import httpx
-
-from app.config import settings
+import firebase_admin
+from firebase_admin import credentials, messaging
 
 logger = logging.getLogger(__name__)
 
-FCM_URL = "https://fcm.googleapis.com/fcm/send"
+_initialized = False
+
+
+def _init_firebase():
+    """Inicializa Firebase Admin SDK se ainda não foi."""
+    global _initialized
+    if _initialized:
+        return True
+
+    import os
+    cred_path = os.environ.get("FIREBASE_CREDENTIALS", "/app/firebase-credentials.json")
+
+    if not os.path.exists(cred_path):
+        logger.warning(f"Firebase credentials não encontrado em {cred_path}. Push desabilitado.")
+        return False
+
+    try:
+        cred = credentials.Certificate(cred_path)
+        firebase_admin.initialize_app(cred)
+        _initialized = True
+        logger.info("Firebase Admin SDK inicializado com sucesso")
+        return True
+    except Exception as e:
+        logger.error(f"Erro ao inicializar Firebase: {e}")
+        return False
 
 
 async def send_push_notification(
@@ -24,7 +47,7 @@ async def send_push_notification(
     data: Optional[dict] = None,
 ) -> bool:
     """
-    Envia push notification via FCM.
+    Envia push notification via FCM V1 API.
 
     Args:
         push_token: FCM device token do destinatário
@@ -35,48 +58,32 @@ async def send_push_notification(
     Returns:
         True se enviou com sucesso
     """
-    server_key = getattr(settings, 'fcm_server_key', None)
-    if not server_key:
-        logger.warning("FCM server_key não configurada. Push não enviado.")
+    if not _init_firebase():
         return False
 
-    payload = {
-        "to": push_token,
-        "notification": {
-            "title": title,
-            "body": body,
-            "sound": "default",
-            "click_action": "FCM_PLUGIN_ACTIVITY",
-        },
-    }
-
-    if data:
-        payload["data"] = data
+    message = messaging.Message(
+        notification=messaging.Notification(
+            title=title,
+            body=body,
+        ),
+        android=messaging.AndroidConfig(
+            priority="high",
+            notification=messaging.AndroidNotification(
+                sound="default",
+                click_action="FCM_PLUGIN_ACTIVITY",
+            ),
+        ),
+        data=data or {},
+        token=push_token,
+    )
 
     try:
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                FCM_URL,
-                json=payload,
-                headers={
-                    "Authorization": f"key={server_key}",
-                    "Content-Type": "application/json",
-                },
-                timeout=10.0,
-            )
-
-        if response.status_code == 200:
-            result = response.json()
-            if result.get("success", 0) > 0:
-                logger.info(f"Push enviado com sucesso para token {push_token[:20]}...")
-                return True
-            else:
-                logger.warning(f"FCM retornou falha: {result}")
-                return False
-        else:
-            logger.error(f"FCM HTTP {response.status_code}: {response.text}")
-            return False
-
+        response = messaging.send(message)
+        logger.info(f"Push enviado: {response}")
+        return True
+    except messaging.UnregisteredError:
+        logger.warning(f"Token inválido/expirado: {push_token[:20]}...")
+        return False
     except Exception as e:
         logger.error(f"Erro ao enviar push: {e}")
         return False
