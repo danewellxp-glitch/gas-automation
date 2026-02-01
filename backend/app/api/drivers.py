@@ -8,7 +8,7 @@ from typing import List
 from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -463,25 +463,26 @@ async def update_delivery_status(
     if status_update.notes:
         delivery.notes = status_update.notes
     
-    # Atualizar status do pedido correspondente
-    order_result = await session.execute(
-        select(Order).where(Order.id == delivery.order_id)
-    )
-    order = order_result.scalar_one_or_none()
-    
-    if order:
-        if status_update.status == DeliveryStatus.PICKED_UP.value:
-            order.status = OrderStatus.DISPATCHED.value
-            order.dispatched_at = datetime.now()
-        elif status_update.status == DeliveryStatus.DELIVERED.value:
-            order.status = OrderStatus.DELIVERED.value
-            order.delivered_at = datetime.now()
-            # Driver volta para disponível
-            driver.status = DriverStatus.AVAILABLE.value
-            driver.total_deliveries += 1
-        
-        session.add(order)
-    
+    # Atualizar status do pedido correspondente via SQL direto
+    # (evita problema de FK resolution no ORM com orders.approved_by)
+    if status_update.status == DeliveryStatus.PICKED_UP.value:
+        await session.execute(
+            update(Order).where(Order.id == delivery.order_id).values(
+                status=OrderStatus.DISPATCHED.value,
+                dispatched_at=datetime.now()
+            )
+        )
+    elif status_update.status == DeliveryStatus.DELIVERED.value:
+        await session.execute(
+            update(Order).where(Order.id == delivery.order_id).values(
+                status=OrderStatus.DELIVERED.value,
+                delivered_at=datetime.now()
+            )
+        )
+        # Driver volta para disponível
+        driver.status = DriverStatus.AVAILABLE.value
+        driver.total_deliveries += 1
+
     session.add(delivery)
     session.add(driver)
     await session.commit()
