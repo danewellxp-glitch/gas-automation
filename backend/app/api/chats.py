@@ -3,13 +3,13 @@ API de Chats - Gerenciamento de conversas WhatsApp.
 """
 
 import logging
-from typing import Optional, List, Dict, Tuple
+from typing import Optional, List, Dict, Tuple, Generic, TypeVar
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select, func, desc
 from sqlalchemy.ext.asyncio import AsyncSession
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.database import get_db, redis_manager
 from app.models.customer import Customer
@@ -19,30 +19,48 @@ from app.api.websocket import emit_new_message
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+
+# ===== SCHEMAS =====
+
+T = TypeVar("T")
 
 
-# ===== ENDPOINT DE DIAGNÓSTICO (deve vir antes das rotas com parâmetros) =====
+class PaginatedResponse(BaseModel, Generic[T]):
+    """Resposta paginada padronizada."""
+    items: List[T]
+    total: int
+    page: int = Field(ge=1)
+    page_size: int = Field(ge=1, le=100)
+    total_pages: int
 
-@router.get("/waha-status")
-async def get_waha_status():
-    """Verifica status da conexão WAHA."""
-    try:
-        status = await waha_client.get_session_status()
-        return {
-            "success": True,
-            "waha_url": waha_client.base_url,
-            "session_name": waha_client.session_name,
-            "status": status
-        }
-    except Exception as e:
-        logger.error(f"Erro ao verificar status WAHA: {e}")
-        return {
-            "success": False,
-            "waha_url": waha_client.base_url,
-            "session_name": waha_client.session_name,
-            "error": str(e)
-        }
+
+class SuccessResponse(BaseModel):
+    """Resposta de sucesso padronizada."""
+    success: bool = True
+    message: str
+
+
+class ChatContextResponse(BaseModel):
+    """Resposta de contexto de chat."""
+    phone: str
+    context: Optional[Dict] = None
+
+
+class WAHAStatusResponse(BaseModel):
+    """Resposta de status WAHA."""
+    success: bool
+    waha_url: str
+    session_name: str
+    status: Optional[Dict] = None
+    error: Optional[str] = None
+
+
+class BotInteractionOut(BaseModel):
+    """Schema de interação do bot."""
+    customer_name: str
+    user_message: str
+    bot_type: str
+    timestamp: str
 
 
 class MessageOut(BaseModel):
@@ -98,6 +116,34 @@ class ConversationMessageOut(BaseModel):
     timestamp: Optional[str] = None
     created_at: Optional[str] = None
     isFromCurrentUser: bool = False
+
+
+# ===== ROUTER =====
+
+router = APIRouter()
+
+
+# ===== ENDPOINT DE DIAGNÓSTICO (deve vir antes das rotas com parâmetros) =====
+
+@router.get("/waha-status", response_model=WAHAStatusResponse)
+async def get_waha_status():
+    """Verifica status da conexão WAHA."""
+    try:
+        status = await waha_client.get_session_status()
+        return WAHAStatusResponse(
+            success=True,
+            waha_url=waha_client.base_url,
+            session_name=waha_client.session_name,
+            status=status,
+        )
+    except Exception as e:
+        logger.error(f"Erro ao verificar status WAHA: {e}")
+        return WAHAStatusResponse(
+            success=False,
+            waha_url=waha_client.base_url,
+            session_name=waha_client.session_name,
+            error=str(e),
+        )
 
 
 # ===== FUNÇÃO AUXILIAR PARA EVITAR DUPLICAÇÃO =====
@@ -266,47 +312,68 @@ async def send_message(
         raise HTTPException(status_code=500, detail=f"Erro ao enviar mensagem: {str(e)}")
 
 
-@router.get("/{phone}/context")
+@router.get("/{phone}/context", response_model=ChatContextResponse)
 async def get_chat_context(phone: str):
     """Busca contexto atual da conversa."""
     redis = redis_manager.client
     if not redis:
-        return {"phone": phone, "context": None}
+        return ChatContextResponse(phone=phone, context=None)
 
     context = await redis.hgetall(f"conversation:{phone}")
-    return {"phone": phone, "context": context or None}
+    return ChatContextResponse(phone=phone, context=context or None)
 
 
-@router.delete("/{phone}/context")
+@router.delete("/{phone}/context", response_model=SuccessResponse)
 async def reset_chat_context(phone: str):
     """Reseta contexto da conversa."""
     redis = redis_manager.client
     if redis:
         await redis.delete(f"conversation:{phone}")
 
-    return {"message": f"Contexto resetado para {phone}"}
+    return SuccessResponse(message=f"Contexto resetado para {phone}")
 
 
 # ===== ENDPOINTS PARA COMPATIBILIDADE COM PAINEL OPERADOR =====
 
-@router.get("/my-conversations", response_model=List[ConversationOut])
-async def list_my_conversations(db: AsyncSession = Depends(get_db)):
-    """Lista conversas atribuídas ao operador atual."""
-    # Por enquanto retorna todas as conversas (sem sistema de atribuição implementado)
-    return await list_conversations_operator(db)
+@router.get("/my-conversations", response_model=PaginatedResponse[ConversationOut], deprecated=True)
+async def list_my_conversations(
+    page: int = Query(1, ge=1, description="Número da página"),
+    page_size: int = Query(20, ge=1, le=100, description="Itens por página"),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    [DEPRECATED] Use GET /conversations em vez disso.
+    Lista conversas atribuídas ao operador atual.
+    """
+    logger.warning("Endpoint /my-conversations está deprecated. Use /conversations")
+    return await list_conversations_operator(page=page, page_size=page_size, db=db)
 
 
-@router.get("/conversations", response_model=List[ConversationOut])
-async def list_conversations_operator(db: AsyncSession = Depends(get_db)):
-    """Lista todas as conversas disponíveis (endpoint alternativo)."""
+@router.get("/conversations", response_model=PaginatedResponse[ConversationOut])
+async def list_conversations_operator(
+    page: int = Query(1, ge=1, description="Número da página"),
+    page_size: int = Query(20, ge=1, le=100, description="Itens por página"),
+    db: AsyncSession = Depends(get_db),
+):
+    """Lista todas as conversas disponíveis com paginação."""
     phones_ordered, phone_last_event, customers_by_phone, phone_states = await _fetch_chat_base_data(db)
 
+    total = len(phones_ordered)
+    total_pages = (total + page_size - 1) // page_size if total > 0 else 1
+
     if not phones_ordered:
-        return []
+        return PaginatedResponse[ConversationOut](
+            items=[], total=0, page=page, page_size=page_size, total_pages=1
+        )
+
+    # Aplicar paginação
+    start_idx = (page - 1) * page_size
+    end_idx = start_idx + page_size
+    phones_page = phones_ordered[start_idx:end_idx]
 
     # Montar resposta
     conversations = []
-    for phone in phones_ordered:
+    for phone in phones_page:
         customer = customers_by_phone.get(phone)
         last_event = phone_last_event.get(phone)
         state = phone_states.get(phone, "start")
@@ -332,14 +399,20 @@ async def list_conversations_operator(db: AsyncSession = Depends(get_db)):
             created_at=last_event.created_at if last_event else None,
         ))
 
-    return conversations
+    return PaginatedResponse[ConversationOut](
+        items=conversations,
+        total=total,
+        page=page,
+        page_size=page_size,
+        total_pages=total_pages,
+    )
 
 
-@router.post("/conversations/{conversation_id}/assign")
+@router.post("/conversations/{conversation_id}/assign", response_model=SuccessResponse)
 async def assign_conversation(conversation_id: str, db: AsyncSession = Depends(get_db)):
     """Atribui conversa ao operador atual."""
     # Por enquanto apenas retorna sucesso (sem sistema de atribuição implementado)
-    return {"success": True, "message": f"Conversa {conversation_id} atribuída"}
+    return SuccessResponse(message=f"Conversa {conversation_id} atribuída")
 
 
 @router.get("/conversations/{conversation_id}/messages", response_model=List[ConversationMessageOut])
@@ -435,7 +508,7 @@ async def reply_to_conversation(
         raise HTTPException(status_code=500, detail=f"Erro ao enviar mensagem: {str(e)}")
 
 
-@router.post("/conversations/{conversation_id}/end")
+@router.post("/conversations/{conversation_id}/end", response_model=SuccessResponse)
 async def end_conversation(conversation_id: str, db: AsyncSession = Depends(get_db)):
     """
     Encerra uma conversa e devolve ao bot.
@@ -495,14 +568,14 @@ async def end_conversation(conversation_id: str, db: AsyncSession = Depends(get_
             "system": True
         })
 
-        return {"success": True, "message": f"Conversa {conversation_id} encerrada e devolvida ao bot"}
+        return SuccessResponse(message=f"Conversa {conversation_id} encerrada e devolvida ao bot")
 
     except Exception as e:
         logger.error(f"Erro ao encerrar conversa {conversation_id}: {e}")
         raise HTTPException(status_code=500, detail=f"Erro ao encerrar conversa: {str(e)}")
 
 
-@router.post("/conversations/{conversation_id}/transfer-to-bot")
+@router.post("/conversations/{conversation_id}/transfer-to-bot", response_model=SuccessResponse)
 async def transfer_to_bot(conversation_id: str, db: AsyncSession = Depends(get_db)):
     """
     Transfere a conversa de volta para o bot mantendo o contexto.
@@ -564,14 +637,14 @@ async def transfer_to_bot(conversation_id: str, db: AsyncSession = Depends(get_d
         db.add(event)
         await db.commit()
 
-        return {"success": True, "message": f"Conversa {conversation_id} transferida para o bot"}
+        return SuccessResponse(message=f"Conversa {conversation_id} transferida para o bot")
 
     except Exception as e:
         logger.error(f"Erro ao transferir conversa {conversation_id} para bot: {e}")
         raise HTTPException(status_code=500, detail=f"Erro ao transferir para bot: {str(e)}")
 
 
-@router.get("/bot-interactions")
+@router.get("/bot-interactions", response_model=List[BotInteractionOut])
 async def list_bot_interactions(db: AsyncSession = Depends(get_db)):
     """Lista interações do bot."""
     interactions = []
@@ -586,12 +659,11 @@ async def list_bot_interactions(db: AsyncSession = Depends(get_db)):
     events = result.scalars().all()
 
     for event in events:
-        interaction = {
-            "customer_name": event.payload.get("customer_name", "Cliente"),
-            "user_message": event.payload.get("user_message", ""),
-            "bot_type": event.payload.get("bot_type", "chatbot"),
-            "timestamp": event.created_at.isoformat()
-        }
-        interactions.append(interaction)
+        interactions.append(BotInteractionOut(
+            customer_name=event.payload.get("customer_name", "Cliente"),
+            user_message=event.payload.get("user_message", ""),
+            bot_type=event.payload.get("bot_type", "chatbot"),
+            timestamp=event.created_at.isoformat(),
+        ))
 
     return interactions

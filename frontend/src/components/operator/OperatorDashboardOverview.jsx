@@ -5,7 +5,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { Package, RefreshCcw, Clock, Truck, CheckCircle } from 'lucide-react'
-import { getOrdersToday, getMyConversations } from '../../services/api'
+import { getOrdersToday, getConversations } from '../../services/api'
 import { useSharedWebSocketEvent } from '../../hooks/useSharedWebSocket'
 
 export default function OperatorDashboardOverview() {
@@ -17,10 +17,13 @@ export default function OperatorDashboardOverview() {
       setLoading(true)
 
       // Buscar métricas em paralelo usando api.js
-      const [todayOrders, conversations] = await Promise.all([
+      const [todayOrders, conversationsData] = await Promise.all([
         getOrdersToday().catch(() => []),
-        getMyConversations().catch(() => [])
+        getConversations().catch(() => ({ items: [], total: 0 }))
       ])
+
+      // Extrair items da resposta paginada
+      const conversations = conversationsData.items || []
 
       setMetrics({
         orders: {
@@ -31,10 +34,10 @@ export default function OperatorDashboardOverview() {
           total: todayOrders.length
         },
         conversations: {
-          active: conversations.length, // Todas as conversas são consideradas ativas
-          waiting: 0, // Sistema de atribuição não implementado ainda
-          mine: 0, // Sistema de atribuição não implementado ainda
-          total: conversations.length
+          active: conversations.length,
+          waiting: conversations.filter(c => c.status === 'waiting').length,
+          mine: conversations.filter(c => c.assigned_to_me).length,
+          total: conversationsData.total || conversations.length
         }
       })
     } catch (error) {

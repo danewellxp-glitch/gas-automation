@@ -362,7 +362,8 @@ export default function ConversationsPanel() {
     setLoadingConversations(true)
     try {
       const data = await getConversations()
-      setConversations(Array.isArray(data) ? data : data.conversations || [])
+      // Resposta paginada: { items, total, page, page_size, total_pages }
+      setConversations(data.items || [])
     } catch (error) {
       console.error('Erro ao carregar conversas:', error)
       toast.error('Erro ao carregar conversas')

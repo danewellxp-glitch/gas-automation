@@ -183,15 +183,23 @@ export const resetChatContext = async (phone) => {
 }
 
 // ==================== Conversations (Operador) ====================
-export const getConversations = async (filterType = null) => {
-  const params = filterType ? { filter_type: filterType } : {}
+export const getConversations = async (page = 1, pageSize = 50) => {
+  const params = { page, page_size: pageSize }
   const response = await api.get('/conversations', { params })
+  // Resposta paginada: { items, total, page, page_size, total_pages }
   return response.data
 }
 
+// Função de compatibilidade - retorna apenas o array de items
+export const getConversationsList = async () => {
+  const data = await getConversations(1, 100)
+  return data.items || []
+}
+
+// Deprecated - use getConversations
 export const getMyConversations = async () => {
-  const response = await api.get('/my-conversations')
-  return response.data
+  console.warn('getMyConversations is deprecated, use getConversations')
+  return getConversations()
 }
 
 export const getConversationMessages = async (id) => {
