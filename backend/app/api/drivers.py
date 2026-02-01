@@ -16,8 +16,10 @@ logger = logging.getLogger(__name__)
 
 from app.auth import get_current_user
 from app.integrations.fcm_client import notify_driver_new_delivery
+from app.integrations.waha import waha_client
 from app.database import get_db
 from app.models.auth_models import User
+from app.models.customer import Customer
 from app.models.delivery import Delivery, DeliveryStatus
 from app.models.driver import Driver, DriverStatus
 from app.models.order import Order, OrderStatus
@@ -487,7 +489,56 @@ async def update_delivery_status(
     session.add(driver)
     await session.commit()
     await session.refresh(delivery)
-    
+
+    # Notificar cliente via WhatsApp
+    try:
+        # Buscar telefone do cliente via order → customer
+        order_result = await session.execute(
+            select(Order).where(Order.id == delivery.order_id)
+        )
+        order = order_result.scalar_one_or_none()
+        customer_phone = None
+        if order and order.customer_id:
+            cust_result = await session.execute(
+                select(Customer).where(Customer.id == order.customer_id)
+            )
+            customer = cust_result.scalar_one_or_none()
+            if customer:
+                customer_phone = customer.phone
+
+        if customer_phone:
+            order_number = order.order_number if order else "?"
+
+            if status_update.status == DeliveryStatus.IN_TRANSIT.value:
+                # Envia localização do driver ao cliente
+                maps_link = ""
+                if driver.current_location:
+                    lat = driver.current_location.get("latitude")
+                    lng = driver.current_location.get("longitude")
+                    if lat and lng:
+                        maps_link = f"\n\n📍 Acompanhe: https://maps.google.com/maps?q={lat},{lng}"
+
+                await waha_client.send_text(
+                    phone=customer_phone,
+                    text=(
+                        f"🚗 Pedido #{order_number} saiu para entrega!\n\n"
+                        f"Entregador: {driver.name}\n"
+                        f"Telefone: {driver.phone}"
+                        f"{maps_link}"
+                    )
+                )
+
+            elif status_update.status == DeliveryStatus.DELIVERED.value:
+                await waha_client.send_text(
+                    phone=customer_phone,
+                    text=(
+                        f"✅ Pedido #{order_number} entregue!\n\n"
+                        f"Obrigado pela preferencia! 🔥"
+                    )
+                )
+    except Exception as e:
+        logger.error(f"Erro ao enviar WhatsApp: {e}")
+
     return {
         "id": str(delivery.id),
         "status": delivery.status,
