@@ -8,7 +8,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, Enum, Float, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -143,6 +143,24 @@ class Delivery(BaseModel):
         JSONB,
         nullable=True,
         comment="Última localização: {lat, lng, timestamp}"
+    )
+
+    # Destino geocodificado (para proximidade / auto-arrived)
+    delivery_destination_lat: Mapped[Optional[float]] = mapped_column(
+        Float,
+        nullable=True,
+        comment="Latitude do endereço de entrega (geocoding)"
+    )
+    delivery_destination_lng: Mapped[Optional[float]] = mapped_column(
+        Float,
+        nullable=True,
+        comment="Longitude do endereço de entrega (geocoding)"
+    )
+    arrived_whatsapp_sent: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        nullable=False,
+        comment="Se WhatsApp '1 minuto' já foi enviado ao cliente"
     )
 
     # Relacionamento

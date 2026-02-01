@@ -39,8 +39,12 @@ from app.schemas.driver import (
     DriversMetricsDashboard,
 )
 from app.services.driver_time_tracking_service import DriverTimeTrackingService
+from app.services.geocoding_service import geocode_address, haversine_distance_km
 
 router = APIRouter()
+
+# Raio em km para considerar "chegou" (~1 minuto de carro)
+ARRIVED_PROXIMITY_KM = 0.5
 
 
 # ==================== ENDPOINTS DO PRÓPRIO DRIVER ====================
@@ -118,14 +122,96 @@ async def update_my_status(
     return driver
 
 
+async def _check_proximity_and_auto_arrived(
+    driver_id: UUID,
+    lat: float,
+    lng: float,
+) -> None:
+    """
+    Background: verifica se driver está próximo do destino e auto-atualiza para 'arrived'
+    + envia WhatsApp "Seu gás está a 1 minuto da sua casa!"
+    """
+    from app.database import AsyncSessionLocal
+    async with AsyncSessionLocal() as session:
+        try:
+            # Buscar entrega in_transit do driver
+            result = await session.execute(
+                select(Delivery)
+                .options(
+                    selectinload(Delivery.order).selectinload(Order.customer),
+                )
+                .where(
+                    and_(
+                        Delivery.driver_id == driver_id,
+                        Delivery.status == DeliveryStatus.IN_TRANSIT.value,
+                    )
+                )
+                .order_by(Delivery.in_transit_at.desc())
+                .limit(1)
+            )
+            delivery = result.scalar_one_or_none()
+            if not delivery or not delivery.order:
+                return
+
+            # Garantir coordenadas do destino (geocoding se necessário)
+            dest_lat = delivery.delivery_destination_lat
+            dest_lng = delivery.delivery_destination_lng
+            if dest_lat is None or dest_lng is None:
+                coords = await geocode_address(
+                    delivery.order.delivery_address,
+                    delivery.bairro,
+                )
+                if not coords:
+                    return
+                dest_lat, dest_lng = coords
+                delivery.delivery_destination_lat = dest_lat
+                delivery.delivery_destination_lng = dest_lng
+                session.add(delivery)
+                await session.commit()
+                await session.refresh(delivery)
+
+            # Calcular distância
+            dist_km = haversine_distance_km(lat, lng, dest_lat, dest_lng)
+            if dist_km > ARRIVED_PROXIMITY_KM:
+                return
+
+            # Está próximo! Atualizar para arrived e enviar WhatsApp
+            if delivery.arrived_whatsapp_sent:
+                return  # Já enviou, não repetir
+
+            delivery.update_status(DeliveryStatus.ARRIVED.value)
+            delivery.arrived_whatsapp_sent = True
+            session.add(delivery)
+            await session.commit()
+
+            # Enviar WhatsApp ao cliente
+            customer_phone = None
+            if delivery.order and delivery.order.customer:
+                customer_phone = delivery.order.customer.phone
+
+            if customer_phone:
+                order_num = delivery.order.order_number if delivery.order else "?"
+                msg = (
+                    f"📍 Seu gás está a 1 minuto da sua casa!\n\n"
+                    f"Pedido #{order_num} – o entregador está chegando. 🔥"
+                )
+                await waha_client.send_text(phone=customer_phone, text=msg)
+                logger.info(f"Auto-arrived + WhatsApp enviado para entrega {delivery.id}")
+        except Exception as e:
+            logger.error(f"Erro em _check_proximity_and_auto_arrived: {e}")
+
+
 @router.put("/me/location", response_model=DriverResponse)
 async def update_my_location(
     location: DriverLocationUpdate,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db)
 ):
     """
     Atualiza localização GPS do driver logado.
+    Se tiver entrega in_transit e estiver próximo (~500m), auto-atualiza para 'arrived'
+    e envia WhatsApp ao cliente: "Seu gás está a 1 minuto da sua casa!"
     
     Requires: role = "driver"
     """
@@ -151,6 +237,14 @@ async def update_my_location(
     session.add(driver)
     await session.commit()
     await session.refresh(driver)
+
+    # Background: verificar proximidade e auto-arrived + WhatsApp
+    background_tasks.add_task(
+        _check_proximity_and_auto_arrived,
+        driver.id,
+        location.latitude,
+        location.longitude,
+    )
 
     return driver
 
