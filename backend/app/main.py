@@ -22,6 +22,10 @@ from app.models.auth_models import User
 from app.auth import get_current_user
 from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
 import app.metrics as metrics
+from app.core.secure_logging import get_secure_logger
+
+# Logger seguro para este módulo (sanitiza dados sensíveis automaticamente)
+secure_logger = get_secure_logger(__name__)
 
 # Importar rotas
 from app.api import webhooks, orders, products, customers, websocket, chats, auth, chatbot, users, drivers, cargas
@@ -39,9 +43,9 @@ try:
     from app.services.delivery_service import DeliveryService
     from app.services.driver_service import DriverService
     from app.services.product_service import ProductService
-    print("Serviços importados com sucesso!")
+    secure_logger.info("Serviços importados com sucesso")
 except ImportError as e:
-    print(f"Erro ao importar serviços: {e}")
+    secure_logger.error("Erro ao importar serviços", exc=e)
     # Fallback: definir classes vazias para evitar crashes
     class CustomerService:
         def __init__(self, session): pass
@@ -483,7 +487,7 @@ async def get_owner_stats(user: User = Depends(get_current_user), session: Async
             revenue = float(revenue_result.scalar() or 0)
             
         except Exception as e:
-            print(f"Erro ao buscar pedidos: {e}")
+            secure_logger.error("Erro ao buscar pedidos", exc=e)
             total_orders = 0
             today_orders = 0
             revenue = 0.0
@@ -508,9 +512,7 @@ async def get_owner_stats(user: User = Depends(get_current_user), session: Async
         }
 
     except Exception as e:
-        print(f"Erro ao buscar estatísticas: {e}")
-        import traceback
-        traceback.print_exc()
+        secure_logger.error("Erro ao buscar estatísticas", exc=e)
         return {
             "totalConversations": 0,
             "totalOrders": 0,
@@ -570,7 +572,7 @@ async def get_admin_stats(user: User = Depends(get_current_user), session: Async
         }
 
     except Exception as e:
-        print(f"Erro ao buscar estatísticas admin: {e}")
+        secure_logger.error("Erro ao buscar estatísticas admin", exc=e)
         return {
             "users": {"total": 0, "active": 0},
             "conversations": {"total": 0, "pending": 0},
@@ -693,9 +695,7 @@ async def get_financial_report(
         }
 
     except Exception as e:
-        print(f"Erro no relatório financeiro: {e}")
-        import traceback
-        traceback.print_exc()
+        secure_logger.error("Erro no relatório financeiro", exc=e)
         return {
             "period": {"start_date": "", "end_date": ""},
             "summary": {"total_revenue": 0, "total_expenses": 0, "net_profit": 0, "total_orders": 0, "average_ticket": 0, "profit_margin": 0},
@@ -811,9 +811,7 @@ async def get_orders_report(
         }
 
     except Exception as e:
-        print(f"Erro no relatório de pedidos: {e}")
-        import traceback
-        traceback.print_exc()
+        secure_logger.error("Erro no relatório de pedidos", exc=e)
         return {
             "period": {"start_date": "", "end_date": ""},
             "summary": {"total_orders": 0, "completed_rate": 0, "by_status": {}},
@@ -896,9 +894,7 @@ async def export_orders_csv(
         )
 
     except Exception as e:
-        print(f"Erro ao exportar pedidos: {e}")
-        import traceback
-        traceback.print_exc()
+        secure_logger.error("Erro ao exportar pedidos", exc=e)
         return Response(
             content="Erro ao gerar CSV",
             media_type="text/plain",
@@ -978,9 +974,7 @@ async def export_financial_csv(
         )
 
     except Exception as e:
-        print(f"Erro ao exportar relatório financeiro: {e}")
-        import traceback
-        traceback.print_exc()
+        secure_logger.error("Erro ao exportar relatório financeiro", exc=e)
         return Response(
             content="Erro ao gerar CSV",
             media_type="text/plain",

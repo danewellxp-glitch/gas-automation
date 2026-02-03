@@ -3,6 +3,10 @@ API para exploração do schema Firebird.
 
 Endpoints para visualizar tabelas, colunas e estrutura do banco legado.
 Somente leitura - não modifica dados.
+
+Segurança:
+- Validação de nomes de tabela via allowlist
+- Bloqueio de queries perigosas (INSERT, DROP, UNION, etc.)
 """
 
 import logging
@@ -14,6 +18,12 @@ from pydantic import BaseModel
 from app.auth import get_current_user
 from app.models.auth_models import User
 from app.integrations.firebird import firebird_client, FirebirdError
+from app.core.sql_security import (
+    validate_table_name,
+    validate_raw_query,
+    SQLSecurityError,
+    get_allowed_tables,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -174,25 +184,48 @@ async def preview_table_data(
 ):
     """
     Preview dos dados de uma tabela (primeiras N linhas).
+
+    Segurança: Apenas tabelas na allowlist são acessíveis.
     """
     if not firebird_client.is_available:
         raise HTTPException(status_code=503, detail="Firebird não disponível")
 
-    # Validar nome da tabela (prevenir SQL injection)
-    if not table_name.replace("_", "").isalnum():
-        raise HTTPException(status_code=400, detail="Nome de tabela inválido")
-
     try:
-        query = f"SELECT FIRST {limit} * FROM {table_name.upper()}"
-        data = firebird_client.execute_raw_query(query)
+        # Validar nome da tabela via allowlist (prevenir SQL injection)
+        safe_table_name = validate_table_name(table_name)
+
+        # Query segura com nome validado
+        # FIRST é específico do Firebird para LIMIT
+        query = f"SELECT FIRST {limit} * FROM {safe_table_name}"
+        data = firebird_client.execute_query(query)
+
         return {
-            "table": table_name.upper(),
+            "table": safe_table_name,
             "rows_returned": len(data),
             "limit": limit,
             "data": data,
         }
+    except SQLSecurityError as e:
+        raise HTTPException(status_code=403, detail=str(e))
     except FirebirdError as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/tables/allowed")
+async def list_allowed_tables(
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Lista tabelas permitidas para consulta via API.
+
+    Apenas tabelas nesta lista podem ser acessadas via /tables/{name}/data.
+    """
+    allowed = sorted(get_allowed_tables())
+    return {
+        "count": len(allowed),
+        "tables": allowed,
+        "note": "Apenas estas tabelas podem ser acessadas via preview de dados"
+    }
 
 
 @router.get("/schema/full")
@@ -220,27 +253,28 @@ async def execute_query(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Executa query SQL (apenas SELECT).
+    Executa query SQL (apenas SELECT com validação de segurança).
 
-    ATENÇÃO: Use com responsabilidade!
+    Segurança:
+    - Apenas SELECT permitido
+    - Bloqueia UNION, INTO, comentários SQL
+    - Bloqueia múltiplas queries (;)
     """
     if not firebird_client.is_available:
         raise HTTPException(status_code=503, detail="Firebird não disponível")
 
-    # Validar que é SELECT
-    if not query.strip().upper().startswith("SELECT"):
-        raise HTTPException(
-            status_code=400,
-            detail="Apenas queries SELECT são permitidas"
-        )
-
     try:
-        results = firebird_client.execute_raw_query(query)
+        # Validar query com regras de segurança rigorosas
+        safe_query = validate_raw_query(query)
+
+        results = firebird_client.execute_query(safe_query)
         return {
             "query": query,
             "rows_returned": len(results),
             "data": results,
         }
+    except SQLSecurityError as e:
+        raise HTTPException(status_code=403, detail=str(e))
     except FirebirdError as e:
         raise HTTPException(status_code=500, detail=str(e))
 

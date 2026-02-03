@@ -41,6 +41,10 @@ class Settings(BaseSettings):
     waha_url: str = "http://localhost:3000"
     waha_api_key: str = "gasautomation123"
     waha_session_name: str = "default"
+    waha_webhook_secret: Optional[str] = Field(
+        default=None,
+        description="Secret HMAC para validação de webhooks WAHA. Gere com: openssl rand -hex 32"
+    )
 
     # Asaas (Gateway de Pagamento)
     asaas_api_key: str = ""

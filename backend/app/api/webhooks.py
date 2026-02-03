@@ -17,6 +17,7 @@ from app.schemas.webhook import (
     WAHAMessage,
     WAHAWebhookPayload,
 )
+from app.core.webhook_security import verify_waha_signature
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +38,13 @@ async def waha_webhook(
     - message: Nova mensagem recebida
     - message.ack: Confirmação de entrega
     - session.status: Status da sessão WhatsApp
+
+    Segurança:
+    - Requer header X-WAHA-Signature com HMAC-SHA256 (quando WAHA_WEBHOOK_SECRET configurado)
     """
+    # Validar assinatura HMAC (se secret configurado)
+    await verify_waha_signature(request)
+
     try:
         body = await request.json()
 

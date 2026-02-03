@@ -1,23 +1,74 @@
 """
 Serviço de Pagamentos.
 Integração com Asaas para Pix, Cartão de Crédito e Boleto.
+
+Segurança:
+- Tokenização de cartão via Asaas.js (PCI-DSS compliant)
+- Sanitização de gateway_response antes de persistir
 """
 
 import logging
+import warnings
 from datetime import datetime, timezone
 from decimal import Decimal
-from typing import Optional, List, Dict, Tuple
+from typing import Optional, List, Dict, Tuple, Any
 from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database import AsyncSessionLocal
 from app.integrations.asaas import asaas_client, AsaasError
 from app.models.order import Order, OrderStatus
 from app.models.payment import Payment, PaymentMethod, PaymentStatus
 
 logger = logging.getLogger(__name__)
+
+
+def _sanitize_gateway_response(response: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Remove dados sensíveis do gateway_response antes de salvar no banco.
+
+    Garante que números de cartão, CVV e outros dados sensíveis
+    não sejam persistidos acidentalmente.
+
+    Args:
+        response: Resposta original do gateway Asaas
+
+    Returns:
+        Resposta sanitizada sem dados sensíveis
+    """
+    if not response:
+        return response
+
+    sanitized = response.copy()
+
+    # Lista de chaves sensíveis no nível raiz
+    sensitive_root_keys = [
+        'creditCard',
+        'creditCardNumber',
+        'ccv', 'cvv', 'cvc',
+        'cardNumber',
+        'securityCode',
+    ]
+
+    # Remover chaves sensíveis do nível raiz
+    for key in sensitive_root_keys:
+        sanitized.pop(key, None)
+
+    # Se houver objeto creditCard nested, manter apenas dados seguros
+    if 'creditCard' in response and isinstance(response['creditCard'], dict):
+        safe_card_info = {}
+        # Campos seguros para manter
+        safe_fields = ['brand', 'creditCardBrand', 'lastDigits', 'last4']
+        for field in safe_fields:
+            if field in response['creditCard']:
+                safe_card_info[field] = response['creditCard'][field]
+        if safe_card_info:
+            sanitized['creditCard'] = safe_card_info
+
+    return sanitized
 
 
 class PaymentService:
@@ -93,7 +144,7 @@ class PaymentService:
                 pix_copy_paste=pix_data.get("payload"),
                 pix_expiration=self._parse_datetime(pix_data.get("expirationDate")),
                 due_date=self._parse_date(asaas_payment.get("dueDate")),
-                gateway_response=asaas_payment,
+                gateway_response=_sanitize_gateway_response(asaas_payment),
             )
 
             db.add(payment)
@@ -108,6 +159,114 @@ class PaymentService:
             raise
         except Exception as e:
             logger.error(f"Erro ao criar pagamento Pix: {e}")
+            raise
+
+    async def create_credit_card_payment_with_token(
+        self,
+        db: AsyncSession,
+        order_id: UUID,
+        customer_name: str,
+        customer_cpf_cnpj: str,
+        customer_email: str,
+        customer_phone: str,
+        amount: Decimal,
+        description: str,
+        card_token: str,
+        billing_postal_code: str,
+        billing_address_number: str,
+        installments: int = 1,
+    ) -> Payment:
+        """
+        Cria pagamento com Cartão de Crédito usando token seguro.
+
+        IMPORTANTE: O card_token deve ser gerado pelo Asaas.js no frontend.
+        Dados do cartão (número, CVV) NUNCA devem ser enviados ao backend.
+
+        Args:
+            card_token: Token gerado pelo Asaas.js (tok_xxx ou crd_xxx)
+            installments: Número de parcelas (1-12)
+        """
+        logger.info(f"Criando pagamento Cartão (tokenizado) para pedido {order_id}: R${amount} em {installments}x")
+
+        # Validar formato do token
+        if not card_token or not isinstance(card_token, str):
+            raise ValueError("Token de cartão inválido")
+
+        # Tokens Asaas começam com tok_ ou crd_ (cartão salvo)
+        if not card_token.startswith(('tok_', 'crd_')):
+            raise ValueError(
+                "Token de cartão inválido. "
+                "Use Asaas.js para gerar tokens no frontend."
+            )
+
+        try:
+            order = await db.get(Order, order_id)
+            if not order:
+                raise ValueError(f"Pedido {order_id} não encontrado")
+
+            if not order.is_payable:
+                raise ValueError(f"Pedido {order_id} não pode ser pago")
+
+            customer = await asaas_client.get_or_create_customer(
+                name=customer_name,
+                cpf_cnpj=customer_cpf_cnpj,
+                email=customer_email,
+                phone=customer_phone,
+                external_reference=str(order_id),
+            )
+
+            credit_card_holder_info = {
+                "name": customer_name,
+                "email": customer_email,
+                "cpfCnpj": customer_cpf_cnpj,
+                "postalCode": billing_postal_code,
+                "addressNumber": billing_address_number,
+                "phone": customer_phone,
+            }
+
+            asaas_payment = await asaas_client.create_tokenized_card_payment(
+                customer_id=customer["id"],
+                value=amount,
+                description=description,
+                credit_card_token=card_token,
+                credit_card_holder_info=credit_card_holder_info,
+                installment_count=installments,
+                external_reference=str(order_id),
+            )
+
+            asaas_status = asaas_payment.get("status", "PENDING")
+            local_status = self._map_asaas_status(asaas_status)
+
+            payment = Payment(
+                order_id=order_id,
+                asaas_payment_id=asaas_payment["id"],
+                asaas_customer_id=customer["id"],
+                method=PaymentMethod.CREDIT_CARD.value,
+                status=local_status,
+                amount=amount,
+                card_last_digits=asaas_payment.get("creditCard", {}).get("lastDigits"),
+                card_brand=asaas_payment.get("creditCard", {}).get("brand"),
+                due_date=self._parse_date(asaas_payment.get("dueDate")),
+                gateway_response=_sanitize_gateway_response(asaas_payment),
+            )
+
+            if local_status in [PaymentStatus.CONFIRMED.value, PaymentStatus.RECEIVED.value]:
+                payment.paid_at = datetime.now(timezone.utc)
+
+            db.add(payment)
+
+            if payment.is_paid:
+                order.status = OrderStatus.PAID.value
+                order.paid_at = datetime.now(timezone.utc)
+
+            await db.commit()
+            await db.refresh(payment)
+
+            logger.info(f"Pagamento Cartão (tokenizado) criado: {payment.id}")
+            return payment
+
+        except AsaasError as e:
+            logger.error(f"Erro Asaas ao criar pagamento tokenizado: {e.message}")
             raise
 
     async def create_credit_card_payment(
@@ -130,11 +289,36 @@ class PaymentService:
         installments: int = 1,
     ) -> Payment:
         """
-        Cria pagamento com Cartão de Crédito.
+        Cria pagamento com Cartão de Crédito (dados diretos).
+
+        DEPRECATED: Este método será removido na v2.0.
+        Use create_credit_card_payment_with_token() com Asaas.js.
+
+        AVISO DE SEGURANÇA: Trafegar dados de cartão pelo backend
+        viola PCI-DSS e expõe a aplicação a riscos de compliance.
 
         Args:
             installments: Número de parcelas (1-12)
         """
+        # Emitir warning de deprecação
+        warnings.warn(
+            "create_credit_card_payment está deprecated. "
+            "Use create_credit_card_payment_with_token() com tokenização Asaas.js",
+            DeprecationWarning,
+            stacklevel=2
+        )
+
+        # Em produção, bloquear uso do método inseguro
+        if settings.is_production:
+            raise ValueError(
+                "Pagamento com dados de cartão diretos não é permitido em produção. "
+                "Use create_credit_card_payment_with_token() com tokenização client-side via Asaas.js"
+            )
+
+        logger.warning(
+            "AVISO DE SEGURANÇA: Dados de cartão trafegando pelo backend. "
+            "Isso NÃO deve acontecer em produção!"
+        )
         logger.info(f"Criando pagamento Cartão para pedido {order_id}: R${amount} em {installments}x")
 
         try:
@@ -190,6 +374,7 @@ class PaymentService:
             local_status = self._map_asaas_status(asaas_status)
 
             # Criar registro de pagamento local
+            # IMPORTANTE: Sanitizar gateway_response para remover dados sensíveis
             payment = Payment(
                 order_id=order_id,
                 asaas_payment_id=asaas_payment["id"],
@@ -199,7 +384,7 @@ class PaymentService:
                 amount=amount,
                 card_last_digits=card_number[-4:] if len(card_number) >= 4 else None,
                 due_date=self._parse_date(asaas_payment.get("dueDate")),
-                gateway_response=asaas_payment,
+                gateway_response=_sanitize_gateway_response(asaas_payment),
             )
 
             # Se cartão foi aprovado imediatamente
@@ -278,7 +463,7 @@ class PaymentService:
                 amount=amount,
                 boleto_url=asaas_payment.get("bankSlipUrl"),
                 due_date=self._parse_date(asaas_payment.get("dueDate")),
-                gateway_response=asaas_payment,
+                gateway_response=_sanitize_gateway_response(asaas_payment),
             )
 
             db.add(payment)

@@ -302,7 +302,10 @@ class AsaasClient:
         external_reference: Optional[str] = None,
     ) -> dict:
         """
-        Cria cobrança com cartão de crédito.
+        Cria cobrança com cartão de crédito (dados diretos).
+
+        DEPRECATED: Use create_tokenized_card_payment() com Asaas.js.
+        Este método será removido em versões futuras.
 
         Args:
             credit_card: {
@@ -321,6 +324,14 @@ class AsaasClient:
                 "phone": "41999999999"
             }
         """
+        import warnings
+        warnings.warn(
+            "create_credit_card_payment com dados diretos está deprecated. "
+            "Use create_tokenized_card_payment() com token do Asaas.js",
+            DeprecationWarning,
+            stacklevel=2
+        )
+
         return await self.create_payment(
             customer_id=customer_id,
             billing_type="CREDIT_CARD",
@@ -328,6 +339,46 @@ class AsaasClient:
             description=description,
             external_reference=external_reference,
             creditCard=credit_card,
+            creditCardHolderInfo=credit_card_holder_info,
+            installmentCount=installment_count,
+        )
+
+    async def create_tokenized_card_payment(
+        self,
+        customer_id: str,
+        value: Decimal,
+        description: str,
+        credit_card_token: str,
+        credit_card_holder_info: dict,
+        installment_count: int = 1,
+        external_reference: Optional[str] = None,
+    ) -> dict:
+        """
+        Cria cobrança com cartão de crédito usando token seguro.
+
+        O token é gerado pelo Asaas.js no frontend, garantindo que
+        dados do cartão nunca trafeguem pelo backend (PCI-DSS compliant).
+
+        Args:
+            credit_card_token: Token do Asaas.js (tok_xxx ou crd_xxx)
+            credit_card_holder_info: Dados do titular (sem número/CVV):
+                {
+                    "name": "Nome completo",
+                    "email": "email@example.com",
+                    "cpfCnpj": "12345678901",
+                    "postalCode": "80000000",
+                    "addressNumber": "123",
+                    "phone": "41999999999"
+                }
+            installment_count: Número de parcelas (1-12)
+        """
+        return await self.create_payment(
+            customer_id=customer_id,
+            billing_type="CREDIT_CARD",
+            value=value,
+            description=description,
+            external_reference=external_reference,
+            creditCardToken=credit_card_token,
             creditCardHolderInfo=credit_card_holder_info,
             installmentCount=installment_count,
         )
