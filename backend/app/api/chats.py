@@ -269,11 +269,11 @@ async def send_message(
     db: AsyncSession = Depends(get_db),
 ):
     """Envia mensagem manual para um cliente."""
-    try:
-        # Formatar telefone para WAHA
-        chat_id = phone if "@" in phone else f"{phone}@c.us"
+    # Formatar telefone para WAHA
+    chat_id = phone if "@" in phone else f"{phone}@c.us"
 
-        # Enviar via WAHA
+    # 1. Enviar via WAHA (prioridade máxima)
+    try:
         logger.info(f"Enviando mensagem manual para {chat_id}")
         result = await waha_client.send_text(chat_id, request.message)
 
@@ -283,7 +283,14 @@ async def send_message(
 
         logger.info(f"Mensagem manual enviada com sucesso para {chat_id}")
 
-        # Log da mensagem enviada
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erro WAHA ao enviar mensagem para {phone}: {e}")
+        raise HTTPException(status_code=500, detail=f"Erro ao enviar mensagem: {str(e)}")
+
+    # 2. Log no banco (não deve falhar o fluxo se der erro)
+    try:
         event = EventLog(
             event_type="message_sent",
             entity_type="chat",
@@ -295,21 +302,22 @@ async def send_message(
         )
         db.add(event)
         await db.commit()
+    except Exception as e:
+        logger.error(f"Erro ao salvar log de mensagem para {phone}: {e}")
+        # Não lançar exceção - mensagem já foi enviada com sucesso
 
-        # Emitir via WebSocket
+    # 3. Emitir via WebSocket (não deve falhar o fluxo se der erro)
+    try:
         await emit_new_message({
             "phone": phone,
             "message": request.message,
             "from_me": True
         })
-
-        return {"success": True, "message": "Mensagem enviada", "result": result}
-
-    except HTTPException:
-        raise
     except Exception as e:
-        logger.error(f"Erro ao enviar mensagem para {phone}: {e}")
-        raise HTTPException(status_code=500, detail=f"Erro ao enviar mensagem: {str(e)}")
+        logger.error(f"Erro ao emitir WebSocket para {phone}: {e}")
+        # Não lançar exceção - mensagem já foi enviada com sucesso
+
+    return {"success": True, "message": "Mensagem enviada", "result": result}
 
 
 @router.get("/{phone}/context", response_model=ChatContextResponse)
@@ -464,22 +472,28 @@ async def reply_to_conversation(
     db: AsyncSession = Depends(get_db),
 ):
     """Responde a uma conversa."""
-    try:
-        # Formatar telefone para WAHA
-        chat_id = conversation_id if "@" in conversation_id else f"{conversation_id}@c.us"
+    # Formatar telefone para WAHA
+    chat_id = conversation_id if "@" in conversation_id else f"{conversation_id}@c.us"
 
-        # Enviar via WAHA
+    # 1. Enviar via WAHA (prioridade máxima)
+    try:
         logger.info(f"Enviando mensagem para {chat_id}: {request.message[:50]}...")
         result = await waha_client.send_text(chat_id, request.message)
 
-        # Verificar se WAHA retornou sucesso
         if not result:
             logger.error(f"WAHA retornou resultado vazio para {chat_id}")
             raise HTTPException(status_code=500, detail="Falha ao enviar mensagem - WAHA não respondeu")
 
         logger.info(f"Mensagem enviada com sucesso para {chat_id}")
 
-        # Log da mensagem enviada
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erro WAHA ao enviar mensagem para {conversation_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Erro ao enviar mensagem: {str(e)}")
+
+    # 2. Log no banco (não deve falhar o fluxo se der erro)
+    try:
         event = EventLog(
             event_type="message_sent",
             entity_type="chat",
@@ -491,21 +505,22 @@ async def reply_to_conversation(
         )
         db.add(event)
         await db.commit()
+    except Exception as e:
+        logger.error(f"Erro ao salvar log de mensagem para {conversation_id}: {e}")
+        # Não lançar exceção - mensagem já foi enviada com sucesso
 
-        # Emitir via WebSocket
+    # 3. Emitir via WebSocket (não deve falhar o fluxo se der erro)
+    try:
         await emit_new_message({
             "phone": conversation_id,
             "message": request.message,
             "from_me": True
         })
-
-        return {"success": True, "message": "Mensagem enviada", "result": result}
-
-    except HTTPException:
-        raise
     except Exception as e:
-        logger.error(f"Erro ao enviar mensagem para {conversation_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Erro ao enviar mensagem: {str(e)}")
+        logger.error(f"Erro ao emitir WebSocket para {conversation_id}: {e}")
+        # Não lançar exceção - mensagem já foi enviada com sucesso
+
+    return {"success": True, "message": "Mensagem enviada", "result": result}
 
 
 @router.post("/conversations/{conversation_id}/end", response_model=SuccessResponse)
