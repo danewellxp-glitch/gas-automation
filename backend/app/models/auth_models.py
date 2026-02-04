@@ -1,6 +1,7 @@
 from sqlmodel import SQLModel, Field
 from typing import Optional
 from datetime import datetime
+from uuid import UUID
 import pytz
 
 # Brazilian timezone
@@ -23,6 +24,10 @@ class User(SQLModel, table=True):
     temp_password_issued_at: Optional[datetime] = Field(default=None)
     created_at: datetime = Field(default_factory=lambda: datetime.now())
     updated_at: datetime = Field(default_factory=lambda: datetime.now())
+
+    # Vinculo com Customer (opcional)
+    customer_id: Optional[UUID] = Field(default=None, foreign_key="customers.id", index=True)
+    # Nota: para obter Customer, fazer query separada (SQLModel + SQLAlchemy usam registros diferentes)
 
 class Conversation(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
