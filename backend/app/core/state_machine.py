@@ -15,6 +15,11 @@ class ConversationState(str, Enum):
     # Início
     START = "start"                          # Cliente iniciou conversa
 
+    # Coleta de dados (identificacao)
+    ASKING_CUSTOMER_TYPE = "asking_customer_type"  # PF ou Empresa
+    COLLECTING_NAME = "collecting_name"      # Aguardando nome (PF ou empresa)
+    COLLECTING_DOCUMENT = "collecting_document"    # CPF/CNPJ antes de confirmar
+
     # Fluxo de pedido
     AWAITING_PRODUCT = "awaiting_product"    # Aguardando seleção de produto
     AWAITING_QUANTITY = "awaiting_quantity"  # Aguardando quantidade
@@ -41,9 +46,27 @@ class StateTransition:
 
     VALID_TRANSITIONS = {
         ConversationState.START: [
+            ConversationState.ASKING_CUSTOMER_TYPE,
+            ConversationState.COLLECTING_NAME,
             ConversationState.AWAITING_PRODUCT,
+            ConversationState.AWAITING_QUANTITY,
+            ConversationState.AWAITING_ADDRESS,
+            ConversationState.AWAITING_PAYMENT,
+            ConversationState.CONFIRMING_ORDER,
             ConversationState.TRACKING_ORDER,
             ConversationState.TALKING_TO_HUMAN,
+        ],
+        ConversationState.ASKING_CUSTOMER_TYPE: [
+            ConversationState.COLLECTING_NAME,
+            ConversationState.START,
+        ],
+        ConversationState.COLLECTING_NAME: [
+            ConversationState.AWAITING_PRODUCT,
+            ConversationState.START,
+        ],
+        ConversationState.COLLECTING_DOCUMENT: [
+            ConversationState.CONFIRMING_ORDER,
+            ConversationState.START,
         ],
         ConversationState.AWAITING_PRODUCT: [
             ConversationState.AWAITING_QUANTITY,
@@ -67,6 +90,7 @@ class StateTransition:
             ConversationState.TALKING_TO_HUMAN,
         ],
         ConversationState.AWAITING_PAYMENT: [
+            ConversationState.COLLECTING_DOCUMENT,
             ConversationState.PROCESSING_PAYMENT,
             ConversationState.AWAITING_PIX,
             ConversationState.CONFIRMING_ORDER,
@@ -129,6 +153,9 @@ class ConversationContext:
     # Cliente
     customer_id: Optional[str] = None
     customer_name: Optional[str] = None
+    customer_type: Optional[str] = None     # "PF" ou "PJ"
+    is_new_customer: bool = False           # Cliente totalmente novo
+    has_complete_data: bool = False         # Nome E (CPF ou endereco)
 
     # Pedido em construção
     order_id: Optional[str] = None
@@ -153,6 +180,13 @@ class ConversationContext:
     last_intent: Optional[str] = None
     ai_confidence: float = 0.0
 
+    # Fluxo conversacional (NLP)
+    awaiting_confirmation: bool = False
+    awaiting_input_type: Optional[str] = None  # 'product', 'quantity', 'address', 'payment', 'cpf', 'name'
+    pending_entities: dict = field(default_factory=dict)  # Entidades extraidas mas nao confirmadas
+    recent_messages: list = field(default_factory=list)  # Ultimas 3 mensagens para contexto
+    change_for: Optional[int] = None  # Valor do troco
+
     def to_dict(self) -> dict:
         """Converte para dicionário (para salvar no Redis)."""
         return {
@@ -160,6 +194,9 @@ class ConversationContext:
             "state": self.state.value,
             "customer_id": self.customer_id,
             "customer_name": self.customer_name,
+            "customer_type": self.customer_type,
+            "is_new_customer": self.is_new_customer,
+            "has_complete_data": self.has_complete_data,
             "order_id": self.order_id,
             "selected_product": self.selected_product,
             "selected_quantity": self.selected_quantity,
@@ -173,6 +210,11 @@ class ConversationContext:
             "retry_count": self.retry_count,
             "last_intent": self.last_intent,
             "ai_confidence": self.ai_confidence,
+            "awaiting_confirmation": self.awaiting_confirmation,
+            "awaiting_input_type": self.awaiting_input_type,
+            "pending_entities": self.pending_entities,
+            "recent_messages": self.recent_messages,
+            "change_for": self.change_for,
         }
 
     @classmethod
@@ -183,6 +225,9 @@ class ConversationContext:
             state=ConversationState(data.get("state", "start")),
             customer_id=data.get("customer_id"),
             customer_name=data.get("customer_name"),
+            customer_type=data.get("customer_type"),
+            is_new_customer=data.get("is_new_customer", False),
+            has_complete_data=data.get("has_complete_data", False),
             order_id=data.get("order_id"),
             selected_product=data.get("selected_product"),
             selected_quantity=data.get("selected_quantity", 1),
@@ -196,6 +241,11 @@ class ConversationContext:
             retry_count=data.get("retry_count", 0),
             last_intent=data.get("last_intent"),
             ai_confidence=data.get("ai_confidence", 0.0),
+            awaiting_confirmation=data.get("awaiting_confirmation", False),
+            awaiting_input_type=data.get("awaiting_input_type"),
+            pending_entities=data.get("pending_entities", {}),
+            recent_messages=data.get("recent_messages", []),
+            change_for=data.get("change_for"),
         )
 
     def transition_to(self, new_state: ConversationState) -> bool:
@@ -212,6 +262,8 @@ class ConversationContext:
     def reset(self) -> None:
         """Reseta o contexto para o estado inicial."""
         self.state = ConversationState.START
+        self.is_new_customer = False
+        self.has_complete_data = False
         self.order_id = None
         self.selected_product = None
         self.selected_quantity = 1
@@ -222,6 +274,11 @@ class ConversationContext:
         self.retry_count = 0
         self.last_intent = None
         self.ai_confidence = 0.0
+        self.awaiting_confirmation = False
+        self.awaiting_input_type = None
+        self.pending_entities = {}
+        self.recent_messages = []
+        self.change_for = None
 
     def increment_retry(self) -> int:
         """Incrementa contador de tentativas e retorna o valor atual."""

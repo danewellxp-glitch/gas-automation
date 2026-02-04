@@ -1,6 +1,10 @@
 """
 Handlers para cada estado da conversa.
-Cada handler processa a mensagem e retorna o próximo estado.
+Cada handler processa a mensagem e retorna o proximo estado.
+
+Inclui:
+- Handlers de estado originais (fluxo por menus)
+- Handlers conversacionais (fluxo por intencao NLP)
 """
 
 import logging
@@ -8,13 +12,19 @@ import re
 from typing import Optional, List, Dict, Tuple
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database import AsyncSessionLocal
 from app.core.state_machine import ConversationState, ConversationContext
 from app.core.flow_engine import MessageResponse, ProcessedMessage
+from app.core.nlp_utils import (
+    extract_product,
+    extract_entities,
+    detect_edit_field,
+    normalize_text,
+)
 from app.models.customer import Customer
 from app.models.product import Product, DEFAULT_PRODUCT_CODES, WEIGHT_TO_CODE, OPTION_TO_CODE
 from app.models.order import Order, OrderItem, OrderStatus
@@ -26,16 +36,27 @@ logger = logging.getLogger(__name__)
 # Usar get_product() que busca do banco
 
 
-async def get_or_create_customer(phone: str) -> Tuple[Customer, bool]:
+async def get_or_create_customer(phone: str) -> Tuple[Customer, bool, bool]:
     """
     Busca ou cria cliente pelo telefone.
 
+    Retorna:
+        tuple: (customer, is_new, has_complete_data)
+        - customer: objeto Customer
+        - is_new: True se foi criado agora (nao existia em lugar nenhum)
+        - has_complete_data: True se tem nome E (cpf_cnpj OU endereco)
+
     Fluxo:
     1. Busca no PostgreSQL pelo telefone
-    2. Se não encontrar, busca no Firebird pelo telefone
+    2. Se nao encontrar, busca no Firebird pelo telefone
     3. Se encontrar no Firebird, cria no PostgreSQL com dados completos
-    4. Se não encontrar em nenhum, cria cliente vazio
+    4. Se nao encontrar em nenhum, cria cliente vazio
     """
+    def _has_complete_data(c: Customer) -> bool:
+        has_name = bool(c.name and c.name.strip())
+        has_doc_or_addr = bool(c.cpf_cnpj) or bool(c.address and (c.address.get("street") or c.address.get("full_address")))
+        return has_name and has_doc_or_addr
+
     async with AsyncSessionLocal() as db:
         result = await db.execute(
             select(Customer).where(Customer.phone == phone)
@@ -43,9 +64,9 @@ async def get_or_create_customer(phone: str) -> Tuple[Customer, bool]:
         customer = result.scalar_one_or_none()
 
         if customer:
-            return customer, False
+            return customer, False, _has_complete_data(customer)
 
-        # Cliente não existe no PostgreSQL - tentar buscar no Firebird
+        # Cliente nao existe no PostgreSQL - tentar buscar no Firebird
         firebird_customer = None
         try:
             from app.integrations.firebird import firebird_client
@@ -58,14 +79,15 @@ async def get_or_create_customer(phone: str) -> Tuple[Customer, bool]:
 
         # Criar cliente com dados do Firebird (se encontrado) ou vazio
         if firebird_customer:
-            address = firebird_customer.get("address", {})
+            address = firebird_customer.get("address", {}) or {}
+            has_addr = address.get("street") or address.get("full_address")
             customer = Customer(
                 phone=phone,
                 name=firebird_customer.get("name"),
                 email=firebird_customer.get("email"),
                 cpf_cnpj=firebird_customer.get("cpf_cnpj"),
                 firebird_id=firebird_customer.get("firebird_id"),
-                address=address if address.get("street") else None,
+                address=address if has_addr else None,
             )
         else:
             customer = Customer(phone=phone)
@@ -73,7 +95,7 @@ async def get_or_create_customer(phone: str) -> Tuple[Customer, bool]:
         db.add(customer)
         await db.commit()
         await db.refresh(customer)
-        return customer, True
+        return customer, True, _has_complete_data(customer)
 
 
 async def get_product(code: str) -> Optional[Product]:
@@ -140,7 +162,7 @@ async def handle_start(
     Dá boas-vindas e oferece opções.
     """
     # Buscar ou criar cliente
-    customer, is_new = await get_or_create_customer(context.phone)
+    customer, is_new, has_complete_data = await get_or_create_customer(context.phone)
     context.customer_id = str(customer.id)
     context.customer_name = customer.name
 
@@ -201,8 +223,16 @@ async def handle_awaiting_product(
     """
     Handler para seleção de produto.
     """
-    # Tentar extrair código do produto
+    # Tentar extrair codigo do produto (basico + NLP)
     product_code = extract_product_code(message)
+
+    # Fallback: usar NLP com dicionario de sinonimos expandido
+    if not product_code:
+        product_code = extract_product(message)
+
+    # Verificar se veio de pending_entities (extraido pelo flow_engine)
+    if not product_code and context.pending_entities.get("product"):
+        product_code = context.pending_entities["product"]
 
     if not product_code:
         # Incrementar tentativas
@@ -555,12 +585,49 @@ async def handle_awaiting_address(
     )
 
 
+async def _payment_selected_maybe_ask_document(
+    context: ConversationContext,
+    product,
+    total,
+) -> ProcessedMessage:
+    """
+    Apos selecionar pagamento: se cliente tem CPF/CNPJ, mostra resumo.
+    Se nao tem, pede documento (COLLECTING_DOCUMENT).
+    """
+    customer = await _get_customer(context.customer_id)
+    if customer and customer.cpf_cnpj:
+        doc = customer.cpf_cnpj
+        doc_type = "CNPJ" if len(doc) == 14 else "CPF"
+        masked = _format_cpf_cnpj(doc)
+        return await _show_order_summary_for_confirmation(context, doc_type, masked)
+
+    customer_type = context.customer_type or "PF"
+    if customer_type == "PJ":
+        doc_text = "Para finalizar, preciso do *CNPJ* da empresa:\n_(apenas numeros)_"
+    else:
+        doc_text = "Para finalizar, preciso do seu *CPF*:\n_(apenas numeros)_"
+
+    payment_label = "Dinheiro" if context.payment_method == "cash" else "Cartao"
+    context.state = ConversationState.COLLECTING_DOCUMENT
+
+    return ProcessedMessage(
+        context=context,
+        responses=[
+            MessageResponse(
+                text=f"Pagamento: {payment_label}\n\n{doc_text}"
+            )
+        ],
+        new_state=ConversationState.COLLECTING_DOCUMENT,
+    )
+
+
 async def handle_awaiting_payment(
     context: ConversationContext,
     message: str,
 ) -> ProcessedMessage:
     """
     Handler para seleção de método de pagamento.
+    Apos escolher, vai para COLLECTING_DOCUMENT se nao tem CPF/CNPJ.
     """
     msg_lower = message.lower().strip()
 
@@ -600,74 +667,12 @@ async def handle_awaiting_payment(
     # Dinheiro
     if msg_lower in ["dinheiro", "2"] or "dinheiro" in msg_lower:
         context.payment_method = "cash"
-
-        # Criar pedido
-        order = await create_order(context, total)
-        context.order_id = str(order.id)
-        context.state = ConversationState.ORDER_CONFIRMED
-
-        # Emitir evento WebSocket de novo pedido
-        try:
-            from app.api.websocket import emit_new_order
-            order_data = {
-                "id": str(order.id),
-                "order_number": order.order_number,
-                "customer_id": str(context.customer_id),
-                "status": order.status,
-                "total_amount": float(order.total_amount),
-                "payment_method": "cash",
-                "created_at": order.created_at.isoformat() if order.created_at else None,
-                "product": product.name,
-                "quantity": context.selected_quantity,
-                "address": context.address.get("full_address", ""),
-            }
-            await emit_new_order(order_data)
-            logger.info(f"Evento WebSocket emitido para novo pedido: #{order.order_number}")
-        except Exception as e:
-            logger.error(f"Erro ao emitir evento WebSocket de novo pedido: {e}")
-
-        return ProcessedMessage(
-            context=context,
-            responses=[
-                MessageResponse(
-                    text=(
-                        f"✅ *Pedido Confirmado!*\n\n"
-                        f"📦 Pedido #{order.order_number}\n"
-                        f"Produto: {context.selected_quantity}x {product.name}\n"
-                        f"Total: *{format_currency(total)}*\n"
-                        f"Pagamento: 💵 Dinheiro na entrega\n\n"
-                        f"📍 Entrega em: {context.address.get('full_address', context.address.get('bairro', 'Endereço cadastrado'))}\n"
-                        f"⏱️ Previsão: *{settings.default_delivery_time_minutes} minutos*\n\n"
-                        "Você receberá atualizações sobre sua entrega!"
-                    ),
-                    footer="Obrigado pela preferência! 🔥",
-                )
-            ],
-            new_state=ConversationState.ORDER_CONFIRMED,
-        )
+        return await _payment_selected_maybe_ask_document(context, product, total)
 
     # Cartão
     if msg_lower in ["cartao", "cartão", "3"] or "cart" in msg_lower:
         context.payment_method = "credit_card"
-
-        return ProcessedMessage(
-            context=context,
-            responses=[
-                MessageResponse(
-                    text=(
-                        "💳 *Pagamento com Cartão*\n\n"
-                        "O pagamento com cartão será feito na entrega.\n"
-                        "Aceitamos débito e crédito.\n\n"
-                        "Deseja confirmar o pedido?"
-                    ),
-                    buttons=[
-                        {"id": "confirmar_cartao", "text": "✅ Confirmar"},
-                        {"id": "voltar_pagamento", "text": "🔙 Voltar"},
-                    ],
-                )
-            ],
-            new_state=ConversationState.CONFIRMING_ORDER,
-        )
+        return await _payment_selected_maybe_ask_document(context, product, total)
 
     # Não entendeu
     return ProcessedMessage(
@@ -956,7 +961,984 @@ async def handle_talking_to_human(
     )
 
 
-# ==================== FUNÇÕES AUXILIARES ====================
+# ==================== HANDLERS CONVERSACIONAIS (NLP) ====================
+
+
+async def handle_greeting(
+    context: ConversationContext,
+    message: str,
+) -> ProcessedMessage:
+    """
+    Saudacao inteligente: diferencia cliente novo, recorrente e incompleto.
+    - NOVO: pede nome -> CPF -> produtos
+    - RECORRENTE (dados completos): oferece "o de sempre" ou produtos
+    - INCOMPLETO: pede o que falta (nome ou CPF)
+    """
+    customer, is_new, has_complete_data = await get_or_create_customer(context.phone)
+    context.customer_id = str(customer.id)
+    context.customer_name = customer.name
+    context.is_new_customer = is_new
+    context.has_complete_data = has_complete_data
+
+    # ========== CENARIO 1: Cliente NOVO - perguntar PF ou Empresa ==========
+    has_name = bool(customer.name and len(customer.name.strip()) > 2)
+    if is_new and not has_name:
+        context.state = ConversationState.ASKING_CUSTOMER_TYPE
+        return ProcessedMessage(
+            context=context,
+            responses=[
+                MessageResponse(
+                    text=(
+                        "Ola! Bem-vindo a *GasMaster*!\n\n"
+                        "Sou o assistente virtual e vou te ajudar.\n\n"
+                        "Para comecar, voce e:"
+                    ),
+                    buttons=[
+                        {"id": "PF", "text": "Pessoa Fisica"},
+                        {"id": "PJ", "text": "Empresa"},
+                    ],
+                )
+            ],
+            new_state=ConversationState.ASKING_CUSTOMER_TYPE,
+        )
+
+    # ========== CENARIO 2: Cliente RECORRENTE com nome ==========
+    if has_name:
+        context.customer_type = customer.tipo_documento or "PF"
+        last_order = await _get_last_order(customer)
+        if last_order:
+            # Oferecer atalho "o de sempre"
+            last_items = await _get_order_items(last_order)
+            if last_items:
+                item = last_items[0]
+                addr_text = _format_address(customer.address) if customer.address else "endereco cadastrado"
+                context.state = ConversationState.START
+
+                return ProcessedMessage(
+                    context=context,
+                    responses=[
+                        MessageResponse(
+                            text=(
+                                f"Oi {customer.name}!\n\n"
+                                f"Quer o de sempre? {item.quantity}x {item.product_code} "
+                                f"no endereco {addr_text}?\n"
+                            ),
+                            buttons=[
+                                {"id": "repeat_order", "text": "Sim, o de sempre"},
+                                {"id": "fazer_pedido", "text": "Outro pedido"},
+                                {"id": "falar_atendente", "text": "Falar com alguem"},
+                            ],
+                        )
+                    ],
+                    new_state=ConversationState.START,
+                )
+        # Tem nome mas sem ultimo pedido - cai no bloco de produtos abaixo
+
+    # ========== CENARIO 3: Cliente INCOMPLETO (existe mas falta nome) ==========
+    if not has_name:
+        context.state = ConversationState.COLLECTING_NAME
+        return ProcessedMessage(
+            context=context,
+            responses=[
+                MessageResponse(
+                    text=(
+                        "Ola! Vi que voce ja entrou em contato antes.\n\n"
+                        "Para agilizar seu pedido, qual e o seu *nome completo*?"
+                    )
+                )
+            ],
+            new_state=ConversationState.COLLECTING_NAME,
+        )
+
+    # Cliente recorrente (sem ultimo pedido): mostrar produtos
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(
+            select(Product)
+            .where(Product.is_active == True)
+            .order_by(Product.code)
+        )
+        products = result.scalars().all()
+
+    if not products:
+        product_text = "Nenhum produto disponivel no momento."
+        buttons = []
+    else:
+        product_lines = []
+        buttons = []
+        for p in products:
+            price_str = f"R$ {p.price:.2f}".replace(".", ",")
+            product_lines.append(f"*{p.code}* ({p.weight_kg}kg) - {price_str}")
+            buttons.append({"id": p.code, "text": f"{p.code} - {price_str}"})
+        product_text = "\n".join(product_lines)
+
+    greeting_name = customer.name if customer and customer.name else ""
+    greeting = f"Oi {greeting_name}!\n\n" if greeting_name else "Ola!\n\n"
+
+    # Se ja extraiu produto da mensagem, pular para coleta
+    if context.pending_entities.get("product"):
+        return await handle_collect_missing_data(context, message)
+
+    context.state = ConversationState.AWAITING_PRODUCT
+
+    return ProcessedMessage(
+        context=context,
+        responses=[
+            MessageResponse(
+                text=(
+                    f"{greeting}"
+                    "Qual botijao voce precisa?\n\n"
+                    f"{product_text}"
+                ),
+                buttons=buttons,
+            )
+        ],
+        new_state=ConversationState.AWAITING_PRODUCT,
+    )
+
+
+# ---------- Handler: ASKING_CUSTOMER_TYPE ----------
+
+async def handle_asking_customer_type(
+    context: ConversationContext,
+    message: str,
+) -> ProcessedMessage:
+    """
+    Handler para perguntar se cliente e PF ou Empresa.
+    """
+    msg = message.lower().strip()
+
+    is_pf = any(x in msg for x in ["pf", "fisica", "física", "pessoa", "1"])
+    is_pj = any(x in msg for x in ["pj", "empresa", "juridica", "jurídica", "cnpj", "2"])
+
+    if is_pj:
+        context.customer_type = "PJ"
+        context.state = ConversationState.COLLECTING_NAME
+        return ProcessedMessage(
+            context=context,
+            responses=[
+                MessageResponse(
+                    text="Certo! Qual o *nome da empresa*?"
+                )
+            ],
+            new_state=ConversationState.COLLECTING_NAME,
+        )
+
+    if is_pf:
+        context.customer_type = "PF"
+        context.state = ConversationState.COLLECTING_NAME
+        return ProcessedMessage(
+            context=context,
+            responses=[
+                MessageResponse(
+                    text="Certo! Qual o seu *nome completo*?"
+                )
+            ],
+            new_state=ConversationState.COLLECTING_NAME,
+        )
+
+    context.increment_retry()
+    if context.retry_count >= 2:
+        context.customer_type = "PF"
+        context.retry_count = 0
+        context.state = ConversationState.COLLECTING_NAME
+        return ProcessedMessage(
+            context=context,
+            responses=[
+                MessageResponse(
+                    text="Vou continuar como pessoa fisica.\n\nQual o seu *nome completo*?"
+                )
+            ],
+            new_state=ConversationState.COLLECTING_NAME,
+        )
+
+    return ProcessedMessage(
+        context=context,
+        responses=[
+            MessageResponse(
+                text="Por favor, escolha uma opcao:",
+                buttons=[
+                    {"id": "PF", "text": "Pessoa Fisica"},
+                    {"id": "PJ", "text": "Empresa"},
+                ],
+            )
+        ],
+        new_state=ConversationState.ASKING_CUSTOMER_TYPE,
+    )
+
+
+# ---------- Validacao CPF/CNPJ ----------
+
+def _validate_cpf(cpf: str) -> bool:
+    """Valida CPF brasileiro."""
+    cpf = re.sub(r"[^0-9]", "", cpf)
+    if len(cpf) != 11:
+        return False
+    if cpf == cpf[0] * 11:
+        return False
+    for i in range(9, 11):
+        value = sum((int(cpf[num]) * ((i + 1) - num) for num in range(0, i)))
+        digit = ((value * 10) % 11) % 10
+        if digit != int(cpf[i]):
+            return False
+    return True
+
+
+def _validate_cnpj(cnpj: str) -> bool:
+    """Valida CNPJ brasileiro (simplificado)."""
+    cnpj = re.sub(r"[^0-9]", "", cnpj)
+    if len(cnpj) != 14:
+        return False
+    if cnpj == cnpj[0] * 14:
+        return False
+    return True
+
+
+def _format_cpf_cnpj(value: str) -> str:
+    """Formata CPF ou CNPJ para exibicao parcial."""
+    clean = re.sub(r"[^0-9]", "", value)
+    if len(clean) == 11:
+        return f"***.{clean[3:6]}.{clean[6:9]}-**"
+    if len(clean) == 14:
+        return f"**.{clean[2:5]}.{clean[5:8]}/{clean[8:12]}-**"
+    return value
+
+
+async def handle_collecting_name(
+    context: ConversationContext,
+    message: str,
+) -> ProcessedMessage:
+    """
+    Handler para coletar nome do cliente ou empresa.
+    Apos coletar, vai DIRETO para produtos (CPF/CNPJ sera pedido antes de confirmar).
+    """
+    name = message.strip()
+
+    if len(name) < 2:
+        return ProcessedMessage(
+            context=context,
+            responses=[
+                MessageResponse(
+                    text="Nome muito curto. Por favor, digite o nome completo:"
+                )
+            ],
+            new_state=ConversationState.COLLECTING_NAME,
+        )
+
+    if len(name) > 100:
+        name = name[:100]
+
+    name = name.title()
+
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(
+            select(Customer).where(Customer.phone == context.phone)
+        )
+        customer = result.scalar_one_or_none()
+        if customer:
+            customer.name = name
+            if context.customer_type:
+                customer.tipo_documento = context.customer_type
+            await db.commit()
+            logger.info(f"Nome salvo para cliente {customer.id}: {name}")
+
+    context.customer_name = name
+    if not context.customer_type:
+        context.customer_type = "PF"
+
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(
+            select(Product)
+            .where(Product.is_active == True)
+            .order_by(Product.code)
+        )
+        products = result.scalars().all()
+
+    if not products:
+        product_text = "Nenhum produto disponivel no momento."
+        buttons = []
+    else:
+        product_lines = []
+        buttons = []
+        for p in products:
+            price_str = f"R$ {p.price:.2f}".replace(".", ",")
+            product_lines.append(f"*{p.code}* ({p.weight_kg}kg) - {price_str}")
+            buttons.append({"id": p.code, "text": f"{p.code} - {price_str}"})
+        product_text = "\n".join(product_lines)
+
+    greeting = f"Prazer, *{name}*!"
+
+    context.state = ConversationState.AWAITING_PRODUCT
+
+    return ProcessedMessage(
+        context=context,
+        responses=[
+            MessageResponse(
+                text=(
+                    f"{greeting}\n\n"
+                    "Qual botijao voce precisa?\n\n"
+                    f"{product_text}"
+                ),
+                buttons=buttons,
+            )
+        ],
+        new_state=ConversationState.AWAITING_PRODUCT,
+    )
+
+
+async def _show_order_summary_for_confirmation(
+    context: ConversationContext,
+    doc_type: str,
+    masked_doc: str,
+) -> ProcessedMessage:
+    """Mostra resumo do pedido com documento para confirmacao final."""
+    product = await get_product(context.selected_product)
+    if not product:
+        return await handle_collect_missing_data(context, "")
+
+    total = product.price * context.selected_quantity
+    address_text = _format_address(context.address) if context.address else "Endereco cadastrado"
+
+    payment_labels = {"cash": "Dinheiro", "credit_card": "Cartao", "debit_card": "Cartao", "pix": "PIX"}
+    payment_text = payment_labels.get(context.payment_method, context.payment_method or "")
+    if context.payment_method == "cash" and context.change_for:
+        payment_text += f" (troco p/ R$ {context.change_for})"
+
+    context.awaiting_confirmation = True
+    context.state = ConversationState.CONFIRMING_ORDER
+
+    return ProcessedMessage(
+        context=context,
+        responses=[
+            MessageResponse(
+                text=(
+                    f"*Resumo do Pedido*\n\n"
+                    f"- {context.customer_name}\n"
+                    f"- {doc_type}: {masked_doc}\n\n"
+                    f"- {context.selected_quantity}x {product.code} - {format_currency(total)}\n"
+                    f"- Entrega: {address_text}\n"
+                    f"- Pagamento: {payment_text}\n\n"
+                    "Tudo certo?"
+                ),
+                buttons=[
+                    {"id": "confirm", "text": "Confirmar"},
+                    {"id": "edit", "text": "Alterar"},
+                    {"id": "cancel", "text": "Cancelar"},
+                ],
+            )
+        ],
+        new_state=ConversationState.CONFIRMING_ORDER,
+    )
+
+
+async def handle_collecting_document(
+    context: ConversationContext,
+    message: str,
+) -> ProcessedMessage:
+    """
+    Handler para coletar CPF (PF) ou CNPJ (PJ) ANTES de confirmar pedido.
+    Chamado apos selecao de pagamento, quando cliente nao tem documento cadastrado.
+    """
+    doc = re.sub(r"[^0-9]", "", message)
+    customer_type = context.customer_type or "PF"
+
+    if customer_type == "PJ":
+        if len(doc) != 14:
+            return ProcessedMessage(
+                context=context,
+                responses=[
+                    MessageResponse(
+                        text="CNPJ invalido. Digite os *14 numeros* do CNPJ:"
+                    )
+                ],
+                new_state=ConversationState.COLLECTING_DOCUMENT,
+            )
+        if not _validate_cnpj(doc):
+            return ProcessedMessage(
+                context=context,
+                responses=[
+                    MessageResponse(text="CNPJ invalido. Verifique e digite novamente:")
+                ],
+                new_state=ConversationState.COLLECTING_DOCUMENT,
+            )
+        doc_type = "CNPJ"
+        masked_doc = f"**.{doc[2:5]}.{doc[5:8]}/{doc[8:12]}-**"
+    else:
+        if len(doc) != 11:
+            return ProcessedMessage(
+                context=context,
+                responses=[
+                    MessageResponse(
+                        text="CPF invalido. Digite os *11 numeros* do CPF:"
+                    )
+                ],
+                new_state=ConversationState.COLLECTING_DOCUMENT,
+            )
+        if not _validate_cpf(doc):
+            return ProcessedMessage(
+                context=context,
+                responses=[
+                    MessageResponse(text="CPF invalido. Verifique e digite novamente:")
+                ],
+                new_state=ConversationState.COLLECTING_DOCUMENT,
+            )
+        doc_type = "CPF"
+        masked_doc = f"***.{doc[3:6]}.{doc[6:9]}-**"
+
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(
+            select(Customer).where(Customer.phone == context.phone)
+        )
+        customer = result.scalar_one_or_none()
+        if customer:
+            customer.cpf_cnpj = doc
+            await db.commit()
+
+    return await _show_order_summary_for_confirmation(context, doc_type, masked_doc)
+
+
+async def handle_collect_missing_data(
+    context: ConversationContext,
+    message: str,
+) -> ProcessedMessage:
+    """
+    Coleta inteligente: pergunta apenas o que falta, na ordem de prioridade.
+    Permite que o cliente forneca multiplos dados em uma unica mensagem.
+    """
+    pe = context.pending_entities
+
+    # Garantir que temos customer_id
+    if not context.customer_id:
+        customer, _, _ = await get_or_create_customer(context.phone)
+        context.customer_id = str(customer.id)
+        context.customer_name = customer.name
+
+    # Consolidar dados pendentes no contexto
+    if pe.get("product") and not context.selected_product:
+        context.selected_product = pe["product"]
+    if pe.get("quantity"):
+        context.selected_quantity = pe["quantity"]
+    # Quantidade padrao 1 quando temos produto
+    if context.selected_product and not context.selected_quantity:
+        context.selected_quantity = 1
+    if pe.get("payment"):
+        context.payment_method = pe["payment"]
+    if pe.get("change_for"):
+        context.change_for = pe["change_for"]
+    if pe.get("address_raw") and not context.address:
+        bairro = pe.get("bairro")
+        context.address = {
+            "full_address": pe["address_raw"],
+            "bairro": bairro,
+        }
+        context.address_confirmed = True
+
+    # 1. Falta produto?
+    if not context.selected_product:
+        context.awaiting_input_type = "product"
+        context.state = ConversationState.AWAITING_PRODUCT
+
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(
+                select(Product)
+                .where(Product.is_active == True)
+                .order_by(Product.code)
+            )
+            products = result.scalars().all()
+
+        buttons = []
+        product_lines = []
+        for p in products:
+            price_str = f"R$ {p.price:.2f}".replace(".", ",")
+            product_lines.append(f"*{p.code}* ({p.weight_kg}kg) - {price_str}")
+            buttons.append({"id": p.code, "text": f"{p.code} - {price_str}"})
+
+        return ProcessedMessage(
+            context=context,
+            responses=[
+                MessageResponse(
+                    text=(
+                        "Qual botijao voce precisa?\n\n"
+                        + "\n".join(product_lines)
+                    ),
+                    buttons=buttons,
+                )
+            ],
+            new_state=ConversationState.AWAITING_PRODUCT,
+        )
+
+    # 2. Falta quantidade? (se nao veio explicitamente, assume 1)
+    # Quantidade default eh 1, entao so pergunta se nao extraiu
+    if not pe.get("quantity") and context.selected_quantity == 1 and context.awaiting_input_type != "quantity_confirmed":
+        # Se veio junto com produto, pode pular
+        pass  # Aceita default de 1
+
+    # 3. Falta endereco?
+    if not context.address:
+        # Verificar se cliente tem endereco no cadastro
+        customer = await _get_customer(context.customer_id)
+        if customer and customer.address:
+            context.address = customer.address
+            context.address_confirmed = True
+        else:
+            context.awaiting_input_type = "address"
+            context.state = ConversationState.AWAITING_ADDRESS
+
+            return ProcessedMessage(
+                context=context,
+                responses=[
+                    MessageResponse(
+                        text=(
+                            "Qual o endereco de entrega?\n"
+                            "(Ex: Rua das Flores, 123 - Boqueirao)"
+                        )
+                    )
+                ],
+                new_state=ConversationState.AWAITING_ADDRESS,
+            )
+
+    # 4. Falta pagamento?
+    if not context.payment_method:
+        context.awaiting_input_type = "payment"
+        context.state = ConversationState.AWAITING_PAYMENT
+
+        return ProcessedMessage(
+            context=context,
+            responses=[
+                MessageResponse(
+                    text="Como prefere pagar?",
+                    buttons=[
+                        {"id": "dinheiro", "text": "Dinheiro"},
+                        {"id": "cartao", "text": "Cartao"},
+                    ],
+                )
+            ],
+            new_state=ConversationState.AWAITING_PAYMENT,
+        )
+
+    # Tudo coletado - mostrar confirmacao
+    return await handle_show_confirmation(context, message)
+
+
+async def handle_show_confirmation(
+    context: ConversationContext,
+    message: str,
+) -> ProcessedMessage:
+    """
+    Mostra resumo completo do pedido para confirmacao final.
+    """
+    pe = context.pending_entities
+
+    product_code = context.selected_product or pe.get("product")
+    quantity = context.selected_quantity or pe.get("quantity", 1)
+    payment = context.payment_method or pe.get("payment", "cash")
+
+    if not product_code:
+        return await handle_collect_missing_data(context, message)
+
+    product = await get_product(product_code)
+    if not product:
+        context.selected_product = None
+        return await handle_collect_missing_data(context, message)
+
+    # Calcular total
+    total = product.price * quantity
+
+    # Formatar endereco
+    address_text = _format_address(context.address) if context.address else "Endereco cadastrado"
+
+    # Formatar pagamento
+    payment_labels = {
+        "cash": "Dinheiro",
+        "credit_card": "Cartao de Credito",
+        "debit_card": "Cartao de Debito",
+        "pix": "PIX",
+    }
+    payment_text = payment_labels.get(payment, payment)
+
+    if payment == "cash" and context.change_for:
+        payment_text += f" (troco p/ R$ {context.change_for})"
+
+    # Salvar dados finais no contexto
+    context.selected_product = product_code
+    context.selected_quantity = quantity
+    context.payment_method = payment
+    context.awaiting_confirmation = True
+    context.state = ConversationState.CONFIRMING_ORDER
+
+    return ProcessedMessage(
+        context=context,
+        responses=[
+            MessageResponse(
+                text=(
+                    f"*Resumo do Pedido*\n\n"
+                    f"- {quantity}x {product.code} ({product.name}) - {format_currency(total)}\n"
+                    f"- Entrega: {address_text}\n"
+                    f"- Pagamento: {payment_text}\n\n"
+                    "Tudo certo?"
+                ),
+                buttons=[
+                    {"id": "confirm", "text": "Confirmar"},
+                    {"id": "edit", "text": "Alterar"},
+                    {"id": "cancel", "text": "Cancelar"},
+                ],
+            )
+        ],
+        new_state=ConversationState.CONFIRMING_ORDER,
+    )
+
+
+async def handle_confirm_order(
+    context: ConversationContext,
+    message: str,
+) -> ProcessedMessage:
+    """
+    Confirma pedido apos resumo - cria Order no banco e emite WebSocket.
+    """
+    product = await get_product(context.selected_product)
+    if not product:
+        context.reset()
+        return await handle_start(context, message)
+
+    total = product.price * context.selected_quantity
+
+    # Criar pedido no banco
+    order = await create_order(context, total)
+    context.order_id = str(order.id)
+    context.state = ConversationState.ORDER_CONFIRMED
+    context.awaiting_confirmation = False
+
+    # Emitir evento WebSocket
+    try:
+        from app.api.websocket import emit_new_order
+        order_data = {
+            "id": str(order.id),
+            "order_number": order.order_number,
+            "customer_id": str(context.customer_id),
+            "status": order.status,
+            "total_amount": float(order.total_amount),
+            "payment_method": context.payment_method,
+            "created_at": order.created_at.isoformat() if order.created_at else None,
+            "product": product.name,
+            "quantity": context.selected_quantity,
+            "address": context.address.get("full_address", "") if context.address else "",
+        }
+        await emit_new_order(order_data)
+        logger.info(f"WebSocket: novo pedido #{order.order_number}")
+    except Exception as e:
+        logger.error(f"Erro WebSocket novo pedido: {e}")
+
+    # Formatar pagamento
+    payment_labels = {
+        "cash": "Dinheiro na entrega",
+        "credit_card": "Cartao na entrega",
+        "debit_card": "Cartao de debito na entrega",
+        "pix": "PIX",
+    }
+    payment_text = payment_labels.get(context.payment_method, context.payment_method)
+    addr_text = context.address.get("full_address", "") if context.address else "Endereco cadastrado"
+    name = context.customer_name or ""
+    thanks = f"\nObrigado, {name}!" if name else "\nObrigado pela preferencia!"
+
+    return ProcessedMessage(
+        context=context,
+        responses=[
+            MessageResponse(
+                text=(
+                    f"Pedido #{order.order_number} confirmado!\n\n"
+                    f"- {context.selected_quantity}x {product.name} - {format_currency(total)}\n"
+                    f"- Entrega: {addr_text}\n"
+                    f"- Pagamento: {payment_text}\n\n"
+                    f"Previsao de entrega: {settings.default_delivery_time_minutes} minutos\n"
+                    f"Acompanhe pelo WhatsApp ou digite 'status'"
+                    f"{thanks}"
+                ),
+            )
+        ],
+        new_state=ConversationState.ORDER_CONFIRMED,
+    )
+
+
+async def handle_edit_order(
+    context: ConversationContext,
+    message: str,
+) -> ProcessedMessage:
+    """
+    Permite alterar campo especifico do pedido antes da confirmacao.
+    """
+    context.awaiting_confirmation = False
+    field = detect_edit_field(message)
+
+    if field == "product":
+        context.selected_product = None
+        context.pending_entities.pop("product", None)
+        return await handle_collect_missing_data(context, message)
+
+    if field == "quantity":
+        context.selected_quantity = 1
+        context.pending_entities.pop("quantity", None)
+        context.awaiting_input_type = "quantity"
+        context.state = ConversationState.AWAITING_QUANTITY
+
+        return ProcessedMessage(
+            context=context,
+            responses=[
+                MessageResponse(
+                    text=f"Quantos botijoes {context.selected_product} voce quer?",
+                    buttons=[
+                        {"id": "qty_1", "text": "1"},
+                        {"id": "qty_2", "text": "2"},
+                        {"id": "qty_3", "text": "3"},
+                    ],
+                )
+            ],
+            new_state=ConversationState.AWAITING_QUANTITY,
+        )
+
+    if field == "address":
+        context.address = None
+        context.address_confirmed = False
+        context.pending_entities.pop("address_raw", None)
+        context.pending_entities.pop("bairro", None)
+        context.state = ConversationState.AWAITING_ADDRESS
+
+        return ProcessedMessage(
+            context=context,
+            responses=[
+                MessageResponse(
+                    text=(
+                        "Qual o novo endereco de entrega?\n"
+                        "(Ex: Rua das Flores, 123 - Boqueirao)"
+                    )
+                )
+            ],
+            new_state=ConversationState.AWAITING_ADDRESS,
+        )
+
+    if field == "payment":
+        context.payment_method = None
+        context.pending_entities.pop("payment", None)
+        context.state = ConversationState.AWAITING_PAYMENT
+
+        return ProcessedMessage(
+            context=context,
+            responses=[
+                MessageResponse(
+                    text="Como prefere pagar?",
+                    buttons=[
+                        {"id": "dinheiro", "text": "Dinheiro"},
+                        {"id": "cartao", "text": "Cartao"},
+                    ],
+                )
+            ],
+            new_state=ConversationState.AWAITING_PAYMENT,
+        )
+
+    # Campo nao especificado: mostrar opcoes
+    return ProcessedMessage(
+        context=context,
+        responses=[
+            MessageResponse(
+                text="O que voce quer alterar?",
+                buttons=[
+                    {"id": "edit_product", "text": "Produto"},
+                    {"id": "edit_quantity", "text": "Quantidade"},
+                    {"id": "edit_address", "text": "Endereco"},
+                ],
+            )
+        ],
+        new_state=ConversationState.CONFIRMING_ORDER,
+    )
+
+
+async def handle_not_understood(
+    context: ConversationContext,
+    message: str,
+) -> ProcessedMessage:
+    """
+    Recuperacao graciosa quando nao entende a mensagem.
+    3 niveis: reformula -> botoes -> transfere para humano.
+    """
+    context.increment_retry()
+
+    if context.retry_count <= 1:
+        return ProcessedMessage(
+            context=context,
+            responses=[
+                MessageResponse(
+                    text=(
+                        "Nao consegui entender. Voce quer:\n\n"
+                        "- Comprar gas?\n"
+                        "- Ver status de um pedido?\n"
+                        "- Falar com atendente?"
+                    ),
+                    buttons=[
+                        {"id": "fazer_pedido", "text": "Comprar gas"},
+                        {"id": "ver_pedido", "text": "Ver pedido"},
+                        {"id": "falar_atendente", "text": "Atendente"},
+                    ],
+                )
+            ],
+            new_state=context.state,
+        )
+
+    if context.retry_count == 2:
+        return ProcessedMessage(
+            context=context,
+            responses=[
+                MessageResponse(
+                    text="Hmm, ainda nao entendi. Toca em uma opcao:",
+                    buttons=[
+                        {"id": "fazer_pedido", "text": "Comprar gas"},
+                        {"id": "ver_pedido", "text": "Ver pedido"},
+                        {"id": "falar_atendente", "text": "Atendente"},
+                    ],
+                )
+            ],
+            new_state=context.state,
+        )
+
+    # 3+ tentativas: transferir para humano
+    context.retry_count = 0
+    return await handle_talking_to_human(context, message)
+
+
+async def handle_emergency(
+    context: ConversationContext,
+    message: str,
+) -> ProcessedMessage:
+    """
+    Handler de emergencia (vazamento, cheiro de gas, fogo).
+    Prioridade maxima - sempre responde independente do estado.
+    """
+    # Notificar operadores via WebSocket
+    try:
+        from app.api.websocket import emit_new_message
+
+        await emit_new_message(
+            phone=context.phone,
+            message=f"EMERGENCIA - {message}",
+            direction="incoming",
+            customer_data={"phone": context.phone, "name": context.customer_name},
+        )
+    except Exception as e:
+        logger.error(f"Erro ao notificar emergencia: {e}")
+
+    context.state = ConversationState.TALKING_TO_HUMAN
+
+    return ProcessedMessage(
+        context=context,
+        responses=[
+            MessageResponse(
+                text=(
+                    "*ATENCAO - EMERGENCIA*\n\n"
+                    "Se voce sente cheiro de gas ou ha risco de vazamento:\n\n"
+                    "1. NAO acione interruptores eletricos\n"
+                    "2. Abra portas e janelas\n"
+                    "3. Feche o registro do botijao\n"
+                    "4. Saia do local\n"
+                    "5. Ligue para o Corpo de Bombeiros: *193*\n\n"
+                    "Estamos transferindo voce para um atendente."
+                )
+            )
+        ],
+        new_state=ConversationState.TALKING_TO_HUMAN,
+    )
+
+
+async def handle_repeat_order(
+    context: ConversationContext,
+    message: str,
+) -> ProcessedMessage:
+    """
+    Repete o ultimo pedido do cliente (atalho 'o de sempre').
+    """
+    if not context.customer_id:
+        customer, _, _ = await get_or_create_customer(context.phone)
+        context.customer_id = str(customer.id)
+        context.customer_name = customer.name
+
+    customer = await _get_customer(context.customer_id)
+    if not customer:
+        return await handle_greeting(context, message)
+
+    last_order = await _get_last_order(customer)
+    if not last_order:
+        return await handle_greeting(context, message)
+
+    items = await _get_order_items(last_order)
+    if not items:
+        return await handle_greeting(context, message)
+
+    item = items[0]
+
+    # Preencher contexto com dados do ultimo pedido
+    context.selected_product = item.product_code
+    context.selected_quantity = item.quantity
+    context.payment_method = last_order.payment_method
+    if customer.address:
+        context.address = customer.address
+        context.address_confirmed = True
+    elif last_order.delivery_address:
+        context.address = last_order.delivery_address
+        context.address_confirmed = True
+
+    # Mostrar confirmacao direta
+    return await handle_show_confirmation(context, message)
+
+
+# ==================== FUNCOES AUXILIARES ====================
+
+
+def _format_address(address: Optional[dict]) -> str:
+    """Formata endereco para exibicao."""
+    if not address:
+        return "Endereco nao informado"
+
+    if address.get("full_address"):
+        return address["full_address"]
+
+    parts = []
+    if address.get("street"):
+        parts.append(address["street"])
+    if address.get("number"):
+        parts.append(address["number"])
+    if address.get("complement"):
+        parts.append(f"- {address['complement']}")
+    if address.get("bairro"):
+        parts.append(f"- {address['bairro']}")
+
+    return ", ".join(parts) if parts else "Endereco cadastrado"
+
+
+async def _get_customer(customer_id: str) -> Optional[Customer]:
+    """Busca cliente por ID."""
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(
+            select(Customer).where(Customer.id == customer_id)
+        )
+        return result.scalar_one_or_none()
+
+
+async def _get_last_order(customer: Customer) -> Optional[Order]:
+    """Busca ultimo pedido nao-cancelado do cliente."""
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(
+            select(Order)
+            .where(Order.customer_id == customer.id)
+            .where(Order.status != OrderStatus.CANCELLED.value)
+            .order_by(desc(Order.created_at))
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
+
+async def _get_order_items(order: Order) -> list:
+    """Busca itens de um pedido."""
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(
+            select(OrderItem).where(OrderItem.order_id == order.id)
+        )
+        return result.scalars().all()
 
 
 async def create_order(
