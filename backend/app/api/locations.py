@@ -122,8 +122,13 @@ async def get_map_data(
             ))
 
         # 2. Buscar entregas em andamento
-        delivery_query = select(Delivery, Order).join(
+        from sqlalchemy.orm import selectinload
+        from app.models.customer import Customer
+
+        delivery_query = select(Delivery, Order, Customer).join(
             Order, Delivery.order_id == Order.id
+        ).join(
+            Customer, Order.customer_id == Customer.id
         ).where(
             Delivery.status.in_([
                 DeliveryStatus.PENDING.value,
@@ -138,7 +143,7 @@ async def get_map_data(
         deliveries_db = result.all()
 
         deliveries = []
-        for delivery, order in deliveries_db:
+        for delivery, order, customer in deliveries_db:
             loc = None
             if delivery.last_location:
                 loc = LocationData(
@@ -158,11 +163,11 @@ async def get_map_data(
             deliveries.append(DeliveryLocation(
                 id=str(delivery.id),
                 order_id=str(delivery.order_id),
-                customer_name=order.customer_name,
-                customer_phone=order.customer_phone,
+                customer_name=customer.name if customer else None,
+                customer_phone=customer.phone if customer else None,
                 status=delivery.status,
                 location=loc,
-                address=delivery.bairro or order.delivery_address.get("formatted") if order.delivery_address else None,
+                address=delivery.bairro or (order.delivery_address.get("formatted") if order.delivery_address else None),
                 driver_id=str(delivery.driver_id) if delivery.driver_id else None,
                 driver_name=delivery.driver_name,
             ))

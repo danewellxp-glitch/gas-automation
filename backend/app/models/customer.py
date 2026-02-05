@@ -68,17 +68,9 @@ class Customer(BaseModel):
         comment="Email para notificações e Asaas"
     )
     cpf_cnpj: Mapped[Optional[str]] = mapped_column(
-        String(14),
+        String(20),
         nullable=True,
-        unique=True,
-        comment="CPF (11 digitos) ou CNPJ (14 digitos), sem formatacao"
-    )
-    tipo_documento: Mapped[str] = mapped_column(
-        String(2),
-        nullable=False,
-        default="PF",
-        server_default="PF",
-        comment="Tipo: PF (pessoa fisica) ou PJ (pessoa juridica)"
+        comment="CPF ou CNPJ"
     )
 
     # Endereço estruturado
@@ -116,7 +108,6 @@ class Customer(BaseModel):
         back_populates="customer",
         cascade="all, delete-orphan"
     )
-    # Nota: relacionamento com User via query - User usa SQLModel (registro diferente)
 
     # Índices
     __table_args__ = (

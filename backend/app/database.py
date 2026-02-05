@@ -25,6 +25,12 @@ engine = create_async_engine(
     pool_pre_ping=True,
     pool_size=10,
     max_overflow=20,
+    connect_args={
+        # Desabilitar cache de prepared statements do asyncpg
+        # Isso evita problemas quando colunas são adicionadas ao banco
+        "prepared_statement_cache_size": 0,
+        "statement_cache_size": 0,
+    },
 )
 
 # Session factory
@@ -103,10 +109,28 @@ class RedisManager:
     async def get_conversation_state(self, phone: str) -> Optional[dict]:
         """Obtém estado da conversa de um cliente."""
         import json
-        data = await self._redis.get(f"chat:{phone}")
-        if data:
-            return json.loads(data)
-        return None
+        import logging
+        logger = logging.getLogger(__name__)
+
+        try:
+            if not self._redis:
+                logger.error(f"[REDIS] get_conversation_state: Redis não conectado!")
+                return None
+
+            key = f"chat:{phone}"
+            data = await self._redis.get(key)
+
+            if data:
+                parsed = json.loads(data)
+                logger.debug(f"[REDIS] GET {key} | state={parsed.get('state', 'N/A')}")
+                return parsed
+            else:
+                logger.debug(f"[REDIS] GET {key} | Não encontrado (None)")
+                return None
+
+        except Exception as e:
+            logger.error(f"[REDIS] ERRO em get_conversation_state({phone}): {e}", exc_info=True)
+            return None
 
     async def set_conversation_state(
         self,
@@ -116,12 +140,23 @@ class RedisManager:
     ) -> None:
         """Define estado da conversa de um cliente."""
         import json
-        ttl = ttl or settings.redis_conversation_ttl
-        await self._redis.set(
-            f"chat:{phone}",
-            json.dumps(state, ensure_ascii=False),
-            ex=ttl
-        )
+        import logging
+        logger = logging.getLogger(__name__)
+
+        try:
+            if not self._redis:
+                logger.error(f"[REDIS] set_conversation_state: Redis não conectado!")
+                return
+
+            ttl = ttl or settings.redis_conversation_ttl
+            key = f"chat:{phone}"
+            json_data = json.dumps(state, ensure_ascii=False)
+
+            await self._redis.set(key, json_data, ex=ttl)
+            logger.debug(f"[REDIS] SET {key} | state={state.get('state', 'N/A')} | TTL={ttl}s | size={len(json_data)}b")
+
+        except Exception as e:
+            logger.error(f"[REDIS] ERRO em set_conversation_state({phone}): {e}", exc_info=True)
 
     async def delete_conversation_state(self, phone: str) -> None:
         """Remove estado da conversa de um cliente."""

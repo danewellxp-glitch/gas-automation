@@ -89,7 +89,9 @@ export default function useMapData({
     const token = localStorage.getItem('token');
     if (!token) return;
 
-    const wsUrl = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws/messages?token=${token}`;
+    // Usar URL do backend para WebSocket, não a porta do frontend
+    const wsBase = import.meta.env.VITE_WS_BASE_URL || import.meta.env.VITE_API_BASE_URL?.replace('http', 'ws') || `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.hostname}:8000`;
+    const wsUrl = `${wsBase}/ws/messages?token=${token}`;
 
     try {
       wsRef.current = new WebSocket(wsUrl);

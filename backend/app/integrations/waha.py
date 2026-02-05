@@ -320,8 +320,41 @@ class WAHAClient:
 
     # ==================== Utilitários ====================
 
+    async def send_typing(self, phone: str, typing: bool = True) -> dict:
+        """
+        Envia indicador de "digitando..." para o cliente.
+
+        Args:
+            phone: Número do destinatário
+            typing: True para iniciar, False para parar
+
+        Isso melhora a UX mostrando que o bot está processando.
+        """
+        client = await self._get_client()
+        chat_id = self._format_phone(phone)
+
+        payload = {
+            "chatId": chat_id,
+            "session": self.session_name,
+        }
+
+        try:
+            if typing:
+                # Iniciar "digitando..."
+                response = await client.post("/api/startTyping", json=payload)
+            else:
+                # Parar "digitando..."
+                response = await client.post("/api/stopTyping", json=payload)
+
+            response.raise_for_status()
+            return response.json()
+        except httpx.HTTPError as e:
+            # Não é crítico se falhar
+            logger.debug(f"Erro ao enviar typing para {phone}: {e}")
+            return {}
+
     async def mark_as_read(self, phone: str, message_id: str) -> dict:
-        """Marca mensagem como lida."""
+        """Marca mensagem como lida (✓✓ azul)."""
         client = await self._get_client()
         chat_id = self._format_phone(phone)
 
