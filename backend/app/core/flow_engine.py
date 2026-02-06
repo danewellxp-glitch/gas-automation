@@ -329,8 +329,18 @@ class FlowEngine:
         if intention == Intention.HUMAN:
             return await handle_talking_to_human(context, message)
 
-        # --- Botoes de pedido abandonado recuperado ---
+        # --- Mapeamento de números para button IDs do menu principal ---
         msg_lower = message.strip().lower()
+        MENU_NUMBER_MAPPING = {
+            "1": "fazer_pedido",
+            "2": "ver_pedido",
+            "3": "falar_atendente",
+        }
+        if msg_lower in MENU_NUMBER_MAPPING:
+            msg_lower = MENU_NUMBER_MAPPING[msg_lower]
+            logger.info(f"Número '{message.strip()}' mapeado para '{msg_lower}'")
+
+        # --- Botoes de pedido abandonado recuperado ---
         if msg_lower == "continuar_pedido":
             # Retomar fluxo do estado atual (handler do estado)
             handler = self._handlers.get(context.state)
@@ -341,6 +351,16 @@ class FlowEngine:
         if msg_lower == "recomecar":
             context.reset()
             return await handle_greeting(context, message)
+
+        # --- Botoes do menu principal (fazer_pedido, ver_pedido, falar_atendente) ---
+        if msg_lower == "fazer_pedido":
+            return await handle_greeting(context, message)
+
+        if msg_lower == "ver_pedido":
+            return await handle_tracking_order(context, message)
+
+        if msg_lower == "falar_atendente":
+            return await handle_talking_to_human(context, message)
 
         # --- FAQ: responder e manter estado atual ---
         if intention == Intention.INFO:
