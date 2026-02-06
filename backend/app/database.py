@@ -189,6 +189,22 @@ class RedisManager:
             await self._redis.expire(key, window)
         return count
     
+    # ==================== Deduplicação de mensagens ====================
+
+    async def check_message_processed(self, message_id: str) -> bool:
+        """
+        Verifica se uma mensagem já foi processada (deduplicação atômica).
+
+        Usa SET NX EX para atomicamente verificar e marcar como processada.
+        Retorna True se a mensagem JÁ FOI processada (duplicada).
+        Retorna False se é uma mensagem nova (e marca como processada).
+        """
+        if not message_id:
+            return False
+        key = f"msg_dedup:{message_id}"
+        was_set = await self._redis.set(key, "1", nx=True, ex=3600)
+        return not was_set  # was_set=None significa que a chave já existia
+
     # ==================== Pub/Sub para WebSocket ====================
     
     async def publish(self, channel: str, message: str) -> int:

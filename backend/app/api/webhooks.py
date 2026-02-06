@@ -47,24 +47,32 @@ async def waha_webhook(
 
     try:
         body = await request.json()
-
-        # Log estruturado em vez de print
-        logger.debug(f"WAHA Webhook recebido: {body.get('event', 'unknown')}")
-
         event = body.get("event", "")
         session = body.get("session", "")
         payload = body.get("payload", {})
+        # Log em INFO para diagnóstico: ver se o WAHA está chamando o backend
+        logger.info(
+            f"WAHA Webhook recebido: event={event} session={session} "
+            f"payload_keys={list(payload.keys()) if isinstance(payload, dict) else 'n/a'}"
+        )
 
         # Processar apenas mensagens recebidas
         if event == "message":
             # Ignorar mensagens enviadas por nós
             from_me = payload.get("fromMe", False)
             if from_me:
+                logger.info("WAHA: ignorando mensagem própria (fromMe=true)")
                 return {"status": "ignored", "reason": "own_message"}
 
             # WAHA usa LID (Linked ID) - manter o chatId completo para responder
             # from: "7185547411514@lid" ou "5541999999999@c.us"
-            chat_id = payload.get("from", "")  # Usar completo para enviar resposta
+            raw_from = payload.get("from")
+            chat_id = (str(raw_from).strip() if raw_from is not None and raw_from != "" else "")
+            if not chat_id:
+                logger.warning(
+                    "WAHA Webhook: ignorando mensagem com chat_id vazio (payload.from ausente ou vazio)"
+                )
+                return {"status": "ignored", "reason": "empty_chat_id"}
 
             # Extrair dados
             key_data = {
@@ -73,9 +81,17 @@ async def waha_webhook(
                 "id": payload.get("id", "").split("_")[-1] if payload.get("id") else "",
             }
 
-            # Corpo da mensagem
-            message_body = payload.get("body", "")
-            sender_name = payload.get("_data", {}).get("notifyName", "")
+            # Corpo da mensagem: WAHA pode enviar body no topo ou em _data
+            message_body = (
+                payload.get("body")
+                or (payload.get("_data") or {}).get("body")
+                or (payload.get("_data") or {}).get("content")
+                or ""
+            )
+            if isinstance(message_body, dict):
+                message_body = message_body.get("text") or message_body.get("body") or ""
+            message_body = (message_body or "").strip()
+            sender_name = (payload.get("_data") or {}).get("notifyName") or payload.get("pushName") or ""
 
             # Extrair dados da mensagem
             message = WAHAMessage(
@@ -118,16 +134,11 @@ async def process_whatsapp_message(message: WAHAMessage):
     """
     Processa mensagem do WhatsApp em background.
 
-    Esta função é chamada em background para não bloquear o webhook.
-    Suporta: texto, botões e localização.
-
-    Fluxo otimizado para UX:
-    1. Verificar duplicata (evitar processar 2x)
-    2. Marcar como lida imediatamente (✓✓)
-    3. Mostrar "digitando..." (feedback visual)
-    4. Emitir WebSocket (painel operador)
-    5. Processar no flow engine
-    6. Enviar resposta
+    Fluxo otimizado (FLUXO_BOT_IDEAL):
+    1. Deduplicação por message_id (Redis SET NX)
+    2. Feedback imediato: typing + mark as read
+    3. Processamento: WebSocket → EventLog → Flow Engine
+    4. Resposta: stop typing → enviar mensagens
     """
     phone = message.phone
     text = message.text
@@ -135,142 +146,111 @@ async def process_whatsapp_message(message: WAHAMessage):
     location = message.location
     message_id = message.key.id if message.key else None
 
-    # =========== ETAPA 1: DEDUPLICAÇÃO ===========
-    # Evita processar a mesma mensagem 2x (retry do WAHA)
+    # ── ETAPA 1: Deduplicação (< 100ms) ──
     if message_id:
-        is_duplicate = await _check_message_duplicate(message_id)
-        if is_duplicate:
-            logger.info(f"[DEDUP] Mensagem duplicada ignorada: {message_id}")
+        try:
+            is_duplicate = await redis_manager.check_message_processed(message_id)
+            if is_duplicate:
+                logger.info(f"Mensagem duplicada ignorada: message_id={message_id} phone={phone}")
+                return
+        except Exception as e:
+            logger.warning(f"Dedup check falhou (processando mesmo assim): {e}")
+
+    # ── ETAPA 2: Feedback imediato (< 500ms) ──
+    from app.integrations.waha import waha_client
+
+    try:
+        await waha_client.start_typing(phone)
+    except Exception:
+        pass
+
+    if message_id:
+        try:
+            await waha_client.mark_as_read(phone, message_id)
+        except Exception:
+            pass
+
+    # ── ETAPA 3: Processar mensagem ──
+    try:
+        # Processar localização se presente
+        if location:
+            logger.info(f"Localização recebida de {phone}: {location}")
+            try:
+                await waha_client.stop_typing(phone)
+            except Exception:
+                pass
+            await process_location_message(phone, location, message_id)
             return
 
-    # Processar localização se presente
-    if location:
-        logger.info(f"Localização recebida de {phone}: {location}")
-        await process_location_message(phone, location, message_id)
-        return
+        # Usar button_id se não tiver texto (clique em botão)
+        content = (text or button_id or "").strip()
 
-    # Usar button_id se não tiver texto (clique em botão)
-    content = text or button_id or ""
+        # Mensagem vazia (ex.: só mídia): tratar como "menu" para o bot sempre responder
+        if not content:
+            logger.info(f"Mensagem sem texto de {phone}; tratando como menu")
+            content = "menu"
 
-    if not content:
-        logger.warning(f"Mensagem sem conteúdo de {phone}")
-        return
+        logger.info(f"Processando mensagem de {phone}: {content[:50]}")
 
-    logger.info(f"[MSG] {phone} | {content[:50]}")
+        # Emitir WebSocket para painel do operador
+        try:
+            from app.api.websocket import emit_new_message
+            await emit_new_message(phone, content, "incoming")
+            logger.info(f"WebSocket emitido para {phone}: {content[:50]}")
+        except Exception as e:
+            logger.error(f"Erro ao emitir WebSocket: {e}", exc_info=True)
 
-    # =========== ETAPA 2: FEEDBACK IMEDIATO ===========
-    # Mostrar que recebemos a mensagem (melhora UX)
-    try:
-        from app.integrations.waha import waha_client
-
-        # Marcar como lida IMEDIATAMENTE (✓✓ azul)
-        if message_id:
-            await waha_client.mark_as_read(phone, message_id)
-            logger.debug(f"[READ] Mensagem marcada como lida: {message_id}")
-
-        # Mostrar "digitando..." (feedback visual para o cliente)
-        await waha_client.send_typing(phone, True)
-        logger.debug(f"[TYPING] Iniciado para {phone}")
-
-    except Exception as e:
-        logger.warning(f"[FEEDBACK] Erro ao enviar feedback: {e}")
-
-    # =========== ETAPA 3: NOTIFICAR PAINEL ===========
-    # Emitir WebSocket para operador ver em tempo real
-    try:
-        from app.api.websocket import emit_new_message
-        await emit_new_message(phone, content, "incoming")
-    except Exception as e:
-        logger.error(f"[WS] Erro ao emitir WebSocket: {e}")
-
-    # =========== ETAPA 4: SALVAR LOG ===========
-    try:
-        async with AsyncSessionLocal() as db:
-            event = EventLog(
-                event_type="message_received",
-                entity_type="chat",
-                payload={"phone": phone, "message": content, "message_id": message_id}
-            )
-            db.add(event)
-            await db.commit()
-    except Exception as e:
-        logger.warning(f"[LOG] Erro ao salvar EventLog: {e}")
-
-    # =========== ETAPA 5: PROCESSAR MENSAGEM ===========
-    try:
-        from app.core.flow_engine import flow_engine
+        # Salvar mensagem recebida no EventLog
+        try:
+            async with AsyncSessionLocal() as db:
+                event = EventLog(
+                    event_type="message_received",
+                    entity_type="chat",
+                    payload={"phone": phone, "message": content}
+                )
+                db.add(event)
+                await db.commit()
+        except Exception as e:
+            logger.warning(f"Erro ao salvar EventLog: {e}")
 
         # Processar mensagem pelo flow engine
+        from app.core.flow_engine import flow_engine
+
         result = await flow_engine.process_message(
             phone=phone,
             message=content,
             message_id=message_id,
         )
 
-        # =========== ETAPA 6: ENVIAR RESPOSTA ===========
-        # Parar "digitando..." e enviar resposta
+        # ── ETAPA 4: Resposta ──
         try:
-            from app.integrations.waha import waha_client
-            await waha_client.send_typing(phone, False)
+            await waha_client.stop_typing(phone)
         except Exception:
-            pass  # Ignorar erro ao parar typing
+            pass
 
+        # Enviar respostas
         if result.responses:
             await flow_engine.send_responses(phone, result.responses)
 
-        logger.info(f"[OK] {phone} | {result.context.state.value} -> {result.new_state.value}")
+        logger.info(
+            f"Mensagem processada: {phone} | "
+            f"Estado: {result.context.state} -> {result.new_state}"
+        )
 
     except Exception as e:
-        logger.error(f"[ERRO] {phone} | {e}", exc_info=True)
-
-        # Parar "digitando..." em caso de erro
+        logger.error(f"Erro ao processar mensagem no flow engine: {e}", exc_info=True)
         try:
-            from app.integrations.waha import waha_client
-            await waha_client.send_typing(phone, False)
+            await waha_client.stop_typing(phone)
+        except Exception:
+            pass
+        # Tentar enviar mensagem de erro ao usuário
+        try:
             await waha_client.send_text(
                 phone,
                 "Desculpe, ocorreu um erro. Digite *menu* para recomeçar."
             )
-        except Exception as send_error:
-            logger.warning(f"[ERRO] Não foi possível enviar erro para {phone}: {send_error}")
-
-
-async def _check_message_duplicate(message_id: str) -> bool:
-    """
-    Verifica se a mensagem já foi processada (deduplicação).
-
-    Usa Redis SET com TTL de 1 hora para evitar processar a mesma
-    mensagem 2x (por exemplo, em caso de retry do WAHA).
-
-    Returns:
-        True se já foi processada (duplicata), False se é nova
-    """
-    if not message_id:
-        return False
-
-    try:
-        key = f"msg_processed:{message_id}"
-
-        # Tentar setar a chave com NX (só seta se não existir)
-        # Se retornar True, é a primeira vez (nova mensagem)
-        # Se retornar False/None, já existe (duplicata)
-        was_set = await redis_manager.client.set(
-            key,
-            "1",
-            nx=True,  # Só seta se não existir
-            ex=3600   # TTL de 1 hora
-        )
-
-        if was_set:
-            logger.debug(f"[DEDUP] Nova mensagem registrada: {message_id}")
-            return False  # Nova mensagem
-        else:
-            logger.debug(f"[DEDUP] Mensagem já existe: {message_id}")
-            return True  # Duplicata
-
-    except Exception as e:
-        logger.warning(f"[DEDUP] Erro ao verificar duplicata: {e}")
-        return False  # Em caso de erro, processa a mensagem
+        except Exception as send_err:
+            logger.warning(f"Não foi possível enviar mensagem de erro para {message.phone}: {send_err}")
 
 
 async def process_location_message(phone: str, location: dict, message_id: str = None):

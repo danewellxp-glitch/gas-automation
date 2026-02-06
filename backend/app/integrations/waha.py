@@ -3,6 +3,7 @@ Cliente WAHA (WhatsApp HTTP API).
 Gerencia envio e recebimento de mensagens via WhatsApp.
 """
 
+import asyncio
 import base64
 import logging
 from typing import Optional, List, Dict
@@ -33,6 +34,8 @@ class WAHAClient:
         self.api_key = api_key or settings.waha_api_key
         self.timeout = timeout
         self._client: Optional[httpx.AsyncClient] = None
+        # Cache de LID -> número real (@c.us) para evitar chamadas repetidas
+        self._lid_cache: Dict[str, str] = {}
 
     async def _get_client(self) -> httpx.AsyncClient:
         """Retorna cliente HTTP (lazy initialization)."""
@@ -57,16 +60,18 @@ class WAHAClient:
         """
         Formata número de telefone para o formato WAHA.
 
-        Se já tiver sufixo @lid ou @c.us, mantém como está.
-        Input: 5541999999999 ou 41999999999 ou 7185547411514@lid
-        Output: 5541999999999@c.us ou 7185547411514@lid
+        WAHA não aceita @lid em chatId ao enviar; usar sempre @c.us.
+        Input: 5541999999999, 41999999999, 7185547411514@lid ou 5541999999999@c.us
+        Output: 5541999999999@c.us
         """
-        # Se já tem sufixo, manter como está
-        if "@" in phone:
+        # Se já é @c.us, retorna como está
+        if phone and "@c.us" in phone:
             return phone
 
-        # Remove caracteres não numéricos
-        cleaned = "".join(filter(str.isdigit, phone))
+        # Remove sufixo @lid ou @c.us e extrai só os dígitos (WAHA exige @c.us para envio)
+        cleaned = "".join(filter(str.isdigit, (phone or "").split("@")[0]))
+        if not cleaned:
+            return phone  # fallback
 
         # Adiciona código do país se necessário
         if len(cleaned) == 11:
@@ -75,6 +80,60 @@ class WAHAClient:
             cleaned = f"55{cleaned}"
 
         return f"{cleaned}@c.us"
+
+    async def resolve_lid(self, lid: str) -> str:
+        """
+        Resolve um LID (Linked ID) para o número real (@c.us).
+
+        O WhatsApp usa LID internamente. Esta função converte para o formato
+        que o WAHA aceita para envio de mensagens.
+
+        Args:
+            lid: ID no formato "7185547411514@lid" ou "7185547411514"
+
+        Returns:
+            Número no formato "61405086785@c.us" ou o próprio lid se não conseguir resolver
+        """
+        # Se não é @lid, formata normalmente
+        if not lid or "@lid" not in lid:
+            return self._format_phone(lid)
+
+        # Verificar cache
+        if lid in self._lid_cache:
+            logger.debug(f"LID {lid} encontrado no cache: {self._lid_cache[lid]}")
+            return self._lid_cache[lid]
+
+        # Extrair apenas o número do LID
+        lid_number = lid.replace("@lid", "")
+
+        try:
+            client = await self._get_client()
+            response = await client.get(
+                f"/api/{self.session_name}/lids/{lid_number}"
+            )
+
+            if response.status_code == 200:
+                data = response.json()
+                pn = data.get("pn")  # phone number no formato "61405086785@c.us"
+                if pn:
+                    self._lid_cache[lid] = pn
+                    logger.info(f"LID resolvido: {lid} -> {pn}")
+                    return pn
+
+            logger.warning(f"Não foi possível resolver LID {lid}")
+            return self._format_phone(lid)
+
+        except Exception as e:
+            logger.error(f"Erro ao resolver LID {lid}: {e}")
+            return self._format_phone(lid)
+
+    async def _get_chat_id(self, phone: str) -> str:
+        """
+        Obtém o chat_id correto para envio, resolvendo LID se necessário.
+        """
+        if "@lid" in phone:
+            return await self.resolve_lid(phone)
+        return self._format_phone(phone)
 
     # ==================== Sessão ====================
 
@@ -102,6 +161,36 @@ class WAHAClient:
             logger.error(f"Erro ao iniciar sessão: {e}")
             raise
 
+    async def ensure_session_ready(self) -> bool:
+        """
+        Garante que a sessão WAHA está WORKING.
+        Se estiver STOPPED, inicia a sessão. Idempotente e best-effort:
+        não levanta exceção para não travar o startup do backend.
+        Retorna True se a sessão está (ou ficou) WORKING, False caso contrário.
+        """
+        try:
+            data = await self.get_session_status()
+            status = (data.get("status") or "").upper()
+            if status == "WORKING":
+                logger.info("WAHA sessão já WORKING")
+                return True
+            if status == "STOPPED":
+                logger.warning("WAHA sessão STOPPED; iniciando sessão no startup...")
+                await self.start_session()
+                await asyncio.sleep(2)
+                data = await self.get_session_status()
+                new_status = (data.get("status") or "").upper()
+                if new_status == "WORKING":
+                    logger.info("WAHA sessão iniciada com sucesso (WORKING)")
+                    return True
+                logger.warning(f"WAHA sessão após start: {new_status} (aguardar WORKING)")
+                return False
+            logger.info(f"WAHA sessão em estado {status} (aguardar WORKING se necessário)")
+            return status == "WORKING"
+        except Exception as e:
+            logger.warning("WAHA ensure_session_ready falhou (best-effort): %s", e)
+            return False
+
     async def get_qr_code(self) -> Optional[str]:
         """Obtém QR Code para autenticação (base64)."""
         client = await self._get_client()
@@ -125,11 +214,16 @@ class WAHAClient:
         Envia mensagem de texto simples.
 
         Args:
-            phone: Número do destinatário
+            phone: Número do destinatário (pode ser @lid ou @c.us)
             text: Texto da mensagem
         """
         client = await self._get_client()
-        chat_id = self._format_phone(phone)
+
+        # Resolver LID para número real se necessário
+        if "@lid" in phone:
+            chat_id = await self.resolve_lid(phone)
+        else:
+            chat_id = await self._get_chat_id(phone)
 
         payload = {
             "chatId": chat_id,
@@ -139,6 +233,31 @@ class WAHAClient:
 
         try:
             response = await client.post("/api/sendText", json=payload)
+            if response.status_code == 422:
+                body = response.json() if response.content else {}
+                err = body.get("response", body)
+                status = err.get("status") if isinstance(err, dict) else None
+                logger.warning(
+                    f"WAHA sendText 422: status={status} body={body!r}"
+                )
+                if status == "STOPPED":
+                    logger.warning(
+                        f"WAHA sessão STOPPED. Iniciando sessão e reenviando..."
+                    )
+                    try:
+                        await client.post(
+                            f"/api/sessions/{self.session_name}/start",
+                            json={},
+                        )
+                    except Exception as start_err:
+                        logger.debug(f"Start session: {start_err}")
+                    await asyncio.sleep(3)
+                    retry = await client.post("/api/sendText", json=payload)
+                    if retry.is_success:
+                        result = retry.json()
+                        logger.info(f"Mensagem enviada para {phone} (após start+retry)")
+                        return result
+                    retry.raise_for_status()
             response.raise_for_status()
             result = response.json()
             logger.info(f"Mensagem enviada para {phone}: {text[:50]}...")
@@ -166,7 +285,7 @@ class WAHAClient:
         Nota: WhatsApp permite máximo de 3 botões.
         """
         client = await self._get_client()
-        chat_id = self._format_phone(phone)
+        chat_id = await self._get_chat_id(phone)
 
         # Formatar botões para o formato WAHA
         formatted_buttons = [
@@ -229,7 +348,7 @@ class WAHAClient:
             sections: Seções da lista [{"title": "Seção", "rows": [{"id": "1", "title": "Item"}]}]
         """
         client = await self._get_client()
-        chat_id = self._format_phone(phone)
+        chat_id = await self._get_chat_id(phone)
 
         payload = {
             "chatId": chat_id,
@@ -264,7 +383,7 @@ class WAHAClient:
             caption: Legenda da imagem
         """
         client = await self._get_client()
-        chat_id = self._format_phone(phone)
+        chat_id = await self._get_chat_id(phone)
 
         payload = {
             "chatId": chat_id,
@@ -298,7 +417,7 @@ class WAHAClient:
     ) -> Dict:
         """Envia documento (PDF, etc)."""
         client = await self._get_client()
-        chat_id = self._format_phone(phone)
+        chat_id = await self._get_chat_id(phone)
 
         payload = {
             "chatId": chat_id,
@@ -356,7 +475,7 @@ class WAHAClient:
     async def mark_as_read(self, phone: str, message_id: str) -> dict:
         """Marca mensagem como lida (✓✓ azul)."""
         client = await self._get_client()
-        chat_id = self._format_phone(phone)
+        chat_id = await self._get_chat_id(phone)
 
         payload = {
             "chatId": chat_id,
@@ -369,13 +488,46 @@ class WAHAClient:
             response.raise_for_status()
             return response.json()
         except httpx.HTTPError as e:
-            logger.warning(f"Erro ao marcar como lido: {e}")
+            if getattr(e, "response", None) and getattr(e.response, "status_code", None) == 404:
+                logger.debug("WAHA markAsRead não disponível (404); ignorando.")
+            else:
+                logger.warning(f"Erro ao marcar como lido: {e}")
             return {}
+
+    async def start_typing(self, phone: str) -> None:
+        """Inicia indicador de 'digitando...' para o cliente."""
+        try:
+            client = await self._get_client()
+            chat_id = await self._get_chat_id(phone)
+            payload = {
+                "chatId": chat_id,
+                "session": self.session_name,
+            }
+            response = await client.post("/api/startTyping", json=payload)
+            if response.status_code not in (200, 201):
+                logger.debug(f"startTyping retornou {response.status_code}")
+        except Exception as e:
+            logger.debug(f"Erro ao iniciar typing para {phone}: {e}")
+
+    async def stop_typing(self, phone: str) -> None:
+        """Para indicador de 'digitando...' para o cliente."""
+        try:
+            client = await self._get_client()
+            chat_id = await self._get_chat_id(phone)
+            payload = {
+                "chatId": chat_id,
+                "session": self.session_name,
+            }
+            response = await client.post("/api/stopTyping", json=payload)
+            if response.status_code not in (200, 201):
+                logger.debug(f"stopTyping retornou {response.status_code}")
+        except Exception as e:
+            logger.debug(f"Erro ao parar typing para {phone}: {e}")
 
     async def check_number_exists(self, phone: str) -> bool:
         """Verifica se o número existe no WhatsApp."""
         client = await self._get_client()
-        chat_id = self._format_phone(phone)
+        chat_id = await self._get_chat_id(phone)
 
         try:
             response = await client.get(

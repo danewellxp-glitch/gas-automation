@@ -144,8 +144,17 @@ class FlowEngine:
         4. Mescla entidades no contexto
         5. Roteia para handler baseado em intencao + estado
         """
+        # DEBUG: Normalizar phone para evitar inconsistencias de formato WAHA
+        # WAHA pode enviar @lid ou @c.us - normalizamos para garantir mesma chave Redis
+        original_phone = phone
+        if "@" in phone:
+            # Extrair apenas o numero para usar como chave consistente
+            phone = phone.split("@")[0]
+        logger.info(f"[DEBUG] Phone original: {original_phone} -> normalizado: {phone}")
+
         # Carregar contexto
         context = await self.get_context(phone)
+        logger.info(f"[DEBUG-1] Estado CARREGADO do Redis: {context.state} (phone={phone})")
         context.message_count += 1
 
         # Guardar mensagem no historico recente (ultimas 3)
@@ -175,8 +184,7 @@ class FlowEngine:
         if global_result:
             global_result.context.state = global_result.new_state
             await self.save_context(global_result.context)
-            if message_id:
-                await self._mark_as_read(phone, message_id)
+            # mark_as_read agora é feito no webhook (feedback imediato)
             return global_result
 
         # Roteamento inteligente baseado em intencao + estado
@@ -186,10 +194,7 @@ class FlowEngine:
             # IMPORTANTE: Sincronizar estado no contexto para persistir no Redis
             result.context.state = result.new_state
             await self.save_context(result.context)
-
-            # Marcar mensagem como lida
-            if message_id:
-                await self._mark_as_read(phone, message_id)
+            # mark_as_read agora é feito no webhook (feedback imediato)
 
             return result
 
