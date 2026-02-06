@@ -106,27 +106,102 @@ class FlowEngine:
         }
 
     async def get_context(self, phone: str) -> ConversationContext:
-        """Carrega contexto da conversa do Redis ou cria um novo."""
+        """
+        Carrega contexto da conversa.
+
+        Prioridade:
+        1. Redis (rapido, TTL 30min)
+        2. PostgreSQL snapshot (fallback, TTL 24h)
+        3. Novo contexto vazio
+        """
         data = await redis_manager.get_conversation_state(phone)
 
         if data:
             context = ConversationContext.from_dict(data)
-            logger.debug(f"Contexto carregado para {phone}: {context.state}")
-        else:
-            context = ConversationContext(phone=phone)
-            logger.debug(f"Novo contexto criado para {phone}")
+            logger.debug(f"Contexto carregado do Redis para {phone}: {context.state}")
+            return context
 
+        # Fallback: tentar recuperar do PostgreSQL (pedido abandonado)
+        try:
+            context = await self._load_snapshot(phone)
+            if context:
+                logger.info(f"Contexto recuperado do snapshot PostgreSQL para {phone}: {context.state}")
+                return context
+        except Exception as e:
+            logger.warning(f"Erro ao carregar snapshot para {phone}: {e}")
+
+        context = ConversationContext(phone=phone)
+        logger.debug(f"Novo contexto criado para {phone}")
+        return context
+
+    async def _load_snapshot(self, phone: str) -> Optional[ConversationContext]:
+        """Carrega snapshot do PostgreSQL se existir e tiver menos de 24h."""
+        from sqlalchemy import select
+        from app.models.conversation_snapshot import ConversationSnapshot
+
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(
+                select(ConversationSnapshot).where(ConversationSnapshot.phone == phone)
+            )
+            snapshot = result.scalar_one_or_none()
+
+        if not snapshot:
+            return None
+
+        # Verificar se snapshot tem menos de 24h
+        age = datetime.utcnow() - snapshot.updated_at.replace(tzinfo=None)
+        if age.total_seconds() > 86400:  # 24 horas
+            logger.debug(f"Snapshot de {phone} expirado ({age})")
+            return None
+
+        # Restaurar contexto do snapshot
+        context = ConversationContext.from_dict(snapshot.context_json)
+        context.resumed_from_snapshot = True
+        # Limpar dados transitorios
+        context.pending_entities = {}
+        context.recent_messages = []
+        context.retry_count = 0
         return context
 
     async def save_context(self, context: ConversationContext) -> None:
-        """Salva contexto da conversa no Redis."""
+        """Salva contexto da conversa no Redis + PostgreSQL (backup)."""
         context.last_message_at = datetime.utcnow()
+        context_dict = context.to_dict()
+
+        # 1. Salvar no Redis (primário, rápido)
         await redis_manager.set_conversation_state(
             context.phone,
-            context.to_dict(),
+            context_dict,
             ttl=settings.redis_conversation_ttl
         )
-        logger.debug(f"Contexto salvo para {context.phone}: {context.state}")
+        logger.debug(f"Contexto salvo no Redis para {context.phone}: {context.state}")
+
+        # 2. Upsert no PostgreSQL (backup, async best-effort)
+        try:
+            await self._save_snapshot(context.phone, context.state.value, context_dict)
+        except Exception as e:
+            logger.warning(f"Erro ao salvar snapshot PostgreSQL para {context.phone}: {e}")
+
+    async def _save_snapshot(self, phone: str, state: str, context_dict: dict) -> None:
+        """Upsert do snapshot no PostgreSQL."""
+        from sqlalchemy.dialects.postgresql import insert
+        from app.models.conversation_snapshot import ConversationSnapshot
+
+        async with AsyncSessionLocal() as db:
+            stmt = insert(ConversationSnapshot).values(
+                phone=phone,
+                state=state,
+                context_json=context_dict,
+            ).on_conflict_do_update(
+                index_elements=["phone"],
+                set_={
+                    "state": state,
+                    "context_json": context_dict,
+                    "updated_at": datetime.utcnow(),
+                },
+            )
+            await db.execute(stmt)
+            await db.commit()
 
     async def process_message(
         self,
@@ -253,6 +328,27 @@ class FlowEngine:
 
         if intention == Intention.HUMAN:
             return await handle_talking_to_human(context, message)
+
+        # --- Botoes de pedido abandonado recuperado ---
+        msg_lower = message.strip().lower()
+        if msg_lower == "continuar_pedido":
+            # Retomar fluxo do estado atual (handler do estado)
+            handler = self._handlers.get(context.state)
+            if handler:
+                return await handler(context, message)
+            return await handle_greeting(context, message)
+
+        if msg_lower == "recomecar":
+            context.reset()
+            return await handle_greeting(context, message)
+
+        # --- FAQ: responder e manter estado atual ---
+        if intention == Intention.INFO:
+            from app.core.nlp_utils import detect_faq_category
+            from app.core.handlers import handle_faq
+            faq_cat = detect_faq_category(normalize_text(message))
+            if faq_cat:
+                return await handle_faq(context, message, faq_cat)
 
         # --- Estados de coleta de dados (identificacao) ---
         if context.state == ConversationState.ASKING_CUSTOMER_TYPE:

@@ -17,6 +17,7 @@ from app.models.product import Product
 from app.models.tipo_preco import TipoPreco, ProdutoPreco
 from app.models.vasilhame import Vasilhame, ClienteVasilhame, MovimentacaoVasilhame
 from app.models.promotion import Promotion
+from app.models.conversation_snapshot import ConversationSnapshot
 
 __all__ = [
     # Auth Models
@@ -69,4 +70,6 @@ __all__ = [
     "MovimentacaoVasilhame",
     # Promotion
     "Promotion",
+    # Conversation Snapshot
+    "ConversationSnapshot",
 ]

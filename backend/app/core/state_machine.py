@@ -187,6 +187,9 @@ class ConversationContext:
     recent_messages: list = field(default_factory=list)  # Ultimas 3 mensagens para contexto
     change_for: Optional[int] = None  # Valor do troco
 
+    # Recuperação de pedido abandonado
+    resumed_from_snapshot: bool = False  # True se contexto veio do PostgreSQL (Redis expirou)
+
     def to_dict(self) -> dict:
         """Converte para dicionário (para salvar no Redis)."""
         return {
@@ -215,6 +218,7 @@ class ConversationContext:
             "pending_entities": self.pending_entities,
             "recent_messages": self.recent_messages,
             "change_for": self.change_for,
+            "resumed_from_snapshot": self.resumed_from_snapshot,
         }
 
     @classmethod
@@ -246,6 +250,7 @@ class ConversationContext:
             pending_entities=data.get("pending_entities", {}),
             recent_messages=data.get("recent_messages", []),
             change_for=data.get("change_for"),
+            resumed_from_snapshot=data.get("resumed_from_snapshot", False),
         )
 
     def transition_to(self, new_state: ConversationState) -> bool:
@@ -279,6 +284,7 @@ class ConversationContext:
         self.pending_entities = {}
         self.recent_messages = []
         self.change_for = None
+        self.resumed_from_snapshot = False
 
     def increment_retry(self) -> int:
         """Incrementa contador de tentativas e retorna o valor atual."""

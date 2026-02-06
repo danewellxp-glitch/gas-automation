@@ -974,6 +974,38 @@ async def handle_greeting(
     - RECORRENTE (dados completos): oferece "o de sempre" ou produtos
     - INCOMPLETO: pede o que falta (nome ou CPF)
     """
+    # ========== CENARIO 0: Pedido abandonado recuperado do snapshot ==========
+    if context.resumed_from_snapshot and context.state != ConversationState.START:
+        context.resumed_from_snapshot = False  # Nao perguntar de novo
+        state_labels = {
+            ConversationState.AWAITING_PRODUCT: "escolhendo o produto",
+            ConversationState.AWAITING_QUANTITY: "informando a quantidade",
+            ConversationState.CONFIRMING_ADDRESS: "confirmando o endereco",
+            ConversationState.AWAITING_ADDRESS: "informando o endereco",
+            ConversationState.AWAITING_PAYMENT: "escolhendo a forma de pagamento",
+            ConversationState.CONFIRMING_ORDER: "confirmando o pedido",
+        }
+        stage = state_labels.get(context.state, "fazendo seu pedido")
+        name = context.customer_name or ""
+        greeting = f"Oi {name}! " if name else "Oi! "
+
+        return ProcessedMessage(
+            context=context,
+            responses=[
+                MessageResponse(
+                    text=(
+                        f"{greeting}Vi que voce estava {stage}.\n"
+                        "Deseja continuar de onde parou?"
+                    ),
+                    buttons=[
+                        {"id": "continuar_pedido", "text": "Continuar pedido"},
+                        {"id": "recomecar", "text": "Novo pedido"},
+                    ],
+                )
+            ],
+            new_state=context.state,  # Manter no estado recuperado
+        )
+
     customer, is_new, has_complete_data = await get_or_create_customer(context.phone)
     context.customer_id = str(customer.id)
     context.customer_name = customer.name
@@ -1884,6 +1916,49 @@ async def handle_repeat_order(
 
     # Mostrar confirmacao direta
     return await handle_show_confirmation(context, message)
+
+
+# ---------- Handler: FAQ (perguntas fora de contexto) ----------
+
+
+async def handle_faq(
+    context: ConversationContext,
+    message: str,
+    faq_category: str,
+) -> ProcessedMessage:
+    """
+    Responde perguntas frequentes (FAQ) sem sair do fluxo atual.
+    Apos responder, re-prompt do estado corrente para retomar pedido.
+    """
+    from app.core.dictionaries import FAQ_RESPONSES
+
+    response_template = FAQ_RESPONSES.get(faq_category, "")
+    response_text = response_template.format(
+        tempo=settings.default_delivery_time_minutes,
+        bairros=", ".join(settings.supported_bairros),
+    )
+
+    # Se estava no meio de um pedido, lembrar onde parou
+    if context.state not in (ConversationState.START, ConversationState.IDLE):
+        state_prompts = {
+            ConversationState.AWAITING_PRODUCT: "Qual produto voce deseja?",
+            ConversationState.AWAITING_QUANTITY: "Quantos botijoes?",
+            ConversationState.CONFIRMING_ADDRESS: "O endereco esta correto?",
+            ConversationState.AWAITING_ADDRESS: "Qual o endereco de entrega?",
+            ConversationState.AWAITING_PAYMENT: "Como deseja pagar?",
+            ConversationState.CONFIRMING_ORDER: "Deseja confirmar o pedido?",
+            ConversationState.COLLECTING_NAME: "Qual e o seu nome?",
+            ConversationState.COLLECTING_DOCUMENT: "Qual o seu CPF/CNPJ?",
+        }
+        prompt = state_prompts.get(context.state)
+        if prompt:
+            response_text += f"\n\nVoltando ao pedido:\n{prompt}"
+
+    return ProcessedMessage(
+        context=context,
+        responses=[MessageResponse(text=response_text)],
+        new_state=context.state,  # Manter no mesmo estado
+    )
 
 
 # ==================== FUNCOES AUXILIARES ====================
