@@ -200,8 +200,8 @@ CONFIRM_SYNONYMS = [
     "issoai", "isso ai", "isso aí", "isso mesmo", "eh isso",
     "é isso", "é isso mesmo", "é isso ai",
     # Pode/Confirma
-    "pode", "pode sim", "pode ser", "podeser", "confirma",
-    "confirmado", "confirmo", "fechado", "fechou", "fechô",
+    "pode", "pode sim", "pode ser", "podeser", "confirma", "confirm",
+    "confirmado", "confirmo", "confirmar", "fechado", "fechou", "fechô",
     "tá certo", "ta certo", "tá bom", "ta bom",
     "tá ok", "ta ok", "combinado", "combinadoo",
     "ok", "okk", "okay", "oks",
@@ -242,7 +242,7 @@ DENY_SYNONYMS = [
     "esse nao", "esse não", "nao esse", "não esse",
     "tá errado isso", "ta errado isso",
     # Cancelar
-    "cancela", "cancelar", "cancelo", "desisto", "desistir",
+    "cancela", "cancelar", "cancelo", "cancel", "desisto", "desistir",
     "nao quero mais", "não quero mais",
     "deixa pra la", "deixa pra lá", "esquece",
     "deixa quieto", "para", "parar",
@@ -748,7 +748,7 @@ EDIT_KEYWORDS = [
     "alterar", "altera", "mudar", "muda", "trocar", "troca",
     "quero alterar", "quero mudar", "quero trocar",
     "alterar pedido", "mudar pedido", "trocar pedido",
-    "editar", "edita", "corrigir", "corrige",
+    "editar", "edita", "edit", "corrigir", "corrige",
     "modificar", "modifica",
 ]
 

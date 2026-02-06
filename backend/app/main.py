@@ -29,7 +29,7 @@ secure_logger = get_secure_logger(__name__)
 
 # Importar rotas
 from app.api import webhooks, orders, products, customers, websocket, chats, auth, chatbot, users, drivers, cargas
-from app.api import admin_users
+from app.api import admin_users, test_flow
 from app.api import admin_errors
 from app.api import admin_system_health
 from app.api import admin_debug
@@ -394,6 +394,7 @@ app.include_router(rpa.router, prefix="/api/rpa", tags=["RPA Gasmaster"])
 app.include_router(daily_summary.router, prefix="/api/daily-summary", tags=["Daily Summary"])
 app.include_router(promotions.router, prefix="/api/promotions", tags=["Promotions"])
 app.include_router(whatsapp_broadcast.router, prefix="/api/whatsapp", tags=["WhatsApp Broadcast"])
+app.include_router(test_flow.router, prefix="/api/test", tags=["Test Flow"])
 
 
 # ==================== AUDIT LOGS (rota direta para compatibilidade) ====================

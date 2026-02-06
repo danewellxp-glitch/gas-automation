@@ -213,9 +213,10 @@ class Order(BaseModel):
     )
     
     # Tracking de aprovação
+    # use_alter=True para evitar conflito de metadata entre SQLModel (User) e BaseModel (Order)
     approved_by: Mapped[Optional[int]] = mapped_column(
         Integer,
-        ForeignKey("users.id", ondelete="SET NULL"),
+        ForeignKey("users.id", ondelete="SET NULL", use_alter=True),
         nullable=True,
         index=True,
         comment="ID do operador/admin que aprovou o pedido (mudou status para PAID)"

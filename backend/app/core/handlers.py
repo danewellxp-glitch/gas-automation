@@ -160,60 +160,12 @@ async def handle_start(
     """
     Handler do estado inicial.
     Dá boas-vindas e oferece opções.
+
+    IMPORTANTE: Delega para handle_greeting para garantir que clientes novos
+    passem pelo fluxo de identificação (PF/PJ -> nome) antes de ver produtos.
     """
-    # Buscar ou criar cliente
-    customer, is_new, has_complete_data = await get_or_create_customer(context.phone)
-    context.customer_id = str(customer.id)
-    context.customer_name = customer.name
-
-    if is_new:
-        greeting = (
-            "👋 *Olá! Bem-vindo à Distribuidora de Gás!*\n\n"
-            "Sou o assistente virtual e vou ajudar você a fazer seu pedido de gás.\n\n"
-        )
-    else:
-        name = customer.name or "cliente"
-        greeting = f"👋 *Olá, {name}!* Que bom ter você de volta!\n\n"
-
-    # Buscar produtos ativos do banco de dados
-    async with AsyncSessionLocal() as db:
-        result = await db.execute(
-            select(Product)
-            .where(Product.is_active == True)
-            .order_by(Product.code)
-        )
-        products = result.scalars().all()
-
-    # Montar mensagem com produtos reais
-    if not products:
-        product_text = "⚠️ Nenhum produto disponível no momento."
-        buttons = []
-    else:
-        product_lines = []
-        buttons = []
-        for p in products:
-            price_str = f"R$ {p.price:.2f}".replace(".", ",")
-            product_lines.append(f"🔵 *{p.code}* - {p.name} - {price_str}")
-            buttons.append({"id": p.code, "text": f"{p.code} - {price_str}"})
-        product_text = "\n".join(product_lines)
-
-    context.state = ConversationState.AWAITING_PRODUCT
-
-    return ProcessedMessage(
-        context=context,
-        responses=[
-            MessageResponse(
-                text=(
-                    f"{greeting}"
-                    "Qual produto você deseja?\n\n"
-                    f"{product_text}"
-                ),
-                buttons=buttons,
-                footer="Escolha uma opção acima" if buttons else "Entre em contato com o suporte",
-            )
-        ],
-        new_state=ConversationState.AWAITING_PRODUCT,
-    )
+    # Delegar para handle_greeting que tem a lógica completa de identificação
+    return await handle_greeting(context, message)
 
 
 async def handle_awaiting_product(
