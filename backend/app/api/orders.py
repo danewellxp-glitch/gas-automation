@@ -282,7 +282,8 @@ async def list_today_orders(
     db: AsyncSession = Depends(get_db),
 ):
     """Lista pedidos de hoje."""
-    today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    from app.models.auth_models import BRAZIL_TZ
+    today_start = datetime.now(BRAZIL_TZ).replace(hour=0, minute=0, second=0, microsecond=0)
 
     query = (
         select(Order)
@@ -385,8 +386,8 @@ async def create_order(
     - Se qualquer operação falhar, tudo é revertido (via get_db rollback)
     - Pedido e itens são criados juntos
     """
-    # Verificar se criação manual está habilitada
-    if not settings.manual_order_creation_enabled:
+    # Verificar se criação manual está habilitada (admin/owner podem sempre criar)
+    if not settings.manual_order_creation_enabled and current_user.role not in ("admin", "owner"):
         raise HTTPException(
             status_code=403,
             detail="Criação manual de pedidos está desabilitada. "
@@ -658,7 +659,7 @@ async def cancel_order(
 
     old_status = order.status
     order.status = OrderStatus.CANCELLED.value
-    order.cancelled_at = datetime.utcnow()
+    order.cancelled_at = datetime.now(timezone.utc)
     order.cancellation_reason = reason
 
     await db.commit()
@@ -681,9 +682,9 @@ async def get_orders_summary(
     """Retorna resumo de pedidos."""
     # Default: últimos 7 dias
     if not date_from:
-        date_from = datetime.now() - timedelta(days=7)
+        date_from = datetime.now(timezone.utc) - timedelta(days=7)
     if not date_to:
-        date_to = datetime.now()
+        date_to = datetime.now(timezone.utc)
 
     # Total de pedidos
     total_query = (
@@ -761,12 +762,15 @@ async def approve_order(
     
     # Atualizar status para 'paid' (aprovado e pago)
     order.status = OrderStatus.PAID.value
-    order.paid_at = datetime.now()
+    order.paid_at = datetime.now(timezone.utc)
     order.approved_by = current_user.id
-    
+
     # Calcular tempo de aprovação
     if order.created_at:
-        approval_time = (datetime.now(timezone.utc) - order.created_at).total_seconds()
+        created = order.created_at
+        if created.tzinfo is None:
+            created = created.replace(tzinfo=timezone.utc)
+        approval_time = (datetime.now(timezone.utc) - created).total_seconds()
     else:
         approval_time = None
     
@@ -822,7 +826,7 @@ async def reject_order(
 
     # Atualizar status para 'cancelled'
     order.status = OrderStatus.CANCELLED.value
-    order.cancelled_at = datetime.now()
+    order.cancelled_at = datetime.now(timezone.utc)
     order.cancellation_reason = data.reason
 
     await db.commit()

@@ -7,7 +7,7 @@ fluxo conversacional inteligente em vez de menus rigidos.
 import logging
 from dataclasses import dataclass
 from typing import Optional, Callable, Awaitable, List, Dict
-from datetime import datetime
+from datetime import datetime, timezone
 
 from app.config import settings
 from app.database import redis_manager, AsyncSessionLocal
@@ -149,7 +149,10 @@ class FlowEngine:
             return None
 
         # Verificar se snapshot tem menos de 24h
-        age = datetime.utcnow() - snapshot.updated_at.replace(tzinfo=None)
+        updated = snapshot.updated_at
+        if updated.tzinfo is None:
+            updated = updated.replace(tzinfo=timezone.utc)
+        age = datetime.now(timezone.utc) - updated
         if age.total_seconds() > 86400:  # 24 horas
             logger.debug(f"Snapshot de {phone} expirado ({age})")
             return None
@@ -175,7 +178,7 @@ class FlowEngine:
             previous_state: Estado anterior (se fornecido, só salva snapshot
                            no PostgreSQL quando o estado muda)
         """
-        context.last_message_at = datetime.utcnow()
+        context.last_message_at = datetime.now(timezone.utc)
         context_dict = context.to_dict()
 
         # 1. Salvar no Redis (primário, rápido) — sempre
@@ -210,7 +213,7 @@ class FlowEngine:
                 set_={
                     "state": state,
                     "context_json": context_dict,
-                    "updated_at": datetime.utcnow(),
+                    "updated_at": datetime.now(timezone.utc),
                 },
             )
             await db.execute(stmt)

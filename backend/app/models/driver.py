@@ -5,7 +5,7 @@ Gerencia entregadores e motoristas.
 
 import enum
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List
 
 from sqlalchemy import Boolean, DateTime, Index, String, Text, func, JSON
@@ -146,7 +146,7 @@ class Driver(BaseModel):
     def go_online(self):
         """Coloca entregador online"""
         self.status = DriverStatus.AVAILABLE.value
-        self.last_online = datetime.now()
+        self.last_online = datetime.now(timezone.utc)
         return self
 
     def go_offline(self):

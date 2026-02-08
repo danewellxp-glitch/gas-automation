@@ -3,7 +3,7 @@ API de Localizacoes - Mapa em tempo real.
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 from uuid import UUID
 
@@ -179,7 +179,7 @@ async def get_map_data(
             drivers=drivers,
             deliveries=deliveries,
             customer_locations=customer_locations,
-            updated_at=datetime.utcnow(),
+            updated_at=datetime.now(timezone.utc),
         )
 
     except Exception as e:
@@ -197,7 +197,7 @@ async def get_recent_customer_locations(
     from app.models.event_log import EventLog
 
     try:
-        cutoff = datetime.utcnow() - timedelta(hours=hours_back)
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=hours_back)
 
         query = select(EventLog).where(
             and_(
@@ -257,7 +257,7 @@ async def update_driver_location(
         driver.current_location = {
             "latitude": location.latitude,
             "longitude": location.longitude,
-            "timestamp": (location.timestamp or datetime.utcnow()).isoformat(),
+            "timestamp": (location.timestamp or datetime.now(timezone.utc)).isoformat(),
         }
 
         await db.commit()

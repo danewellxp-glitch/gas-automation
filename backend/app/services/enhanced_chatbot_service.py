@@ -32,16 +32,13 @@ class DatabaseContextManager:
         ).first()
 
         if context_record:
-            # Check if context is still valid (handle timezone comparison)
-            current_time = brazilian_now()
-            try:
-                is_valid = context_record.expires_at > current_time
-            except TypeError:
-                # Handle timezone-aware vs naive datetime comparison
-                if context_record.expires_at.tzinfo is None:
-                    is_valid = context_record.expires_at > current_time.replace(tzinfo=None)
-                else:
-                    is_valid = context_record.expires_at > current_time
+            # Check if context is still valid
+            # BotContext stores naive Brazilian time, so compare consistently
+            current_time = brazilian_now().replace(tzinfo=None)
+            expires = context_record.expires_at
+            if expires.tzinfo is not None:
+                expires = expires.replace(tzinfo=None)
+            is_valid = expires > current_time
 
             if is_valid:
                 # Parse collected_info if it's a JSON string
@@ -78,7 +75,7 @@ class DatabaseContextManager:
             'bot_responses_count': 0,
             'escalation_requested': False,
             'escalation_reason': None,
-            'last_updated': brazilian_now(),
+            'last_updated': brazilian_now().replace(tzinfo=None),
             'user_last_message': None,
             'last_bot_response': None
         }
@@ -111,8 +108,8 @@ class DatabaseContextManager:
         if 'escalation_reason' in updates:
             context_record.escalation_reason = updates['escalation_reason']
 
-        context_record.last_updated = brazilian_now()
-        context_record.expires_at = brazilian_now() + self.context_timeout
+        context_record.last_updated = brazilian_now().replace(tzinfo=None)
+        context_record.expires_at = brazilian_now().replace(tzinfo=None) + self.context_timeout
 
         self.session.commit()
 
@@ -130,8 +127,8 @@ class DatabaseContextManager:
             bot_responses_count=context.get('bot_responses_count', 0),
             escalation_requested=context.get('escalation_requested', False),
             escalation_reason=context.get('escalation_reason'),
-            last_updated=context.get('last_updated', brazilian_now()),
-            expires_at=brazilian_now() + self.context_timeout
+            last_updated=context.get('last_updated', brazilian_now().replace(tzinfo=None)),
+            expires_at=brazilian_now().replace(tzinfo=None) + self.context_timeout
         )
         self.session.add(context_record)
         self.session.commit()
@@ -147,16 +144,11 @@ class DatabaseContextManager:
 
     def cleanup_expired_contexts(self) -> int:
         """Clean up expired contexts from database"""
-        current_time = brazilian_now()
+        current_time = brazilian_now().replace(tzinfo=None)
 
-        try:
-            expired_contexts = self.session.exec(
-                select(BotContext).where(BotContext.expires_at < current_time)
-            ).all()
-        except TypeError:
-            expired_contexts = self.session.exec(
-                select(BotContext).where(BotContext.expires_at < current_time.replace(tzinfo=None))
-            ).all()
+        expired_contexts = self.session.exec(
+            select(BotContext).where(BotContext.expires_at < current_time)
+        ).all()
 
         count = len(expired_contexts)
         for context in expired_contexts:

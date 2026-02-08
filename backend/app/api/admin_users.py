@@ -136,8 +136,8 @@ async def admin_create_user(
         is_active=body.is_active,
         must_change_password=True,
         temp_password_issued_at=datetime.utcnow(),
-        created_at=datetime.now(),
-        updated_at=datetime.now(),
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
     )
 
     session.add(user)
@@ -219,7 +219,7 @@ async def admin_update_user(
     if body.is_active is not None:
         user.is_active = body.is_active
 
-    user.updated_at = datetime.now()
+    user.updated_at = datetime.utcnow()
     session.add(user)
     await session.commit()
     await session.refresh(user)
@@ -265,7 +265,7 @@ async def admin_reset_password(
     user.hashed_password = get_password_hash(temporary_password)
     user.must_change_password = True
     user.temp_password_issued_at = datetime.utcnow()
-    user.updated_at = datetime.now()
+    user.updated_at = datetime.utcnow()
 
     session.add(user)
     await session.commit()

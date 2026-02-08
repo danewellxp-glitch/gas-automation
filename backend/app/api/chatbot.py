@@ -192,7 +192,7 @@ async def get_chatbot_analytics(
             escalation_reasons[row[0] or "unknown"] = row[1]
 
         # Interacoes ultimas 24h
-        yesterday = datetime.now() - timedelta(days=1)
+        yesterday = datetime.utcnow() - timedelta(days=1)
         recent_result = await session.execute(
             select(func.count(BotInteraction.id))
             .where(BotInteraction.timestamp >= yesterday)

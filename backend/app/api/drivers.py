@@ -4,7 +4,7 @@ API endpoints para Driver (Entregador).
 
 import asyncio
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List
 from uuid import UUID
 
@@ -111,7 +111,7 @@ async def update_my_status(
     # Atualizar status
     driver.status = status_update.status
     if status_update.status in [DriverStatus.AVAILABLE.value, DriverStatus.BUSY.value]:
-        driver.last_online = datetime.now()
+        driver.last_online = datetime.now(timezone.utc)
     
     session.add(driver)
     await session.commit()
@@ -240,7 +240,7 @@ async def update_my_location(
     driver.current_location = {
         "latitude": location.latitude,
         "longitude": location.longitude,
-        "timestamp": datetime.now().isoformat()
+        "timestamp": datetime.now(timezone.utc).isoformat()
     }
     
     session.add(driver)
@@ -439,7 +439,8 @@ async def get_my_stats(
         raise HTTPException(status_code=404, detail="Perfil de entregador não encontrado")
     
     # Calcular estatísticas
-    now = datetime.now()
+    from app.models.auth_models import BRAZIL_TZ
+    now = datetime.now(BRAZIL_TZ)
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     week_start = today_start - timedelta(days=today_start.weekday())
     month_start = today_start.replace(day=1)
@@ -574,14 +575,14 @@ async def update_delivery_status(
         await session.execute(
             update(Order).where(Order.id == delivery.order_id).values(
                 status=OrderStatus.DISPATCHED.value,
-                dispatched_at=datetime.now()
+                dispatched_at=datetime.now(timezone.utc)
             )
         )
     elif status_update.status == DeliveryStatus.DELIVERED.value:
         await session.execute(
             update(Order).where(Order.id == delivery.order_id).values(
                 status=OrderStatus.DELIVERED.value,
-                delivered_at=datetime.now()
+                delivered_at=datetime.now(timezone.utc)
             )
         )
         # Driver volta para disponível

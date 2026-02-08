@@ -1,6 +1,6 @@
 from sqlmodel import SQLModel, Field
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 import pytz
 
 # Brazilian timezone
@@ -21,8 +21,8 @@ class User(SQLModel, table=True):
     is_active: bool = Field(default=True)
     must_change_password: bool = Field(default=False)
     temp_password_issued_at: Optional[datetime] = Field(default=None)
-    created_at: datetime = Field(default_factory=lambda: datetime.now())
-    updated_at: datetime = Field(default_factory=lambda: datetime.now())
+    created_at: datetime = Field(default_factory=lambda: datetime.utcnow())
+    updated_at: datetime = Field(default_factory=lambda: datetime.utcnow())
 
 class Conversation(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -30,7 +30,7 @@ class Conversation(SQLModel, table=True):
     name: Optional[str] = None
     assigned_to: Optional[int] = Field(default=None, foreign_key="user.id")
     created_by: int = Field(foreign_key="user.id")
-    created_at: datetime = Field(default_factory=lambda: datetime.now())
+    created_at: datetime = Field(default_factory=lambda: datetime.utcnow())
     status: str = "pending"
 
 class Message(SQLModel, table=True):
@@ -43,7 +43,7 @@ class Message(SQLModel, table=True):
     n8n_workflow_id: Optional[str] = None  # n8n workflow identifier
     n8n_execution_id: Optional[str] = None  # n8n execution identifier
     n8n_processed: bool = False  # whether message was processed by n8n
-    timestamp: datetime = Field(default_factory=lambda: datetime.now())
+    timestamp: datetime = Field(default_factory=lambda: datetime.utcnow())
 
 class AuditLog(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -77,5 +77,5 @@ class BotContext(SQLModel, table=True):
     bot_responses_count: int = 0
     escalation_requested: bool = False
     escalation_reason: Optional[str] = None
-    last_updated: datetime = Field(default_factory=lambda: datetime.now())
-    expires_at: datetime = Field(default_factory=lambda: datetime.now() + timedelta(hours=2))
+    last_updated: datetime = Field(default_factory=lambda: brazilian_now().replace(tzinfo=None))
+    expires_at: datetime = Field(default_factory=lambda: brazilian_now().replace(tzinfo=None) + timedelta(hours=2))

@@ -4,7 +4,7 @@ Modelos de Pedido e Itens do Pedido.
 
 import enum
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import TYPE_CHECKING, Optional, List
 
@@ -273,7 +273,7 @@ class Order(BaseModel):
         """Atualiza status e timestamps relacionados."""
         self.status = new_status
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         if new_status == OrderStatus.PAID.value:
             self.paid_at = now
             if approved_by is not None:

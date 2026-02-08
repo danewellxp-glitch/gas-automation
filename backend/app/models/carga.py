@@ -5,7 +5,7 @@ Controla produtos que o entregador leva e acerto no fim do dia.
 
 import enum
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List
 
 from sqlalchemy import DateTime, Index, String, Integer, ForeignKey, func
@@ -98,13 +98,13 @@ class CargaVeiculo(BaseModel):
     def registrar_saida(self):
         """Registra saída do motorista."""
         self.status = CargaStatus.EM_ROTA.value
-        self.data_saida = datetime.now()
+        self.data_saida = datetime.now(timezone.utc)
         return self
 
     def finalizar(self):
         """Finaliza a carga (acerto realizado)."""
         self.status = CargaStatus.FINALIZADA.value
-        self.data_retorno = datetime.now()
+        self.data_retorno = datetime.now(timezone.utc)
         return self
 
 
