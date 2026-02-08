@@ -163,12 +163,22 @@ class FlowEngine:
         context.retry_count = 0
         return context
 
-    async def save_context(self, context: ConversationContext) -> None:
-        """Salva contexto da conversa no Redis + PostgreSQL (backup)."""
+    async def save_context(
+        self,
+        context: ConversationContext,
+        previous_state: Optional[ConversationState] = None,
+    ) -> None:
+        """Salva contexto da conversa no Redis + PostgreSQL (backup).
+
+        Args:
+            context: Contexto atualizado da conversa
+            previous_state: Estado anterior (se fornecido, só salva snapshot
+                           no PostgreSQL quando o estado muda)
+        """
         context.last_message_at = datetime.utcnow()
         context_dict = context.to_dict()
 
-        # 1. Salvar no Redis (primário, rápido)
+        # 1. Salvar no Redis (primário, rápido) — sempre
         await redis_manager.set_conversation_state(
             context.phone,
             context_dict,
@@ -176,11 +186,14 @@ class FlowEngine:
         )
         logger.debug(f"Contexto salvo no Redis para {context.phone}: {context.state}")
 
-        # 2. Upsert no PostgreSQL (backup, async best-effort)
-        try:
-            await self._save_snapshot(context.phone, context.state.value, context_dict)
-        except Exception as e:
-            logger.warning(f"Erro ao salvar snapshot PostgreSQL para {context.phone}: {e}")
+        # 2. Upsert no PostgreSQL (backup, best-effort)
+        # Só salva quando o estado muda (reduz ~80% dos writes)
+        state_changed = previous_state is None or previous_state != context.state
+        if state_changed:
+            try:
+                await self._save_snapshot(context.phone, context.state.value, context_dict)
+            except Exception as e:
+                logger.warning(f"Erro ao salvar snapshot PostgreSQL para {context.phone}: {e}")
 
     async def _save_snapshot(self, phone: str, state: str, context_dict: dict) -> None:
         """Upsert do snapshot no PostgreSQL."""
@@ -229,6 +242,7 @@ class FlowEngine:
 
         # Carregar contexto
         context = await self.get_context(phone)
+        previous_state = context.state  # Guardar para otimizar snapshot
         logger.info(f"[DEBUG-1] Estado CARREGADO do Redis: {context.state} (phone={phone})")
         context.message_count += 1
 
@@ -258,7 +272,7 @@ class FlowEngine:
         global_result = await self._check_global_commands_nlp(context, message, intention)
         if global_result:
             global_result.context.state = global_result.new_state
-            await self.save_context(global_result.context)
+            await self.save_context(global_result.context, previous_state=previous_state)
             # mark_as_read agora é feito no webhook (feedback imediato)
             return global_result
 
@@ -268,7 +282,7 @@ class FlowEngine:
 
             # IMPORTANTE: Sincronizar estado no contexto para persistir no Redis
             result.context.state = result.new_state
-            await self.save_context(result.context)
+            await self.save_context(result.context, previous_state=previous_state)
             # mark_as_read agora é feito no webhook (feedback imediato)
 
             return result

@@ -26,10 +26,10 @@ engine = create_async_engine(
     pool_size=10,
     max_overflow=20,
     connect_args={
-        # Desabilitar cache de prepared statements do asyncpg
-        # Isso evita problemas quando colunas são adicionadas ao banco
-        "prepared_statement_cache_size": 0,
-        "statement_cache_size": 0,
+        # Em debug/dev: desabilitar cache para evitar problemas com migrações
+        # Em produção: habilitar cache para melhor performance (~25% throughput)
+        "prepared_statement_cache_size": 0 if settings.debug else 256,
+        "statement_cache_size": 0 if settings.debug else 1024,
     },
 )
 

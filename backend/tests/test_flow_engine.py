@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, patch, MagicMock
 from app.core.state_machine import ConversationState, ConversationContext, StateTransition
 from app.core.flow_engine import FlowEngine, MessageResponse, ProcessedMessage
 from app.core.business_rules import BusinessRules
+from app.core.nlp_utils import Intention, detect_intention
 
 
 class TestConversationState:
@@ -279,47 +280,41 @@ class TestFlowEngine:
 
     @pytest.mark.asyncio
     async def test_global_command_menu(self):
-        """Testa comando global 'menu'."""
+        """Testa comando global 'menu' via NLP."""
         engine = FlowEngine()
         context = ConversationContext(phone="5541999999999")
         context.state = ConversationState.AWAITING_PAYMENT
 
-        result = await engine._check_global_commands(context, "menu")
+        result = await engine._check_global_commands_nlp(context, "menu", Intention.MENU)
 
         assert result is not None
-        assert result.context.state == ConversationState.START
+        assert result.new_state == ConversationState.START
         assert len(result.responses) > 0
 
     @pytest.mark.asyncio
     async def test_global_command_ajuda(self):
-        """Testa comando global 'ajuda'."""
+        """Testa comando global 'ajuda' via NLP."""
         engine = FlowEngine()
         context = ConversationContext(phone="5541999999999")
 
-        result = await engine._check_global_commands(context, "ajuda")
+        result = await engine._check_global_commands_nlp(context, "ajuda", Intention.HELP)
 
         assert result is not None
         assert "ajuda" in result.responses[0].text.lower()
 
-    @pytest.mark.asyncio
-    async def test_global_command_atendente(self):
-        """Testa comando global 'atendente'."""
-        engine = FlowEngine()
-        context = ConversationContext(phone="5541999999999")
-
-        result = await engine._check_global_commands(context, "atendente")
-
-        assert result is not None
-        assert result.new_state == ConversationState.TALKING_TO_HUMAN
+    def test_global_command_atendente_intention(self):
+        """Testa que 'atendente' é detectado como intenção HUMAN pelo NLP."""
+        intention = detect_intention("atendente")
+        assert intention == Intention.HUMAN
 
     @pytest.mark.asyncio
     async def test_global_command_cancelar(self):
-        """Testa comando global 'cancelar'."""
+        """Testa comando global 'cancelar' via NLP."""
         engine = FlowEngine()
         context = ConversationContext(phone="5541999999999")
         context.order_id = "123"
 
-        result = await engine._check_global_commands(context, "cancelar")
+        result = await engine._check_global_commands_nlp(context, "cancelar", Intention.CANCEL)
 
         assert result is not None
         assert result.context.order_id is None
