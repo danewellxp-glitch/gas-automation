@@ -25,23 +25,33 @@ def verify_password(plain_password, hashed_password):
     """Verify a password against its hash"""
     return pwd_context.verify(plain_password, hashed_password)
 
-def get_password_hash(password: str) -> str:
+def validate_password_strength(password: str) -> None:
     """
-    Hash a password using Argon2.
-    
-    Valida comprimento antes de hash para prevenir truncamento silencioso.
+    Valida comprimento e força da senha.
+    Raises ValueError se a senha não atender aos critérios.
     """
-    # Validar comprimento mínimo
     if len(password) < 8:
         raise ValueError("Senha deve ter no mínimo 8 caracteres")
-    
-    # Validar comprimento máximo (limite do Argon2)
     if len(password) > 72:
         raise ValueError(
             "Senha não pode ter mais de 72 caracteres "
             "(limitação do algoritmo Argon2)"
         )
-    
+    if not any(c.isupper() for c in password):
+        raise ValueError("Senha deve conter pelo menos uma letra maiúscula")
+    if not any(c.islower() for c in password):
+        raise ValueError("Senha deve conter pelo menos uma letra minúscula")
+    if not any(c.isdigit() for c in password):
+        raise ValueError("Senha deve conter pelo menos um número")
+
+
+def get_password_hash(password: str) -> str:
+    """
+    Hash a password using Argon2.
+
+    Valida comprimento e força antes de hash.
+    """
+    validate_password_strength(password)
     return pwd_context.hash(password)
 
 async def authenticate_user(session: AsyncSession, username: str, password: str):

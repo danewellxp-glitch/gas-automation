@@ -68,7 +68,6 @@ async def login_by_email(
         )
     
     # Verify password
-    from app.auth import verify_password
     if not verify_password(credentials.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -115,14 +114,17 @@ async def register_user(
         )
 
     # Create user
-    user = await create_user(
-        session=session,
-        username=user_data.username,
-        email=user_data.email,
-        full_name=user_data.full_name,
-        password=user_data.password,
-        role=user_data.role
-    )
+    try:
+        user = await create_user(
+            session=session,
+            username=user_data.username,
+            email=user_data.email,
+            full_name=user_data.full_name,
+            password=user_data.password,
+            role=user_data.role
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
     # Create access token
     access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
@@ -202,8 +204,10 @@ async def change_password(
     if not verify_password(body.current_password, current_user.hashed_password):
         raise HTTPException(status_code=400, detail="Senha atual inválida")
 
-    # get_password_hash já valida min/max
-    current_user.hashed_password = get_password_hash(body.new_password)
+    try:
+        current_user.hashed_password = get_password_hash(body.new_password)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     current_user.must_change_password = False
     current_user.temp_password_issued_at = None
     current_user.updated_at = datetime.utcnow()
