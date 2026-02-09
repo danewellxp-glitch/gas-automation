@@ -323,11 +323,7 @@ async def handle_awaiting_quantity(
 
         if customer and customer.address:
             context.address = customer.address
-            addr = customer.address
-            address_text = f"{addr.get('street', '')}, {addr.get('number', '')}"
-            if addr.get("complement"):
-                address_text += f" - {addr['complement']}"
-            address_text += f"\n{addr.get('bairro', '')} - {addr.get('city', 'Curitiba')}"
+            address_text = _format_address(customer.address)
 
             context.state = ConversationState.CONFIRMING_ADDRESS
 
@@ -675,6 +671,7 @@ async def handle_order_confirmed(
 ) -> ProcessedMessage:
     """
     Handler após confirmação do pedido.
+    Permite FAQ e tracking sem resetar contexto.
     """
     msg_lower = message.lower().strip()
 
@@ -682,7 +679,13 @@ async def handle_order_confirmed(
     if "status" in msg_lower or "pedido" in msg_lower:
         return await handle_tracking_order(context, message)
 
-    # Novo pedido
+    # Permitir FAQ sem resetar
+    from app.core.nlp_utils import detect_faq_category
+    faq_category = detect_faq_category(message)
+    if faq_category:
+        return await handle_faq(context, message, faq_category)
+
+    # Qualquer outra mensagem → novo pedido
     context.reset()
     return await handle_start(context, message)
 
@@ -1322,6 +1325,10 @@ async def handle_collecting_document(
     Handler para coletar CPF (PF) ou CNPJ (PJ) ANTES de confirmar pedido.
     Chamado apos selecao de pagamento, quando cliente nao tem documento cadastrado.
     """
+    # Guard: garantir que produto e quantidade existem antes de prosseguir
+    if not context.selected_product or not context.selected_quantity:
+        return await handle_collect_missing_data(context, message)
+
     doc = re.sub(r"[^0-9]", "", message)
     customer_type = context.customer_type or "PF"
 

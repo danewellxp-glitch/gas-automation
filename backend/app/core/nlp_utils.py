@@ -227,13 +227,6 @@ def detect_intention(text: str, context=None) -> str:
     if _text_matches_any_word(normalized, GREETING_SYNONYMS):
         return Intention.GREETING
 
-    # --- CONFIRMAR / NEGAR sem contexto explícito mas com dados pendentes ---
-    if context and _has_pending_order(context):
-        if _text_matches_any_word(normalized, CONFIRM_SYNONYMS):
-            return Intention.CONFIRM
-        if _text_matches_any_word(normalized, DENY_SYNONYMS):
-            return Intention.DENY
-
     return Intention.UNKNOWN
 
 

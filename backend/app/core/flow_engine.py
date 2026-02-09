@@ -274,19 +274,29 @@ class FlowEngine:
         # Verificar comandos globais via NLP (prioridade alta)
         global_result = await self._check_global_commands_nlp(context, message, intention)
         if global_result:
-            global_result.context.state = global_result.new_state
-            await self.save_context(global_result.context, previous_state=previous_state)
-            # mark_as_read agora é feito no webhook (feedback imediato)
+            new_state = global_result.new_state
+            global_result.context.state = new_state
+            try:
+                await self.save_context(global_result.context, previous_state=previous_state)
+            except Exception as save_err:
+                logger.error(f"Falha ao salvar contexto (global): {save_err}")
+                global_result.context.state = previous_state
             return global_result
 
         # Roteamento inteligente baseado em intencao + estado
         try:
             result = await self._route_message(context, message, intention)
 
-            # IMPORTANTE: Sincronizar estado no contexto para persistir no Redis
-            result.context.state = result.new_state
-            await self.save_context(result.context, previous_state=previous_state)
-            # mark_as_read agora é feito no webhook (feedback imediato)
+            # Sincronizar estado e persistir no Redis
+            new_state = result.new_state
+            if new_state != previous_state:
+                result.context.retry_count = 0
+            result.context.state = new_state
+            try:
+                await self.save_context(result.context, previous_state=previous_state)
+            except Exception as save_err:
+                logger.error(f"Falha ao salvar contexto: {save_err}")
+                result.context.state = previous_state
 
             return result
 
