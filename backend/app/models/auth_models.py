@@ -28,8 +28,8 @@ class Conversation(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     customer_number: str
     name: Optional[str] = None
-    assigned_to: Optional[int] = Field(default=None, foreign_key="user.id")
-    created_by: int = Field(foreign_key="user.id")
+    assigned_to: Optional[int] = Field(default=None, foreign_key="users.id")
+    created_by: int = Field(foreign_key="users.id")
     created_at: datetime = Field(default_factory=lambda: datetime.utcnow())
     status: str = "pending"
 

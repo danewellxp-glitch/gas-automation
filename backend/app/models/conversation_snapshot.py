@@ -3,7 +3,7 @@ Model para persistência de contexto de conversa no PostgreSQL.
 Backup do Redis para recuperar pedidos abandonados.
 """
 
-from sqlalchemy import Column, String, Index
+from sqlalchemy import Column, String
 from sqlalchemy.dialects.postgresql import JSONB
 
 from app.models.base import BaseModel
@@ -22,10 +22,6 @@ class ConversationSnapshot(BaseModel):
     phone = Column(String(20), unique=True, nullable=False, index=True)
     state = Column(String(50), nullable=False, default="start")
     context_json = Column(JSONB, nullable=False, default={})
-
-    __table_args__ = (
-        Index("ix_conversation_snapshots_phone", "phone"),
-    )
 
     def __repr__(self):
         return f"<ConversationSnapshot phone={self.phone} state={self.state}>"
