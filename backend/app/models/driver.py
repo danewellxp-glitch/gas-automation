@@ -59,6 +59,12 @@ class Driver(BaseModel):
         nullable=True,
         comment="Email opcional"
     )
+    bairro: Mapped[Optional[str]] = mapped_column(
+        String(100),
+        nullable=True,
+        index=True,
+        comment="Bairro de atuação do entregador"
+    )
 
     # Veículo
     vehicle_type: Mapped[Optional[str]] = mapped_column(

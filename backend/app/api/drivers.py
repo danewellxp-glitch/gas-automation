@@ -318,9 +318,11 @@ async def get_my_deliveries(
     # Construir query baseado no status
     if status == "pending":
         # Entregas disponíveis (sem driver alocado ainda)
-        # TODO: Filtrar por bairro do driver quando implementar
+        conditions = [Delivery.status == DeliveryStatus.PENDING.value]
+        if driver.bairro:
+            conditions.append(Delivery.bairro == driver.bairro)
         query = select(Delivery).where(
-            Delivery.status == DeliveryStatus.PENDING.value
+            and_(*conditions)
         ).order_by(Delivery.created_at.desc())
     
     elif status == "active":

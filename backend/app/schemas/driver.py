@@ -16,6 +16,7 @@ class DriverBase(BaseModel):
     email: Optional[str] = Field(None, max_length=100, description="Email opcional")
     vehicle_type: Optional[str] = Field(None, max_length=50, description="Tipo de veículo (moto, carro)")
     license_plate: Optional[str] = Field(None, max_length=10, description="Placa do veículo")
+    bairro: Optional[str] = Field(None, max_length=100, description="Bairro de atuação")
 
 
 class DriverCreate(DriverBase):
@@ -30,6 +31,7 @@ class DriverUpdate(BaseModel):
     email: Optional[str] = Field(None, max_length=100)
     vehicle_type: Optional[str] = Field(None, max_length=50)
     license_plate: Optional[str] = Field(None, max_length=10)
+    bairro: Optional[str] = Field(None, max_length=100)
     is_active: Optional[bool] = None
 
 
@@ -79,10 +81,11 @@ class DriverBrief(BaseModel):
     phone: str
     status: str
     vehicle_type: Optional[str] = None
+    bairro: Optional[str] = None
     rating: float
     total_deliveries: int
     is_active: bool
-    
+
     class Config:
         from_attributes = True
 

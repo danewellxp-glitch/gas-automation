@@ -18,6 +18,7 @@ import io
 from fastapi import UploadFile, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
+import httpx
 from app.config import settings
 from app.integrations.minio_client import MinIOClient
 
@@ -174,12 +175,25 @@ class ImageProcessor:
     async def extract_text_from_image(self, image_path_or_url: str) -> Optional[str]:
         """Extrai texto de uma imagem usando OCR"""
         try:
-            # Se for URL do MinIO, baixar primeiro
             if image_path_or_url.startswith("http"):
-                # TODO: Implementar download da URL
-                pass
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    resp = await client.get(image_path_or_url)
+                    resp.raise_for_status()
+                    content_type = resp.headers.get("content-type", "")
+                    if not content_type.startswith("image/"):
+                        logger.warning(f"URL não é imagem: {content_type}")
+                        return None
+                    if len(resp.content) > self.max_file_size:
+                        logger.warning("Imagem da URL excede tamanho máximo")
+                        return None
+                    image_array = np.frombuffer(resp.content, np.uint8)
+                    image = cv2.imdecode(image_array, cv2.IMREAD_COLOR)
+                    if image is None:
+                        logger.warning("Falha ao decodificar imagem da URL")
+                        return None
+                    text = pytesseract.image_to_string(image, lang='por+eng')
+                    return text.strip()
             else:
-                # Caminho local
                 image = cv2.imread(image_path_or_url)
                 text = pytesseract.image_to_string(image, lang='por+eng')
                 return text.strip()
