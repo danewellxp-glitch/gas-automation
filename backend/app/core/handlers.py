@@ -243,7 +243,7 @@ async def handle_awaiting_product(
             new_state=ConversationState.AWAITING_PRODUCT,
         )
 
-    context.state = ConversationState.AWAITING_QUANTITY
+    context.transition_to(ConversationState.AWAITING_QUANTITY)
 
     return ProcessedMessage(
         context=context,
@@ -325,7 +325,7 @@ async def handle_awaiting_quantity(
             context.address = customer.address
             address_text = _format_address(customer.address)
 
-            context.state = ConversationState.CONFIRMING_ADDRESS
+            context.transition_to(ConversationState.CONFIRMING_ADDRESS)
 
             return ProcessedMessage(
                 context=context,
@@ -349,7 +349,7 @@ async def handle_awaiting_quantity(
             )
 
     # Cliente sem endereço
-    context.state = ConversationState.AWAITING_ADDRESS
+    context.transition_to(ConversationState.AWAITING_ADDRESS)
 
     return ProcessedMessage(
         context=context,
@@ -380,7 +380,7 @@ async def handle_confirming_address(
     # Confirmar endereço
     if msg_lower in ["sim", "correto", "confirmar", "confirmar_end", "s", "1"] or "sim" in msg_lower:
         context.address_confirmed = True
-        context.state = ConversationState.AWAITING_PAYMENT
+        context.transition_to(ConversationState.AWAITING_PAYMENT)
 
         # Buscar produto do banco de dados
         product = await get_product(context.selected_product)
@@ -417,7 +417,7 @@ async def handle_confirming_address(
 
     # Alterar endereço
     if msg_lower in ["alterar", "não", "nao", "alterar_end", "n", "2"] or "alterar" in msg_lower:
-        context.state = ConversationState.AWAITING_ADDRESS
+        context.transition_to(ConversationState.AWAITING_ADDRESS)
         context.address = None
 
         return ProcessedMessage(
@@ -497,7 +497,7 @@ async def handle_awaiting_address(
             await db.commit()
 
     context.address_confirmed = True
-    context.state = ConversationState.AWAITING_PAYMENT
+    context.transition_to(ConversationState.AWAITING_PAYMENT)
 
     # Buscar produto do banco de dados
     product = await get_product(context.selected_product)
@@ -556,7 +556,7 @@ async def _payment_selected_maybe_ask_document(
         doc_text = "Para finalizar, preciso do seu *CPF*:\n_(apenas numeros)_"
 
     payment_label = "Dinheiro" if context.payment_method == "cash" else "Cartao"
-    context.state = ConversationState.COLLECTING_DOCUMENT
+    context.transition_to(ConversationState.COLLECTING_DOCUMENT)
 
     return ProcessedMessage(
         context=context,
@@ -720,7 +720,7 @@ async def handle_confirming_order(
         # Criar pedido
         order = await create_order(context, total)
         context.order_id = str(order.id)
-        context.state = ConversationState.ORDER_CONFIRMED
+        context.transition_to(ConversationState.ORDER_CONFIRMED)
 
         # Emitir evento WebSocket de novo pedido
         try:
@@ -970,7 +970,7 @@ async def handle_greeting(
     # ========== CENARIO 1: Cliente NOVO - perguntar PF ou Empresa ==========
     has_name = bool(customer.name and len(customer.name.strip()) > 2)
     if is_new and not has_name:
-        context.state = ConversationState.ASKING_CUSTOMER_TYPE
+        context.transition_to(ConversationState.ASKING_CUSTOMER_TYPE)
         return ProcessedMessage(
             context=context,
             responses=[
@@ -999,7 +999,7 @@ async def handle_greeting(
             if last_items:
                 item = last_items[0]
                 addr_text = _format_address(customer.address) if customer.address else "endereco cadastrado"
-                context.state = ConversationState.START
+                context.transition_to(ConversationState.START)
 
                 return ProcessedMessage(
                     context=context,
@@ -1023,7 +1023,7 @@ async def handle_greeting(
 
     # ========== CENARIO 3: Cliente INCOMPLETO (existe mas falta nome) ==========
     if not has_name:
-        context.state = ConversationState.COLLECTING_NAME
+        context.transition_to(ConversationState.COLLECTING_NAME)
         return ProcessedMessage(
             context=context,
             responses=[
@@ -1065,7 +1065,7 @@ async def handle_greeting(
     if context.pending_entities.get("product"):
         return await handle_collect_missing_data(context, message)
 
-    context.state = ConversationState.AWAITING_PRODUCT
+    context.transition_to(ConversationState.AWAITING_PRODUCT)
 
     return ProcessedMessage(
         context=context,
@@ -1099,7 +1099,7 @@ async def handle_asking_customer_type(
 
     if is_pj:
         context.customer_type = "PJ"
-        context.state = ConversationState.COLLECTING_NAME
+        context.transition_to(ConversationState.COLLECTING_NAME)
         return ProcessedMessage(
             context=context,
             responses=[
@@ -1112,7 +1112,7 @@ async def handle_asking_customer_type(
 
     if is_pf:
         context.customer_type = "PF"
-        context.state = ConversationState.COLLECTING_NAME
+        context.transition_to(ConversationState.COLLECTING_NAME)
         return ProcessedMessage(
             context=context,
             responses=[
@@ -1127,7 +1127,7 @@ async def handle_asking_customer_type(
     if context.retry_count >= 2:
         context.customer_type = "PF"
         context.retry_count = 0
-        context.state = ConversationState.COLLECTING_NAME
+        context.transition_to(ConversationState.COLLECTING_NAME)
         return ProcessedMessage(
             context=context,
             responses=[
@@ -1254,7 +1254,7 @@ async def handle_collecting_name(
 
     greeting = f"Prazer, *{name}*!"
 
-    context.state = ConversationState.AWAITING_PRODUCT
+    context.transition_to(ConversationState.AWAITING_PRODUCT)
 
     return ProcessedMessage(
         context=context,
@@ -1291,7 +1291,7 @@ async def _show_order_summary_for_confirmation(
         payment_text += f" (troco p/ R$ {context.change_for})"
 
     context.awaiting_confirmation = True
-    context.state = ConversationState.CONFIRMING_ORDER
+    context.transition_to(ConversationState.CONFIRMING_ORDER)
 
     return ProcessedMessage(
         context=context,
@@ -1426,7 +1426,7 @@ async def handle_collect_missing_data(
     # 1. Falta produto?
     if not context.selected_product:
         context.awaiting_input_type = "product"
-        context.state = ConversationState.AWAITING_PRODUCT
+        context.transition_to(ConversationState.AWAITING_PRODUCT)
 
         async with AsyncSessionLocal() as db:
             result = await db.execute(
@@ -1472,7 +1472,7 @@ async def handle_collect_missing_data(
             context.address_confirmed = True
         else:
             context.awaiting_input_type = "address"
-            context.state = ConversationState.AWAITING_ADDRESS
+            context.transition_to(ConversationState.AWAITING_ADDRESS)
 
             return ProcessedMessage(
                 context=context,
@@ -1490,7 +1490,7 @@ async def handle_collect_missing_data(
     # 4. Falta pagamento?
     if not context.payment_method:
         context.awaiting_input_type = "payment"
-        context.state = ConversationState.AWAITING_PAYMENT
+        context.transition_to(ConversationState.AWAITING_PAYMENT)
 
         return ProcessedMessage(
             context=context,
@@ -1554,7 +1554,7 @@ async def handle_show_confirmation(
     context.selected_quantity = quantity
     context.payment_method = payment
     context.awaiting_confirmation = True
-    context.state = ConversationState.CONFIRMING_ORDER
+    context.transition_to(ConversationState.CONFIRMING_ORDER)
 
     return ProcessedMessage(
         context=context,
@@ -1595,7 +1595,7 @@ async def handle_confirm_order(
     # Criar pedido no banco
     order = await create_order(context, total)
     context.order_id = str(order.id)
-    context.state = ConversationState.ORDER_CONFIRMED
+    context.transition_to(ConversationState.ORDER_CONFIRMED)
     context.awaiting_confirmation = False
 
     # Emitir evento WebSocket
@@ -1668,7 +1668,7 @@ async def handle_edit_order(
         context.selected_quantity = 1
         context.pending_entities.pop("quantity", None)
         context.awaiting_input_type = "quantity"
-        context.state = ConversationState.AWAITING_QUANTITY
+        context.transition_to(ConversationState.AWAITING_QUANTITY)
 
         return ProcessedMessage(
             context=context,
@@ -1690,7 +1690,7 @@ async def handle_edit_order(
         context.address_confirmed = False
         context.pending_entities.pop("address_raw", None)
         context.pending_entities.pop("bairro", None)
-        context.state = ConversationState.AWAITING_ADDRESS
+        context.transition_to(ConversationState.AWAITING_ADDRESS)
 
         return ProcessedMessage(
             context=context,
@@ -1708,7 +1708,7 @@ async def handle_edit_order(
     if field == "payment":
         context.payment_method = None
         context.pending_entities.pop("payment", None)
-        context.state = ConversationState.AWAITING_PAYMENT
+        context.transition_to(ConversationState.AWAITING_PAYMENT)
 
         return ProcessedMessage(
             context=context,
@@ -1814,7 +1814,7 @@ async def handle_emergency(
     except Exception as e:
         logger.error(f"Erro ao notificar emergencia: {e}")
 
-    context.state = ConversationState.TALKING_TO_HUMAN
+    context.transition_to(ConversationState.TALKING_TO_HUMAN)
 
     return ProcessedMessage(
         context=context,

@@ -120,10 +120,11 @@ class TestConversationContext:
         assert context.state == ConversationState.AWAITING_PRODUCT
 
     def test_transition_to_invalid(self):
-        """Testa transição inválida."""
+        """Testa transição não mapeada: executa com warning, retorna False."""
         context = ConversationContext(phone="5541999999999")
         assert not context.transition_to(ConversationState.ORDER_CONFIRMED)
-        assert context.state == ConversationState.START
+        # Transição ocorre mesmo assim (safety net) mas retorna False
+        assert context.state == ConversationState.ORDER_CONFIRMED
 
 
 class TestBusinessRules:

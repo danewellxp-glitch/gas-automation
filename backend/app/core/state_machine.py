@@ -3,10 +3,13 @@ Máquina de Estados para conversas do WhatsApp.
 Define os estados do fluxo de pedido e as transições válidas.
 """
 
+import logging
 from enum import Enum
 from typing import Optional, List
 from dataclasses import dataclass, field
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 
 class ConversationState(str, Enum):
@@ -75,6 +78,7 @@ class StateTransition:
         ],
         ConversationState.AWAITING_QUANTITY: [
             ConversationState.CONFIRMING_ADDRESS,
+            ConversationState.AWAITING_ADDRESS,
             ConversationState.AWAITING_PRODUCT,
             ConversationState.TALKING_TO_HUMAN,
         ],
@@ -111,6 +115,9 @@ class StateTransition:
         ConversationState.CONFIRMING_ORDER: [
             ConversationState.ORDER_CONFIRMED,
             ConversationState.AWAITING_PRODUCT,
+            ConversationState.AWAITING_QUANTITY,
+            ConversationState.AWAITING_ADDRESS,
+            ConversationState.AWAITING_PAYMENT,
             ConversationState.START,
             ConversationState.TALKING_TO_HUMAN,
         ],
@@ -255,14 +262,21 @@ class ConversationContext:
 
     def transition_to(self, new_state: ConversationState) -> bool:
         """
-        Tenta transicionar para um novo estado.
-        Retorna True se a transição foi válida.
+        Transiciona para um novo estado.
+        Loga warning se a transição não está na tabela de válidas.
+        Sempre executa a transição (safety net para não quebrar fluxos).
         """
-        if StateTransition.is_valid(self.state, new_state):
-            self.state = new_state
-            self.retry_count = 0
+        if self.state == new_state:
             return True
-        return False
+        is_valid = StateTransition.is_valid(self.state, new_state)
+        if not is_valid:
+            logger.warning(
+                f"Transicao nao mapeada: {self.state.value} -> {new_state.value} "
+                f"(phone={self.phone})"
+            )
+        self.state = new_state
+        self.retry_count = 0
+        return is_valid
 
     def reset(self) -> None:
         """Reseta o contexto para o estado inicial."""
