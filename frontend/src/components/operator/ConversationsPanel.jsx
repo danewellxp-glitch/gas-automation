@@ -50,7 +50,7 @@ const statusConfig = {
 }
 
 // Componente de lista de conversas
-function ConversationList({ conversations, selectedId, onSelect, loading, filter, onFilterChange }) {
+function ConversationList({ conversations, selectedId, onSelect, onAssign, loading, filter, onFilterChange }) {
   const filteredConversations = conversations.filter(conv => {
     if (filter === 'all') return true
     if (filter === 'waiting') return conv.status === 'waiting' || !conv.assigned_to
@@ -134,12 +134,27 @@ function ConversationList({ conversations, selectedId, onSelect, loading, filter
                     </span>
                   </div>
                 </div>
-                {conv.assigned_to_name && (
-                  <div className="mt-1 flex items-center gap-1 text-xs text-gray-400">
-                    <UserCheck className="w-3 h-3" />
-                    {conv.assigned_to_name}
-                  </div>
-                )}
+                <div className="mt-1 flex items-center justify-between">
+                  {conv.assigned_to_name ? (
+                    <div className="flex items-center gap-1 text-xs text-gray-400">
+                      <UserCheck className="w-3 h-3" />
+                      {conv.assigned_to_name}
+                    </div>
+                  ) : (
+                    <div />
+                  )}
+                  {!conv.assigned_to_me && conv.status !== 'closed' && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onAssign(conv)
+                      }}
+                      className="px-2 py-0.5 text-xs font-medium text-white bg-primary-600 rounded hover:bg-primary-700 transition-colors"
+                    >
+                      Assumir
+                    </button>
+                  )}
+                </div>
               </div>
             )
           })
@@ -424,16 +439,19 @@ export default function ConversationsPanel() {
 
   useSharedWebSocketEvent('new_message', handleNewMessage)
 
-  // Assumir conversa
-  const handleAssign = async () => {
-    if (!selectedConversation) return
+  // Assumir conversa (aceita conversa do parâmetro ou usa a selecionada)
+  const handleAssign = async (conv) => {
+    const target = conv || selectedConversation
+    if (!target) return
 
     try {
-      await assignConversation(selectedConversation.id)
+      await assignConversation(target.id)
       toast.success('Conversa assumida')
       loadConversations()
-      // Atualizar conversa selecionada
-      setSelectedConversation(prev => ({ ...prev, assigned_to_me: true, status: 'active' }))
+      // Atualizar conversa selecionada se for a mesma
+      if (selectedConversation && selectedConversation.id === target.id) {
+        setSelectedConversation(prev => ({ ...prev, assigned_to_me: true, status: 'active' }))
+      }
     } catch (error) {
       console.error('Erro ao assumir conversa:', error)
       toast.error('Erro ao assumir conversa')
@@ -513,6 +531,7 @@ export default function ConversationsPanel() {
           conversations={conversations}
           selectedId={selectedConversation?.id}
           onSelect={setSelectedConversation}
+          onAssign={handleAssign}
           loading={loadingConversations}
           filter={filter}
           onFilterChange={setFilter}
@@ -527,7 +546,7 @@ export default function ConversationsPanel() {
             messages={messages}
             loading={loadingMessages}
             onSend={handleSendMessage}
-            onAssign={handleAssign}
+            onAssign={() => handleAssign()}
             onEnd={handleEndConversation}
             onTransferToBot={handleTransferToBot}
             isAssignedToMe={selectedConversation.assigned_to_me}
