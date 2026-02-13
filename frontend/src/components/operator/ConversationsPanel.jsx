@@ -230,7 +230,9 @@ function ChatWindow({ conversation, messages, loading, onSend, onAssign, onEnd, 
       await onSend(inputMessage)
       setInputMessage('')
     } catch (error) {
-      toast.error('Erro ao enviar mensagem')
+      const detail = error?.response?.data?.detail || error?.message || 'Erro desconhecido'
+      toast.error(`Erro ao enviar: ${detail}`)
+      console.error('Erro ao enviar mensagem:', error)
     } finally {
       setSending(false)
     }
@@ -276,23 +278,23 @@ function ChatWindow({ conversation, messages, loading, onSend, onAssign, onEnd, 
                 Assumir
               </button>
             )}
-            {conversation.status !== 'closed' && (
-              <button
-                onClick={onTransferToBot}
-                className="px-3 py-1.5 text-sm font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors flex items-center gap-1"
-                title="Transferir conversa de volta para o bot"
-              >
-                <Bot className="w-4 h-4" />
-                Transferir para Bot
-              </button>
-            )}
             {isAssignedToMe && conversation.status !== 'closed' && (
-              <button
-                onClick={onEnd}
-                className="px-3 py-1.5 text-sm font-medium text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition-colors"
-              >
-                Encerrar
-              </button>
+              <>
+                <button
+                  onClick={onTransferToBot}
+                  className="px-3 py-1.5 text-sm font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors flex items-center gap-1"
+                  title="Transferir conversa de volta para o bot"
+                >
+                  <Bot className="w-4 h-4" />
+                  Transferir para Bot
+                </button>
+                <button
+                  onClick={onEnd}
+                  className="px-3 py-1.5 text-sm font-medium text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition-colors"
+                >
+                  Encerrar
+                </button>
+              </>
             )}
           </div>
         </div>
@@ -421,17 +423,23 @@ export default function ConversationsPanel() {
   }, [selectedConversation])
 
   // WebSocket: nova mensagem
-  const handleNewMessage = useCallback((data) => {
-    console.log('Nova mensagem via WebSocket:', data)
+  const handleNewMessage = useCallback((wsEvent) => {
+    console.log('Nova mensagem via WebSocket:', wsEvent)
     loadConversations()
+
+    // Extrair dados da mensagem (backend envia { type, data: { phone, message, direction } })
+    const msgData = wsEvent.data || wsEvent
+    const phone = msgData.phone
+    const message = msgData.message
+    const direction = msgData.direction
 
     // Usar ref para evitar stale closure
     const currentConversation = selectedConversationRef.current
-    if (currentConversation && data.conversation_id === currentConversation.id) {
+    if (currentConversation && phone === currentConversation.id) {
       setMessages(prev => [...prev, {
         id: Date.now().toString(),
-        content: data.message || data.content,
-        sender: data.from_me ? 'agent' : 'customer',
+        content: message,
+        sender: direction === 'outgoing' ? 'agent' : 'customer',
         timestamp: new Date().toISOString()
       }])
     }
@@ -447,10 +455,23 @@ export default function ConversationsPanel() {
     try {
       await assignConversation(target.id)
       toast.success('Conversa assumida')
-      loadConversations()
-      // Atualizar conversa selecionada se for a mesma
+
+      // Atualizar conversa selecionada imediatamente
       if (selectedConversation && selectedConversation.id === target.id) {
         setSelectedConversation(prev => ({ ...prev, assigned_to_me: true, status: 'active' }))
+      }
+
+      // Atualizar lista de conversas (o backend agora retorna assigned_to_me correto)
+      const data = await getConversations()
+      const items = data.items || []
+      setConversations(items)
+
+      // Preservar o estado assigned_to_me da conversa selecionada
+      if (selectedConversation && selectedConversation.id === target.id) {
+        const updated = items.find(c => c.id === target.id)
+        if (updated) {
+          setSelectedConversation({ ...updated, assigned_to_me: true, status: 'active' })
+        }
       }
     } catch (error) {
       console.error('Erro ao assumir conversa:', error)

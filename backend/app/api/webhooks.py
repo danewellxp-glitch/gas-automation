@@ -64,10 +64,46 @@ async def waha_webhook(
                 logger.info("WAHA: ignorando mensagem própria (fromMe=true)")
                 return {"status": "ignored", "reason": "own_message"}
 
-            # WAHA usa LID (Linked ID) - manter o chatId completo para responder
+            # WAHA usa LID (Linked ID) - resolver para @c.us quando possível
             # from: "7185547411514@lid" ou "5541999999999@c.us"
             raw_from = payload.get("from")
             chat_id = (str(raw_from).strip() if raw_from is not None and raw_from != "" else "")
+
+            # Se @lid, tentar resolver para @c.us usando campos do payload
+            if chat_id and "@lid" in chat_id:
+                resolved = None
+                # Fonte 1: campo 'id' do payload (formato: "false_5541999999@c.us_MSGID")
+                raw_id = payload.get("id", "")
+                if raw_id and "@c.us" in raw_id:
+                    parts = raw_id.split("_")
+                    for part in parts:
+                        if "@c.us" in part:
+                            resolved = part
+                            break
+                # Fonte 2: _data.key.participant ou _data.participant
+                if not resolved:
+                    _data = payload.get("_data", {}) or {}
+                    participant = (
+                        (_data.get("key", {}) or {}).get("participant", "")
+                        or _data.get("participant", "")
+                    )
+                    if participant and "@c.us" in str(participant):
+                        resolved = str(participant)
+                # Fonte 3: WAHA resolve_lid via API
+                if not resolved:
+                    try:
+                        from app.integrations.waha import waha_client
+                        resolved_lid = await waha_client.resolve_lid(chat_id)
+                        if resolved_lid and "@c.us" in resolved_lid:
+                            resolved = resolved_lid
+                    except Exception as e:
+                        logger.debug(f"Resolve LID via API falhou: {e}")
+
+                if resolved:
+                    logger.info(f"LID resolvido no webhook: {chat_id} -> {resolved}")
+                    chat_id = resolved
+                else:
+                    logger.warning(f"Não foi possível resolver LID {chat_id} - mantendo formato original")
             if not chat_id:
                 logger.warning(
                     "WAHA Webhook: ignorando mensagem com chat_id vazio (payload.from ausente ou vazio)"

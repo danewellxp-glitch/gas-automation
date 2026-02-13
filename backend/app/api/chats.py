@@ -269,8 +269,13 @@ async def send_message(
     db: AsyncSession = Depends(get_db),
 ):
     """Envia mensagem manual para um cliente."""
-    # Formatar telefone para WAHA
-    chat_id = phone if "@" in phone else f"{phone}@c.us"
+    # Formatar telefone para WAHA (resolver @lid se necessário)
+    if "@lid" in phone:
+        chat_id = await waha_client.resolve_lid(phone)
+    elif "@" in phone:
+        chat_id = phone
+    else:
+        chat_id = f"{phone}@c.us"
 
     # 1. Enviar via WAHA (prioridade máxima)
     try:
@@ -308,11 +313,11 @@ async def send_message(
 
     # 3. Emitir via WebSocket (não deve falhar o fluxo se der erro)
     try:
-        await emit_new_message({
-            "phone": phone,
-            "message": request.message,
-            "from_me": True
-        })
+        await emit_new_message(
+            phone=phone,
+            message=request.message,
+            direction="outgoing",
+        )
     except Exception as e:
         logger.error(f"Erro ao emitir WebSocket para {phone}: {e}")
         # Não lançar exceção - mensagem já foi enviada com sucesso
@@ -379,12 +384,24 @@ async def list_conversations_operator(
     end_idx = start_idx + page_size
     phones_page = phones_ordered[start_idx:end_idx]
 
+    # Buscar dados de atribuição do Redis
+    redis = redis_manager.client
+    phone_operators = {}
+    if redis:
+        for phone in phones_page:
+            try:
+                operator = await redis.hget(f"conversation:{phone}", "assigned_operator")
+                phone_operators[phone] = operator
+            except Exception:
+                pass
+
     # Montar resposta
     conversations = []
     for phone in phones_page:
         customer = customers_by_phone.get(phone)
         last_event = phone_last_event.get(phone)
         state = phone_states.get(phone, "start")
+        has_operator = bool(phone_operators.get(phone))
 
         # Determinar status baseado no estado
         status = "waiting"
@@ -401,8 +418,8 @@ async def list_conversations_operator(
             last_message=last_event.payload.get("message") if last_event else None,
             last_message_at=last_event.created_at if last_event else None,
             assigned_to=None,
-            assigned_to_me=False,
-            assigned_to_name=None,
+            assigned_to_me=has_operator,
+            assigned_to_name="Operador" if has_operator else None,
             unread_count=0,
             created_at=last_event.created_at if last_event else None,
         ))
@@ -419,8 +436,33 @@ async def list_conversations_operator(
 @router.post("/conversations/{conversation_id}/assign", response_model=SuccessResponse)
 async def assign_conversation(conversation_id: str, db: AsyncSession = Depends(get_db)):
     """Atribui conversa ao operador atual."""
-    # Por enquanto apenas retorna sucesso (sem sistema de atribuição implementado)
-    return SuccessResponse(message=f"Conversa {conversation_id} atribuída")
+    phone = conversation_id
+    redis = redis_manager.client
+
+    try:
+        if redis:
+            # Setar estado para talking_to_human no Redis
+            await redis.hset(f"conversation:{phone}", "state", "talking_to_human")
+            await redis.hset(f"conversation:{phone}", "assigned_operator", "operator")
+            logger.info(f"Conversa {phone} assumida: estado -> talking_to_human")
+
+        # Registrar no EventLog
+        event = EventLog(
+            event_type="conversation_assigned",
+            entity_type="chat",
+            payload={
+                "phone": phone,
+                "action": "assign",
+            }
+        )
+        db.add(event)
+        await db.commit()
+
+        return SuccessResponse(message=f"Conversa {conversation_id} atribuída")
+
+    except Exception as e:
+        logger.error(f"Erro ao assumir conversa {conversation_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Erro ao assumir conversa: {str(e)}")
 
 
 @router.get("/conversations/{conversation_id}/messages", response_model=List[ConversationMessageOut])
@@ -472,8 +514,14 @@ async def reply_to_conversation(
     db: AsyncSession = Depends(get_db),
 ):
     """Responde a uma conversa."""
-    # Formatar telefone para WAHA
-    chat_id = conversation_id if "@" in conversation_id else f"{conversation_id}@c.us"
+    # Formatar telefone para WAHA - resolver @lid se necessário
+    if "@lid" in conversation_id:
+        chat_id = await waha_client.resolve_lid(conversation_id)
+        logger.info(f"LID resolvido para reply: {conversation_id} -> {chat_id}")
+    elif "@" in conversation_id:
+        chat_id = conversation_id
+    else:
+        chat_id = f"{conversation_id}@c.us"
 
     # 1. Enviar via WAHA (prioridade máxima)
     try:
@@ -511,11 +559,11 @@ async def reply_to_conversation(
 
     # 3. Emitir via WebSocket (não deve falhar o fluxo se der erro)
     try:
-        await emit_new_message({
-            "phone": conversation_id,
-            "message": request.message,
-            "from_me": True
-        })
+        await emit_new_message(
+            phone=conversation_id,
+            message=request.message,
+            direction="outgoing",
+        )
     except Exception as e:
         logger.error(f"Erro ao emitir WebSocket para {conversation_id}: {e}")
         # Não lançar exceção - mensagem já foi enviada com sucesso
@@ -545,7 +593,12 @@ async def end_conversation(conversation_id: str, db: AsyncSession = Depends(get_
             logger.info(f"Estado resetado para 'start' no Redis para {phone}")
 
         # 2. Enviar mensagem ao cliente informando que voltou ao bot
-        chat_id = phone if "@" in phone else f"{phone}@c.us"
+        if "@lid" in phone:
+            chat_id = await waha_client.resolve_lid(phone)
+        elif "@" in phone:
+            chat_id = phone
+        else:
+            chat_id = f"{phone}@c.us"
         message_to_client = (
             "✅ *Atendimento encerrado*\n\n"
             "Obrigado por entrar em contato! "
@@ -609,18 +662,26 @@ async def transfer_to_bot(conversation_id: str, db: AsyncSession = Depends(get_d
             current_state = context_data.get("state", "start") if context_data else "start"
             logger.info(f"Estado atual de {phone}: {current_state}")
 
-        # 2. Se está em talking_to_human, voltar para o estado anterior ou awaiting_product
+        # 2. Voltar para estado do bot e limpar atribuição
         new_state = current_state
-        if current_state == "talking_to_human":
-            # Tentar recuperar estado anterior ou usar awaiting_product como padrão
-            new_state = "awaiting_product"
-            if redis:
-                await redis.hset(f"conversation:{phone}", "state", new_state)
-                await redis.hdel(f"conversation:{phone}", "assigned_operator")
-                logger.info(f"Estado alterado de {current_state} para {new_state}")
+        if redis:
+            # Sempre limpar assigned_operator ao transferir para bot
+            await redis.hdel(f"conversation:{phone}", "assigned_operator")
 
-        # 3. Enviar mensagem ao cliente
-        chat_id = phone if "@" in phone else f"{phone}@c.us"
+            if current_state == "talking_to_human":
+                new_state = "awaiting_product"
+                await redis.hset(f"conversation:{phone}", "state", new_state)
+                logger.info(f"Estado alterado de {current_state} para {new_state}")
+            else:
+                logger.info(f"Estado mantido em {current_state}, operador removido")
+
+        # 3. Enviar mensagem ao cliente (resolver @lid se necessário)
+        if "@lid" in phone:
+            chat_id = await waha_client.resolve_lid(phone)
+        elif "@" in phone:
+            chat_id = phone
+        else:
+            chat_id = f"{phone}@c.us"
         message_to_client = (
             "🤖 *Você foi transferido de volta para o atendimento automático*\n\n"
             "Como posso ajudar?\n\n"

@@ -92,7 +92,7 @@ class WAHAClient:
             lid: ID no formato "7185547411514@lid" ou "7185547411514"
 
         Returns:
-            Número no formato "61405086785@c.us" ou o próprio lid se não conseguir resolver
+            Número no formato "5541999999999@c.us" ou o próprio lid se não conseguir resolver
         """
         # Se não é @lid, formata normalmente
         if not lid or "@lid" not in lid:
@@ -103,29 +103,62 @@ class WAHAClient:
             logger.debug(f"LID {lid} encontrado no cache: {self._lid_cache[lid]}")
             return self._lid_cache[lid]
 
-        # Extrair apenas o número do LID
         lid_number = lid.replace("@lid", "")
+        client = await self._get_client()
 
+        # Tentativa 1: endpoint /lids (WAHA Plus)
         try:
-            client = await self._get_client()
             response = await client.get(
                 f"/api/{self.session_name}/lids/{lid_number}"
             )
-
             if response.status_code == 200:
                 data = response.json()
-                pn = data.get("pn")  # phone number no formato "61405086785@c.us"
-                if pn:
+                pn = data.get("pn")
+                if pn and "@c.us" in pn:
                     self._lid_cache[lid] = pn
-                    logger.info(f"LID resolvido: {lid} -> {pn}")
+                    logger.info(f"LID resolvido via /lids: {lid} -> {pn}")
                     return pn
-
-            logger.warning(f"Não foi possível resolver LID {lid}")
-            return self._format_phone(lid)
-
         except Exception as e:
-            logger.error(f"Erro ao resolver LID {lid}: {e}")
-            return self._format_phone(lid)
+            logger.debug(f"LID /lids falhou: {e}")
+
+        # Tentativa 2: endpoint /contacts (mais comum)
+        try:
+            response = await client.get(
+                f"/api/contacts",
+                params={"contactId": lid, "session": self.session_name}
+            )
+            if response.status_code == 200:
+                data = response.json()
+                # Pode retornar lista ou objeto
+                contacts = data if isinstance(data, list) else [data]
+                for contact in contacts:
+                    cid = contact.get("id", "")
+                    if "@c.us" in cid:
+                        self._lid_cache[lid] = cid
+                        logger.info(f"LID resolvido via /contacts: {lid} -> {cid}")
+                        return cid
+        except Exception as e:
+            logger.debug(f"LID /contacts falhou: {e}")
+
+        # Tentativa 3: buscar no banco o Customer com este LID phone
+        try:
+            from app.database import AsyncSessionLocal
+            from app.models.customer import Customer
+            from sqlalchemy import select
+            async with AsyncSessionLocal() as db:
+                result = await db.execute(
+                    select(Customer).where(Customer.phone == lid)
+                )
+                customer = result.scalar_one_or_none()
+                if customer and customer.phone and "@c.us" not in customer.phone:
+                    # Buscar pelo EventLog se há outro phone @c.us para este customer
+                    pass
+        except Exception as e:
+            logger.debug(f"LID DB lookup falhou: {e}")
+
+        logger.warning(f"Não foi possível resolver LID {lid} - usando formato original")
+        # Retornar o LID original em vez de _format_phone (que gera número inválido)
+        return lid
 
     async def _get_chat_id(self, phone: str) -> str:
         """
@@ -237,12 +270,14 @@ class WAHAClient:
                 body = response.json() if response.content else {}
                 err = body.get("response", body)
                 status = err.get("status") if isinstance(err, dict) else None
+                error_msg = body.get("message", "")
                 logger.warning(
-                    f"WAHA sendText 422: status={status} body={body!r}"
+                    f"WAHA sendText 422: status={status} msg={error_msg} body={body!r}"
                 )
-                if status == "STOPPED":
+                # Sessão não está WORKING - tentar reiniciar
+                if status and status != "WORKING":
                     logger.warning(
-                        f"WAHA sessão STOPPED. Iniciando sessão e reenviando..."
+                        f"WAHA sessão {status}. Iniciando sessão e reenviando..."
                     )
                     try:
                         await client.post(
@@ -257,13 +292,25 @@ class WAHAClient:
                         result = retry.json()
                         logger.info(f"Mensagem enviada para {phone} (após start+retry)")
                         return result
-                    retry.raise_for_status()
+                    retry_body = retry.json() if retry.content else {}
+                    logger.error(f"Retry também falhou: {retry.status_code} {retry_body}")
+                    raise httpx.HTTPStatusError(
+                        f"WAHA sendText falhou após retry: {retry_body}",
+                        request=retry.request,
+                        response=retry,
+                    )
+                # 422 sem status de sessão - erro de validação (chatId inválido, etc)
+                raise httpx.HTTPStatusError(
+                    f"WAHA rejeitou mensagem: {error_msg or body}",
+                    request=response.request,
+                    response=response,
+                )
             response.raise_for_status()
             result = response.json()
             logger.info(f"Mensagem enviada para {phone}: {text[:50]}...")
             return result
         except httpx.HTTPError as e:
-            logger.error(f"Erro ao enviar mensagem para {phone}: {e}")
+            logger.error(f"Erro ao enviar mensagem para {phone} (chatId={chat_id}): {e}")
             raise
 
     async def send_buttons(

@@ -7,7 +7,7 @@ const apiBaseURL = import.meta.env.VITE_API_URL || 'http://192.168.10.156:8000/a
 
 const api = axios.create({
   baseURL: apiBaseURL,
-  timeout: 10000,
+  timeout: 30000,
 })
 
 // Interceptor para adicionar token de autenticacao
