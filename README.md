@@ -80,19 +80,19 @@ O Gas Automation não é apenas um chatbot. É uma **plataforma completa de auto
 
 ### Dashboard Operacional
 
-![Dashboard Operacional](prints.read.me/Screenshot%202026-02-13%20120856.png)
+![Dashboard Operacional](prints.read.me/dashboard-operacional.png)
 
 *Visão completa do painel operacional com lista de conversas, status de pedidos e métricas em tempo real. Operadores podem gerenciar múltiplas conversas simultaneamente e ter visibilidade completa da operação.*
 
 ### Painel de Conversas e Atendimento
 
-![Painel de Conversas](prints.read.me/Screenshot%202026-02-13%20120904.png)
+![Painel de Conversas](prints.read.me/painel-conversas.png)
 
 *Interface de atendimento onde operadores podem assumir conversas, visualizar histórico completo e interagir diretamente com clientes. O sistema mostra contexto completo da conversa e estado atual do pedido.*
 
 ### Dashboard Executivo
 
-![Dashboard Executivo](prints.read.me/Screenshot%202026-02-13%20121328.png)
+![Dashboard Executivo](prints.read.me/dashboard-executivo.png)
 
 *Visão executiva com métricas financeiras, operacionais e de performance. Inclui gráficos de receita, análise de bairros, performance de operadores e produtos mais vendidos. Ideal para tomada de decisão estratégica.*
 
