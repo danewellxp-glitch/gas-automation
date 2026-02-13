@@ -81,6 +81,14 @@ class Customer(BaseModel):
         comment="Endereço: {street, number, complement, bairro, city, state, cep}"
     )
 
+    # WAHA LID tracking
+    waha_chat_id: Mapped[Optional[str]] = mapped_column(
+        String(100),
+        nullable=True,
+        index=True,
+        comment="ChatId original do WAHA (@lid) para envio de respostas"
+    )
+
     # Observações
     notes: Mapped[Optional[str]] = mapped_column(
         Text,

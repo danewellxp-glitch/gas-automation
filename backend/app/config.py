@@ -69,9 +69,17 @@ class Settings(BaseSettings):
     firebird_export_on_delivered: bool = False
     firebird_trade_table: str = "TRADE"
     firebird_trade_item_table: str = "TRADEITEM"
-    firebird_trade_estab_id: Optional[int] = None
-    firebird_trade_tipomovest_id: Optional[int] = None
-    firebird_trade_estlocal_id: Optional[int] = 1
+    firebird_trade_estab_id: Optional[int] = Field(default=None)
+    firebird_trade_tipomovest_id: Optional[int] = Field(default=None)
+    firebird_trade_estlocal_id: Optional[int] = Field(default=1)
+
+    @field_validator('firebird_trade_estab_id', 'firebird_trade_tipomovest_id', 'firebird_trade_estlocal_id', mode='before')
+    @classmethod
+    def empty_str_to_none_int(cls, v):
+        """Converte string vazia para None (env vars podem ser '')."""
+        if v == '' or v is None:
+            return None
+        return v
     firebird_trade_bxestoque: Optional[str] = None  # 'S'/'N' ou 1/0 conforme schema
     firebird_trade_bxfinanc: Optional[str] = None   # 'S'/'N' ou 1/0 conforme schema
 

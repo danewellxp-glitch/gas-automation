@@ -194,6 +194,9 @@ class ConversationContext:
     recent_messages: list = field(default_factory=list)  # Ultimas 3 mensagens para contexto
     change_for: Optional[int] = None  # Valor do troco
 
+    # WAHA LID resolution
+    waha_chat_id: Optional[str] = None  # Original chatId do WAHA (@lid ou @c.us) para envio de respostas
+
     # Recuperação de pedido abandonado
     resumed_from_snapshot: bool = False  # True se contexto veio do PostgreSQL (Redis expirou)
 
@@ -225,6 +228,7 @@ class ConversationContext:
             "pending_entities": self.pending_entities,
             "recent_messages": self.recent_messages,
             "change_for": self.change_for,
+            "waha_chat_id": self.waha_chat_id,
             "resumed_from_snapshot": self.resumed_from_snapshot,
         }
 
@@ -257,6 +261,7 @@ class ConversationContext:
             pending_entities=data.get("pending_entities", {}),
             recent_messages=data.get("recent_messages", []),
             change_for=data.get("change_for"),
+            waha_chat_id=data.get("waha_chat_id"),
             resumed_from_snapshot=data.get("resumed_from_snapshot", False),
         )
 

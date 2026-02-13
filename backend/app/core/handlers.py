@@ -7,6 +7,7 @@ Inclui:
 - Handlers conversacionais (fluxo por intencao NLP)
 """
 
+import asyncio
 import logging
 import re
 from typing import Optional, List, Dict, Tuple
@@ -697,6 +698,31 @@ async def handle_confirming_order(
     """
     Handler para confirmar pedido com cartão.
     """
+    # ── GUARD: Pedido já criado neste contexto ──
+    if context.order_id:
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(
+                select(Order).where(Order.id == context.order_id)
+            )
+            existing = result.scalar_one_or_none()
+            if existing and existing.status != OrderStatus.CANCELLED.value:
+                logger.warning(
+                    f"[DEDUP] handle_confirming_order: pedido já existe "
+                    f"#{existing.order_number} phone={context.phone}"
+                )
+                context.transition_to(ConversationState.ORDER_CONFIRMED)
+                return ProcessedMessage(
+                    context=context,
+                    responses=[
+                        MessageResponse(
+                            text=f"Seu pedido #{existing.order_number} ja foi confirmado!\n\n"
+                            f"Previsao de entrega: {settings.default_delivery_time_minutes} minutos\n"
+                            "Acompanhe pelo WhatsApp ou digite 'status'"
+                        )
+                    ],
+                    new_state=ConversationState.ORDER_CONFIRMED,
+                )
+
     msg_lower = message.lower().strip()
 
     # Buscar produto do banco de dados
@@ -966,6 +992,21 @@ async def handle_greeting(
     context.customer_name = customer.name
     context.is_new_customer = is_new
     context.has_complete_data = has_complete_data
+
+    # Salvar waha_chat_id no cliente se disponível e mudou
+    if context.waha_chat_id and context.waha_chat_id != customer.waha_chat_id:
+        try:
+            async with AsyncSessionLocal() as db:
+                result = await db.execute(
+                    select(Customer).where(Customer.id == customer.id)
+                )
+                c = result.scalar_one_or_none()
+                if c:
+                    c.waha_chat_id = context.waha_chat_id
+                    await db.commit()
+                    logger.info(f"waha_chat_id salvo: customer={customer.id} chat_id={context.waha_chat_id}")
+        except Exception as e:
+            logger.debug(f"Erro ao salvar waha_chat_id: {e}")
 
     # ========== CENARIO 1: Cliente NOVO - perguntar PF ou Empresa ==========
     has_name = bool(customer.name and len(customer.name.strip()) > 2)
@@ -1585,6 +1626,31 @@ async def handle_confirm_order(
     """
     Confirma pedido apos resumo - cria Order no banco e emite WebSocket.
     """
+    # ── GUARD: Pedido já criado neste contexto ──
+    if context.order_id:
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(
+                select(Order).where(Order.id == context.order_id)
+            )
+            existing = result.scalar_one_or_none()
+            if existing and existing.status != OrderStatus.CANCELLED.value:
+                logger.warning(
+                    f"[DEDUP] handle_confirm_order: pedido já existe "
+                    f"#{existing.order_number} phone={context.phone}"
+                )
+                context.transition_to(ConversationState.ORDER_CONFIRMED)
+                return ProcessedMessage(
+                    context=context,
+                    responses=[
+                        MessageResponse(
+                            text=f"Seu pedido #{existing.order_number} ja foi confirmado!\n\n"
+                            f"Previsao de entrega: {settings.default_delivery_time_minutes} minutos\n"
+                            "Acompanhe pelo WhatsApp ou digite 'status'"
+                        )
+                    ],
+                    new_state=ConversationState.ORDER_CONFIRMED,
+                )
+
     product = await get_product(context.selected_product)
     if not product:
         context.reset()
@@ -1979,42 +2045,119 @@ async def create_order(
     context: ConversationContext,
     total: Decimal,
 ) -> Order:
-    """Cria pedido no banco de dados."""
-    async with AsyncSessionLocal() as db:
-        # Buscar produto do banco de dados
-        result = await db.execute(
-            select(Product).where(Product.code == context.selected_product)
+    """
+    Cria pedido no banco de dados com proteção contra duplicatas.
+
+    Guards (3 camadas):
+    1. context.order_id - Se já existe pedido neste contexto, retorna ele
+    2. Redis lock - Impede criação concorrente para o mesmo cliente
+    3. DB check - Verifica se já existe pedido PENDING para o cliente
+    """
+    from app.database import redis_manager
+
+    # ── GUARD 1: Contexto já tem pedido ──
+    if context.order_id:
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(
+                select(Order).where(Order.id == context.order_id)
+            )
+            existing = result.scalar_one_or_none()
+            if existing and existing.status != OrderStatus.CANCELLED.value:
+                logger.warning(
+                    f"[DEDUP] Pedido já existe no contexto: "
+                    f"order_id={context.order_id} phone={context.phone}"
+                )
+                return existing
+
+    # ── GUARD 2: Redis lock por cliente ──
+    lock_acquired = False
+    try:
+        lock_acquired = await redis_manager.set_order_lock(
+            str(context.customer_id), ttl=30
         )
-        product = result.scalar_one_or_none()
-        if not product:
-            raise ValueError(f"Produto {context.selected_product} não encontrado")
+        if not lock_acquired:
+            logger.warning(
+                f"[DEDUP] Order lock contention: "
+                f"customer_id={context.customer_id} phone={context.phone}"
+            )
+            # Outro worker está criando - esperar e verificar
+            import asyncio
+            await asyncio.sleep(2)
+            async with AsyncSessionLocal() as db:
+                result = await db.execute(
+                    select(Order)
+                    .where(
+                        Order.customer_id == context.customer_id,
+                        Order.status == OrderStatus.PENDING.value,
+                    )
+                    .order_by(desc(Order.created_at))
+                    .limit(1)
+                )
+                existing = result.scalar_one_or_none()
+                if existing:
+                    logger.info(
+                        f"[DEDUP] Pedido encontrado após lock wait: "
+                        f"#{existing.order_number}"
+                    )
+                    return existing
+            # Nenhum pedido encontrado após espera - tentar criar normalmente
 
-        # Criar pedido
-        order = Order(
-            customer_id=context.customer_id,
-            status=OrderStatus.PENDING.value,
-            payment_method=context.payment_method,
-            total_amount=total,
-            delivery_address=context.address,
-            delivery_bairro=context.address.get("bairro") if context.address else None,
-        )
-        db.add(order)
-        await db.flush()
+        async with AsyncSessionLocal() as db:
+            # ── GUARD 3: DB check - pedido PENDING já existe? ──
+            result = await db.execute(
+                select(Order).where(
+                    Order.customer_id == context.customer_id,
+                    Order.status == OrderStatus.PENDING.value,
+                )
+            )
+            existing = result.scalar_one_or_none()
+            if existing:
+                logger.warning(
+                    f"[DEDUP] Pedido PENDING já existe no DB: "
+                    f"#{existing.order_number} customer={context.customer_id}"
+                )
+                return existing
 
-        # Criar item do pedido
-        item = OrderItem(
-            order_id=order.id,
-            product_code=context.selected_product,
-            product_name=product.name,
-            quantity=context.selected_quantity,
-            unit_price=product.price,
-            subtotal=total,
-        )
-        db.add(item)
+            # Buscar produto do banco de dados
+            result = await db.execute(
+                select(Product).where(Product.code == context.selected_product)
+            )
+            product = result.scalar_one_or_none()
+            if not product:
+                raise ValueError(f"Produto {context.selected_product} não encontrado")
 
-        await db.commit()
-        await db.refresh(order)
+            # Criar pedido
+            order = Order(
+                customer_id=context.customer_id,
+                status=OrderStatus.PENDING.value,
+                payment_method=context.payment_method,
+                total_amount=total,
+                delivery_address=context.address,
+                delivery_bairro=context.address.get("bairro") if context.address else None,
+            )
+            db.add(order)
+            await db.flush()
 
-        logger.info(f"Pedido criado: #{order.order_number} - {total}")
+            # Criar item do pedido
+            item = OrderItem(
+                order_id=order.id,
+                product_code=context.selected_product,
+                product_name=product.name,
+                quantity=context.selected_quantity,
+                unit_price=product.price,
+                subtotal=total,
+            )
+            db.add(item)
 
-        return order
+            await db.commit()
+            await db.refresh(order)
+
+            logger.info(f"Pedido criado: #{order.order_number} - {total}")
+
+            return order
+    finally:
+        if lock_acquired:
+            try:
+                await redis_manager.release_order_lock(str(context.customer_id))
+            except Exception:
+                pass

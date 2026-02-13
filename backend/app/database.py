@@ -189,6 +189,42 @@ class RedisManager:
             await self._redis.expire(key, window)
         return count
     
+    # ==================== Distributed Locks ====================
+
+    async def acquire_phone_lock(
+        self, phone: str, lock_id: str, ttl: int = 30
+    ) -> bool:
+        """
+        Acquires a distributed lock for a phone number.
+        Prevents concurrent message processing for the same conversation.
+        Uses SET NX EX for atomicity.
+
+        Returns True if lock acquired, False if contention.
+        """
+        if not self._redis:
+            return True  # fail-open if Redis down
+        key = f"lock:phone:{phone}"
+        result = await self._redis.set(key, lock_id, nx=True, ex=ttl)
+        return bool(result)
+
+    async def release_phone_lock(self, phone: str, lock_id: str) -> bool:
+        """
+        Releases lock only if we still own it (Lua script for atomicity).
+        Prevents releasing a lock acquired by another worker after TTL expiry.
+        """
+        if not self._redis:
+            return True
+        lua_script = """
+        if redis.call("get", KEYS[1]) == ARGV[1] then
+            return redis.call("del", KEYS[1])
+        else
+            return 0
+        end
+        """
+        key = f"lock:phone:{phone}"
+        result = await self._redis.eval(lua_script, 1, key, lock_id)
+        return bool(result)
+
     # ==================== Deduplicação de mensagens ====================
 
     async def check_message_processed(self, message_id: str) -> bool:

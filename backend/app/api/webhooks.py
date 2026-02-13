@@ -4,7 +4,9 @@ Webhook handlers para WAHA (WhatsApp).
 Nota: integração Asaas/Pix foi descontinuada (não utilizada).
 """
 
+import asyncio
 import logging
+import time
 from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
@@ -64,23 +66,23 @@ async def waha_webhook(
                 logger.info("WAHA: ignorando mensagem própria (fromMe=true)")
                 return {"status": "ignored", "reason": "own_message"}
 
-            # WAHA usa LID (Linked ID) - resolver para @c.us quando possível
+            # WAHA usa LID (Linked ID) - resolver para número real quando possível
             # from: "7185547411514@lid" ou "5541999999999@c.us"
             raw_from = payload.get("from")
-            chat_id = (str(raw_from).strip() if raw_from is not None and raw_from != "" else "")
+            original_chat_id = (str(raw_from).strip() if raw_from is not None and raw_from != "" else "")
+            chat_id = original_chat_id
 
-            # Se @lid, tentar resolver para @c.us usando campos do payload
             if chat_id and "@lid" in chat_id:
+                # Resolução rápida via campos do próprio payload (sem API call)
                 resolved = None
-                # Fonte 1: campo 'id' do payload (formato: "false_5541999999@c.us_MSGID")
+                # Fonte 1: campo 'id' (formato: "false_5541999999@c.us_MSGID")
                 raw_id = payload.get("id", "")
                 if raw_id and "@c.us" in raw_id:
-                    parts = raw_id.split("_")
-                    for part in parts:
+                    for part in raw_id.split("_"):
                         if "@c.us" in part:
                             resolved = part
                             break
-                # Fonte 2: _data.key.participant ou _data.participant
+                # Fonte 2: _data.key.participant
                 if not resolved:
                     _data = payload.get("_data", {}) or {}
                     participant = (
@@ -89,21 +91,22 @@ async def waha_webhook(
                     )
                     if participant and "@c.us" in str(participant):
                         resolved = str(participant)
-                # Fonte 3: WAHA resolve_lid via API
+                # Fonte 3: WAHA /api/contacts (resolve_lid com cache Redis)
                 if not resolved:
                     try:
                         from app.integrations.waha import waha_client
-                        resolved_lid = await waha_client.resolve_lid(chat_id)
-                        if resolved_lid and "@c.us" in resolved_lid:
-                            resolved = resolved_lid
+                        resolved = await waha_client.resolve_lid(chat_id)
+                        if resolved == chat_id:
+                            resolved = None  # Não conseguiu resolver
                     except Exception as e:
-                        logger.debug(f"Resolve LID via API falhou: {e}")
+                        logger.debug(f"resolve_lid API falhou: {e}")
 
                 if resolved:
-                    logger.info(f"LID resolvido no webhook: {chat_id} -> {resolved}")
+                    logger.info(f"LID resolvido: {chat_id} -> {resolved}")
                     chat_id = resolved
                 else:
-                    logger.warning(f"Não foi possível resolver LID {chat_id} - mantendo formato original")
+                    logger.warning(f"LID não resolvido: {chat_id}")
+
             if not chat_id:
                 logger.warning(
                     "WAHA Webhook: ignorando mensagem com chat_id vazio (payload.from ausente ou vazio)"
@@ -143,6 +146,7 @@ async def waha_webhook(
             background_tasks.add_task(
                 process_whatsapp_message,
                 message=message,
+                original_chat_id=original_chat_id if original_chat_id != chat_id else None,
             )
 
             return {"status": "processing"}
@@ -166,15 +170,20 @@ async def waha_webhook(
         return {"status": "error", "message": str(e)}
 
 
-async def process_whatsapp_message(message: WAHAMessage):
+async def process_whatsapp_message(
+    message: WAHAMessage,
+    original_chat_id: str = None,
+):
     """
     Processa mensagem do WhatsApp em background.
 
-    Fluxo otimizado (FLUXO_BOT_IDEAL):
+    Fluxo otimizado:
     1. Deduplicação por message_id (Redis SET NX)
-    2. Feedback imediato: typing + mark as read
-    3. Processamento: WebSocket → EventLog → Flow Engine
-    4. Resposta: stop typing → enviar mensagens
+    2. Lock distribuído por telefone (impede processamento concorrente)
+    3. Feedback imediato: typing + mark as read
+    4. Processamento: WebSocket → EventLog → Flow Engine
+    5. Resposta: stop typing → enviar mensagens
+    6. Release lock
     """
     phone = message.phone
     text = message.text
@@ -187,27 +196,57 @@ async def process_whatsapp_message(message: WAHAMessage):
         try:
             is_duplicate = await redis_manager.check_message_processed(message_id)
             if is_duplicate:
-                logger.info(f"Mensagem duplicada ignorada: message_id={message_id} phone={phone}")
+                logger.info(f"[DEDUP] Mensagem duplicada: msg={message_id} phone={phone}")
                 return
         except Exception as e:
             logger.warning(f"Dedup check falhou (processando mesmo assim): {e}")
+    else:
+        logger.warning(f"[DEDUP] Sem message_id para phone={phone} - dedup impossível")
 
-    # ── ETAPA 2: Feedback imediato (< 500ms) ──
+    # ── ETAPA 2: Lock distribuído por telefone ──
     from app.integrations.waha import waha_client
 
-    try:
-        await waha_client.start_typing(phone)
-    except Exception:
-        pass
+    # Normalizar phone para chave de lock consistente
+    normalized_phone = phone.split("@")[0] if "@" in phone else phone
+    lock_id = f"{message_id or 'no_id'}:{time.time()}"
+    lock_acquired = False
 
-    if message_id:
+    try:
+        lock_acquired = await redis_manager.acquire_phone_lock(
+            normalized_phone, lock_id, ttl=30
+        )
+        if not lock_acquired:
+            logger.warning(
+                f"[LOCK] Contention para phone={normalized_phone} msg={message_id}"
+            )
+            # Esperar e tentar uma vez
+            await asyncio.sleep(1.5)
+            lock_acquired = await redis_manager.acquire_phone_lock(
+                normalized_phone, lock_id, ttl=30
+            )
+            if not lock_acquired:
+                logger.error(
+                    f"[LOCK] Falhou 2x para phone={normalized_phone} msg={message_id} - dropping"
+                )
+                return
+    except Exception as e:
+        logger.warning(f"Lock acquisition failed (processing anyway): {e}")
+        lock_acquired = False  # fail-open
+
+    try:
+        # ── ETAPA 3: Feedback imediato (< 500ms) ──
         try:
-            await waha_client.mark_as_read(phone, message_id)
+            await waha_client.start_typing(phone)
         except Exception:
             pass
 
-    # ── ETAPA 3: Processar mensagem ──
-    try:
+        if message_id:
+            try:
+                await waha_client.mark_as_read(phone, message_id)
+            except Exception:
+                pass
+
+        # ── ETAPA 4: Processar mensagem ──
         # Processar localização se presente
         if location:
             logger.info(f"Localização recebida de {phone}: {location}")
@@ -221,18 +260,17 @@ async def process_whatsapp_message(message: WAHAMessage):
         # Usar button_id se não tiver texto (clique em botão)
         content = (text or button_id or "").strip()
 
-        # Mensagem vazia (ex.: só mídia): tratar como "menu" para o bot sempre responder
+        # Mensagem vazia (ex.: só mídia): tratar como "menu"
         if not content:
             logger.info(f"Mensagem sem texto de {phone}; tratando como menu")
             content = "menu"
 
-        logger.info(f"Processando mensagem de {phone}: {content[:50]}")
+        logger.info(f"Processando: phone={phone} msg_id={message_id} content={content[:50]}")
 
         # Emitir WebSocket para painel do operador
         try:
             from app.api.websocket import emit_new_message
             await emit_new_message(phone, content, "incoming")
-            logger.info(f"WebSocket emitido para {phone}: {content[:50]}")
         except Exception as e:
             logger.error(f"Erro ao emitir WebSocket: {e}", exc_info=True)
 
@@ -242,7 +280,11 @@ async def process_whatsapp_message(message: WAHAMessage):
                 event = EventLog(
                     event_type="message_received",
                     entity_type="chat",
-                    payload={"phone": phone, "message": content}
+                    payload={
+                        "phone": phone,
+                        "message": content,
+                        "message_id": message_id,
+                    }
                 )
                 db.add(event)
                 await db.commit()
@@ -256,37 +298,48 @@ async def process_whatsapp_message(message: WAHAMessage):
             phone=phone,
             message=content,
             message_id=message_id,
+            waha_chat_id=original_chat_id or (phone if "@" in phone else None),
         )
 
-        # ── ETAPA 4: Resposta ──
+        # ── ETAPA 5: Resposta ──
         try:
             await waha_client.stop_typing(phone)
         except Exception:
             pass
 
-        # Enviar respostas
+        # Enviar respostas (usa waha_chat_id do contexto para rotear)
         if result.responses:
-            await flow_engine.send_responses(phone, result.responses)
+            send_to = result.context.waha_chat_id or phone
+            await flow_engine.send_responses(send_to, result.responses)
 
         logger.info(
-            f"Mensagem processada: {phone} | "
+            f"Mensagem processada: phone={phone} msg_id={message_id} | "
             f"Estado: {result.context.state} -> {result.new_state}"
         )
 
     except Exception as e:
-        logger.error(f"Erro ao processar mensagem no flow engine: {e}", exc_info=True)
+        logger.error(
+            f"Erro ao processar mensagem: phone={phone} msg_id={message_id} err={e}",
+            exc_info=True
+        )
         try:
             await waha_client.stop_typing(phone)
         except Exception:
             pass
-        # Tentar enviar mensagem de erro ao usuário
         try:
             await waha_client.send_text(
                 phone,
                 "Desculpe, ocorreu um erro. Digite *menu* para recomeçar."
             )
         except Exception as send_err:
-            logger.warning(f"Não foi possível enviar mensagem de erro para {message.phone}: {send_err}")
+            logger.warning(f"Erro ao enviar msg de erro para {phone}: {send_err}")
+    finally:
+        # ── ETAPA 6: Liberar lock ──
+        if lock_acquired:
+            try:
+                await redis_manager.release_phone_lock(normalized_phone, lock_id)
+            except Exception:
+                pass
 
 
 async def process_location_message(phone: str, location: dict, message_id: str = None):

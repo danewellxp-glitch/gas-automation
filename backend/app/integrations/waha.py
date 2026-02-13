@@ -83,30 +83,70 @@ class WAHAClient:
 
     async def resolve_lid(self, lid: str) -> str:
         """
-        Resolve um LID (Linked ID) para o número real (@c.us).
+        Resolve um LID (Linked ID) para o número real do telefone.
 
-        O WhatsApp usa LID internamente. Esta função converte para o formato
-        que o WAHA aceita para envio de mensagens.
+        Usa o endpoint GET /api/contacts?contactId={lid} do WAHA que retorna
+        o campo 'number' com o telefone real do contato.
 
         Args:
             lid: ID no formato "7185547411514@lid" ou "7185547411514"
 
         Returns:
-            Número no formato "5541999999999@c.us" ou o próprio lid se não conseguir resolver
+            Número no formato "5541999999999@c.us" ou o próprio lid se falhar
         """
         # Se não é @lid, formata normalmente
         if not lid or "@lid" not in lid:
             return self._format_phone(lid)
 
-        # Verificar cache
+        # 1. Verificar cache em memória (mesmo worker)
         if lid in self._lid_cache:
-            logger.debug(f"LID {lid} encontrado no cache: {self._lid_cache[lid]}")
+            logger.debug(f"LID cache hit (mem): {lid} -> {self._lid_cache[lid]}")
             return self._lid_cache[lid]
 
-        lid_number = lid.replace("@lid", "")
+        # 2. Verificar cache Redis (cross-worker)
+        try:
+            from app.database import redis_manager
+            redis = redis_manager.client
+            cached = await redis.get(f"lid_resolve:{lid}")
+            if cached:
+                self._lid_cache[lid] = cached
+                logger.debug(f"LID cache hit (redis): {lid} -> {cached}")
+                return cached
+        except Exception:
+            pass
+
         client = await self._get_client()
 
-        # Tentativa 1: endpoint /lids (WAHA Plus)
+        # 3. MÉTODO PRINCIPAL: GET /api/contacts?contactId={lid}&session={session}
+        #    Retorna objeto com campo 'number' = telefone real
+        try:
+            response = await client.get(
+                "/api/contacts",
+                params={"contactId": lid, "session": self.session_name}
+            )
+            if response.status_code == 200:
+                data = response.json()
+                # Pode ser objeto ou lista
+                contact = data[0] if isinstance(data, list) and data else data
+                if isinstance(contact, dict):
+                    # Campo 'number' é o telefone real (ex: "5541999999999")
+                    real_number = contact.get("number")
+                    if real_number:
+                        resolved = f"{real_number}@c.us"
+                        await self._cache_lid(lid, resolved)
+                        logger.info(f"LID resolvido via /contacts.number: {lid} -> {resolved}")
+                        return resolved
+                    # Fallback: campo 'id' se contém @c.us
+                    cid = contact.get("id", "")
+                    if cid and "@c.us" in cid:
+                        await self._cache_lid(lid, cid)
+                        logger.info(f"LID resolvido via /contacts.id: {lid} -> {cid}")
+                        return cid
+        except Exception as e:
+            logger.debug(f"LID /contacts falhou: {e}")
+
+        # 4. Fallback: endpoint /lids (WAHA Plus)
+        lid_number = lid.replace("@lid", "")
         try:
             response = await client.get(
                 f"/api/{self.session_name}/lids/{lid_number}"
@@ -115,50 +155,70 @@ class WAHAClient:
                 data = response.json()
                 pn = data.get("pn")
                 if pn and "@c.us" in pn:
-                    self._lid_cache[lid] = pn
+                    await self._cache_lid(lid, pn)
                     logger.info(f"LID resolvido via /lids: {lid} -> {pn}")
                     return pn
         except Exception as e:
             logger.debug(f"LID /lids falhou: {e}")
 
-        # Tentativa 2: endpoint /contacts (mais comum)
-        try:
-            response = await client.get(
-                f"/api/contacts",
-                params={"contactId": lid, "session": self.session_name}
-            )
-            if response.status_code == 200:
-                data = response.json()
-                # Pode retornar lista ou objeto
-                contacts = data if isinstance(data, list) else [data]
-                for contact in contacts:
-                    cid = contact.get("id", "")
-                    if "@c.us" in cid:
-                        self._lid_cache[lid] = cid
-                        logger.info(f"LID resolvido via /contacts: {lid} -> {cid}")
-                        return cid
-        except Exception as e:
-            logger.debug(f"LID /contacts falhou: {e}")
-
-        # Tentativa 3: buscar no banco o Customer com este LID phone
+        # 5. Fallback: buscar no banco Customer com waha_chat_id == lid
         try:
             from app.database import AsyncSessionLocal
             from app.models.customer import Customer
             from sqlalchemy import select
             async with AsyncSessionLocal() as db:
                 result = await db.execute(
-                    select(Customer).where(Customer.phone == lid)
+                    select(Customer).where(Customer.waha_chat_id == lid)
                 )
                 customer = result.scalar_one_or_none()
-                if customer and customer.phone and "@c.us" not in customer.phone:
-                    # Buscar pelo EventLog se há outro phone @c.us para este customer
-                    pass
+                if customer and customer.phone:
+                    resolved = self._format_phone(customer.phone)
+                    await self._cache_lid(lid, resolved)
+                    logger.info(f"LID resolvido via DB: {lid} -> {resolved}")
+                    return resolved
         except Exception as e:
             logger.debug(f"LID DB lookup falhou: {e}")
 
-        logger.warning(f"Não foi possível resolver LID {lid} - usando formato original")
-        # Retornar o LID original em vez de _format_phone (que gera número inválido)
+        logger.warning(f"Não foi possível resolver LID {lid} - mantendo original")
         return lid
+
+    async def _cache_lid(self, lid: str, resolved: str) -> None:
+        """Armazena resolução LID em memória e Redis (TTL 24h)."""
+        self._lid_cache[lid] = resolved
+        try:
+            from app.database import redis_manager
+            await redis_manager.client.set(
+                f"lid_resolve:{lid}", resolved, ex=86400
+            )
+        except Exception:
+            pass
+
+    async def get_contact_info(self, contact_id: str) -> Optional[Dict]:
+        """
+        Busca informações completas de um contato no WAHA.
+
+        Retorna dict com: number, pushname, name, isBusiness
+        ou None se falhar.
+        """
+        try:
+            client = await self._get_client()
+            response = await client.get(
+                "/api/contacts",
+                params={"contactId": contact_id, "session": self.session_name}
+            )
+            if response.status_code == 200:
+                data = response.json()
+                contact = data[0] if isinstance(data, list) and data else data
+                if isinstance(contact, dict):
+                    return {
+                        "number": contact.get("number"),
+                        "pushname": contact.get("pushname"),
+                        "name": contact.get("name") or contact.get("shortName"),
+                        "isBusiness": contact.get("isBusiness", False),
+                    }
+        except Exception as e:
+            logger.debug(f"get_contact_info falhou para {contact_id}: {e}")
+        return None
 
     async def _get_chat_id(self, phone: str) -> str:
         """

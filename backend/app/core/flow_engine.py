@@ -224,6 +224,7 @@ class FlowEngine:
         phone: str,
         message: str,
         message_id: Optional[str] = None,
+        waha_chat_id: Optional[str] = None,
     ) -> ProcessedMessage:
         """
         Processa uma mensagem recebida com NLP.
@@ -235,16 +236,21 @@ class FlowEngine:
         4. Mescla entidades no contexto
         5. Roteia para handler baseado em intencao + estado
         """
-        # DEBUG: Normalizar phone para evitar inconsistencias de formato WAHA
+        # Normalizar phone para evitar inconsistencias de formato WAHA
         # WAHA pode enviar @lid ou @c.us - normalizamos para garantir mesma chave Redis
         original_phone = phone
         if "@" in phone:
-            # Extrair apenas o numero para usar como chave consistente
             phone = phone.split("@")[0]
-        logger.info(f"[DEBUG] Phone original: {original_phone} -> normalizado: {phone}")
+        logger.info(f"Phone: {original_phone} -> {phone} | chat_id={waha_chat_id}")
 
         # Carregar contexto
         context = await self.get_context(phone)
+
+        # Preservar waha_chat_id original para envio de respostas
+        if waha_chat_id:
+            context.waha_chat_id = waha_chat_id
+        elif not context.waha_chat_id and "@" in original_phone:
+            context.waha_chat_id = original_phone
         previous_state = context.state  # Guardar para otimizar snapshot
         logger.info(f"[DEBUG-1] Estado CARREGADO do Redis: {context.state} (phone={phone})")
         context.message_count += 1
