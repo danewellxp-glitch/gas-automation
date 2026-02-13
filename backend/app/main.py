@@ -3,8 +3,16 @@ Aplicação principal FastAPI para automação de pedidos de gás via WhatsApp.
 """
 
 import asyncio
+import logging
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
+
+# Configurar logging ANTES de qualquer import de módulos da app
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
 
 from fastapi import FastAPI, Request, Depends, HTTPException, Header
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -46,6 +54,14 @@ try:
     secure_logger.info("Serviços importados com sucesso")
 except ImportError as e:
     secure_logger.error("Erro ao importar serviços", exc=e)
+
+# Importar WAHA Poller (fallback quando webhooks não funcionam)
+try:
+    from app.services.waha_poller import waha_poller
+    secure_logger.info("WAHA Poller importado com sucesso")
+except ImportError as e:
+    secure_logger.warning(f"WAHA Poller não disponível: {e}")
+    waha_poller = None
     # Fallback: definir classes vazias para evitar crashes
     class CustomerService:
         def __init__(self, session): pass
@@ -145,6 +161,14 @@ async def lifespan(app: FastAPI):
     metrics_task = asyncio.create_task(_metrics_updater(ws_manager, redis_ws_bridge))
     print("[OK] Monitor de métricas iniciado")
 
+    # Iniciar WAHA Poller como fallback quando webhooks não funcionam
+    if waha_poller:
+        try:
+            await waha_poller.start()
+            print("[OK] WAHA Poller iniciado (fallback para webhooks)")
+        except Exception as e:
+            secure_logger.warning(f"Erro ao iniciar WAHA Poller: {e}")
+
     # TODO: Pré-carregar modelo Ollama se necessário
     # TODO: Verificar conexão com Firebird se habilitado
 
@@ -166,6 +190,14 @@ async def lifespan(app: FastAPI):
         await metrics_task
     except asyncio.CancelledError:
         pass
+    
+    # Parar WAHA Poller
+    if waha_poller:
+        try:
+            await waha_poller.stop()
+            print("[OK] WAHA Poller parado")
+        except Exception as e:
+            secure_logger.warning(f"Erro ao parar WAHA Poller: {e}")
     
     # Parar Event Batcher
     await ws_manager.disable_batching()

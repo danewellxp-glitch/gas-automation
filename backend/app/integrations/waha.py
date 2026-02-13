@@ -118,7 +118,7 @@ class WAHAClient:
         client = await self._get_client()
 
         # 3. MÉTODO PRINCIPAL: GET /api/contacts?contactId={lid}&session={session}
-        #    Retorna objeto com campo 'number' = telefone real
+        #    Conforme GUIA-RESOLUCAO-LID-WAHA.md - retorna objeto com campo 'number' = telefone real
         try:
             response = await client.get(
                 "/api/contacts",
@@ -126,42 +126,27 @@ class WAHAClient:
             )
             if response.status_code == 200:
                 data = response.json()
-                # Pode ser objeto ou lista
+                # WAHA pode retornar objeto único ou lista
                 contact = data[0] if isinstance(data, list) and data else data
                 if isinstance(contact, dict):
-                    # Campo 'number' é o telefone real (ex: "5541999999999")
+                    # Campo 'number' é o telefone real (ex: "5541999999999") - conforme guia
                     real_number = contact.get("number")
                     if real_number:
+                        # Formatar como @c.us para consistência
                         resolved = f"{real_number}@c.us"
                         await self._cache_lid(lid, resolved)
-                        logger.info(f"LID resolvido via /contacts.number: {lid} -> {resolved}")
+                        logger.info(f"LID resolvido via /api/contacts.number: {lid} -> {resolved}")
                         return resolved
-                    # Fallback: campo 'id' se contém @c.us
+                    # Fallback: campo 'id' se contém @c.us (algumas versões do WAHA)
                     cid = contact.get("id", "")
-                    if cid and "@c.us" in cid:
+                    if cid and "@c.us" in str(cid):
                         await self._cache_lid(lid, cid)
-                        logger.info(f"LID resolvido via /contacts.id: {lid} -> {cid}")
+                        logger.info(f"LID resolvido via /api/contacts.id: {lid} -> {cid}")
                         return cid
         except Exception as e:
-            logger.debug(f"LID /contacts falhou: {e}")
+            logger.debug(f"LID /api/contacts falhou: {e}")
 
-        # 4. Fallback: endpoint /lids (WAHA Plus)
-        lid_number = lid.replace("@lid", "")
-        try:
-            response = await client.get(
-                f"/api/{self.session_name}/lids/{lid_number}"
-            )
-            if response.status_code == 200:
-                data = response.json()
-                pn = data.get("pn")
-                if pn and "@c.us" in pn:
-                    await self._cache_lid(lid, pn)
-                    logger.info(f"LID resolvido via /lids: {lid} -> {pn}")
-                    return pn
-        except Exception as e:
-            logger.debug(f"LID /lids falhou: {e}")
-
-        # 5. Fallback: buscar no banco Customer com waha_chat_id == lid
+        # 4. Fallback: buscar no banco Customer com waha_chat_id == lid
         try:
             from app.database import AsyncSessionLocal
             from app.models.customer import Customer

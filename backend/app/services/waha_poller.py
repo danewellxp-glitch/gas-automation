@@ -91,6 +91,10 @@ class WAHAPoller:
                         continue
 
                     chats = chats_resp.json()
+                    
+                    total_unread = sum(chat.get("unreadCount", 0) for chat in chats)
+                    if total_unread > 0:
+                        logger.info(f"[Poller] Encontrados {total_unread} mensagens não lidas em {len(chats)} chats")
 
                     for chat in chats:
                         chat_id = chat.get("id", {})
@@ -99,6 +103,7 @@ class WAHAPoller:
 
                         unread = chat.get("unreadCount", 0)
                         if unread > 0:
+                            logger.debug(f"[Poller] Chat {chat_id} tem {unread} mensagens não lidas")
                             await self._process_chat_messages(client, base_url, headers, chat_id)
 
             except asyncio.CancelledError:
@@ -119,34 +124,54 @@ class WAHAPoller:
             )
 
             if messages_resp.status_code != 200:
+                logger.warning(f"[Poller] Erro ao buscar mensagens do chat {chat_id}: {messages_resp.status_code}")
                 return
 
             messages = messages_resp.json()
+            logger.debug(f"[Poller] Chat {chat_id}: {len(messages)} mensagens retornadas")
 
             for msg in messages:
+                # Extrair message_id corretamente (WAHA pode retornar em diferentes formatos)
                 msg_id = msg.get("id", {})
                 if isinstance(msg_id, dict):
-                    msg_id_str = msg_id.get("_serialized", msg_id.get("id", ""))
+                    # Formato: {"_serialized": "false_7185547411514@lid_MSGID", "id": "MSGID"}
+                    msg_id_str = msg_id.get("_serialized", "") or msg_id.get("id", "")
+                    if not msg_id_str and "_data" in msg:
+                        # Tentar extrair de _data.key
+                        _data = msg.get("_data", {})
+                        key = _data.get("id", {})
+                        if isinstance(key, dict):
+                            msg_id_str = key.get("_serialized", "") or key.get("id", "")
                 else:
-                    msg_id_str = str(msg_id)
+                    msg_id_str = str(msg_id) if msg_id else ""
+
+                if not msg_id_str:
+                    logger.warning(f"[Poller] Mensagem sem ID válido: {msg}")
+                    continue
 
                 # Ignorar mensagens já processadas (cache local)
                 if msg_id_str in self._processed_ids:
                     continue
 
                 # Ignorar mensagens próprias
-                from_me = msg.get("fromMe", False)
+                from_me = msg.get("fromMe", False) or (msg.get("_data", {}).get("key", {}).get("fromMe", False))
                 if from_me:
                     self._processed_ids.add(msg_id_str)
                     continue
 
                 # Ignorar mensagens antigas (mais de 5 minutos)
-                timestamp = msg.get("timestamp", 0)
+                timestamp = msg.get("timestamp", 0) or msg.get("_data", {}).get("t", 0)
                 if timestamp:
-                    msg_time = datetime.fromtimestamp(timestamp)
-                    if datetime.now() - msg_time > timedelta(minutes=5):
-                        self._processed_ids.add(msg_id_str)
-                        continue
+                    # Timestamp pode estar em segundos ou milissegundos
+                    if timestamp > 1e10:  # Milissegundos
+                        timestamp = timestamp / 1000
+                    try:
+                        msg_time = datetime.fromtimestamp(timestamp)
+                        if datetime.now() - msg_time > timedelta(minutes=5):
+                            self._processed_ids.add(msg_id_str)
+                            continue
+                    except (ValueError, OSError):
+                        pass  # Timestamp inválido, processar mesmo assim
 
                 # ── DEDUP Redis: verificar se webhook já processou ──
                 if msg_id_str:
@@ -160,6 +185,7 @@ class WAHAPoller:
                         logger.debug(f"[Poller] Redis dedup check falhou: {e}")
 
                 # Processar a mensagem
+                logger.info(f"[Poller] Processando mensagem: chat={chat_id} msg_id={msg_id_str} body={msg.get('body', '')[:50]}")
                 await self._process_message(msg, chat_id)
                 self._processed_ids.add(msg_id_str)
 
@@ -176,16 +202,32 @@ class WAHAPoller:
             from app.api.webhooks import process_whatsapp_message
             from app.schemas.webhook import WAHAMessage
 
-            # Extrair dados da mensagem
+            # Extrair dados da mensagem (WAHA pode retornar em diferentes formatos)
             msg_id = msg.get("id", {})
             if isinstance(msg_id, dict):
-                msg_id_str = msg_id.get("id", "")
+                msg_id_str = msg_id.get("_serialized", "") or msg_id.get("id", "")
+                if not msg_id_str and "_data" in msg:
+                    _data = msg.get("_data", {})
+                    key = _data.get("id", {})
+                    if isinstance(key, dict):
+                        msg_id_str = key.get("_serialized", "") or key.get("id", "")
             else:
-                msg_id_str = str(msg_id)
+                msg_id_str = str(msg_id) if msg_id else ""
 
-            body = msg.get("body", "")
-            timestamp = msg.get("timestamp", 0)
-            push_name = msg.get("_data", {}).get("notifyName", "") or msg.get("notifyName", "")
+            # Extrair body (pode estar em _data.body ou body)
+            body = msg.get("body", "") or msg.get("_data", {}).get("body", "")
+            
+            # Extrair timestamp (pode estar em timestamp ou _data.t)
+            timestamp = msg.get("timestamp", 0) or msg.get("_data", {}).get("t", 0)
+            if timestamp > 1e10:  # Converter milissegundos para segundos
+                timestamp = int(timestamp / 1000)
+            
+            # Extrair push_name
+            push_name = (
+                msg.get("_data", {}).get("notifyName", "") 
+                or msg.get("notifyName", "")
+                or msg.get("pushName", "")
+            )
 
             # Resolver LID para número real se necessário
             original_chat_id = None

@@ -44,11 +44,29 @@ async def waha_webhook(
     Segurança:
     - Requer header X-WAHA-Signature com HMAC-SHA256 (quando WAHA_WEBHOOK_SECRET configurado)
     """
-    # Validar assinatura HMAC (se secret configurado)
-    await verify_waha_signature(request)
-
     try:
-        body = await request.json()
+        # Ler body uma vez para validação e processamento
+        body_bytes = await request.body()
+        
+        # Validar assinatura HMAC (se secret configurado)
+        # Criar um request temporário para validação que usa o body_bytes já lido
+        class TempRequest:
+            def __init__(self, headers, body_bytes):
+                self.headers = headers
+                self._body = body_bytes
+            async def body(self):
+                return self._body
+        
+        temp_req = TempRequest(request.headers, body_bytes)
+        await verify_waha_signature(temp_req)
+        
+        # Parse do JSON
+        import json
+        try:
+            body = json.loads(body_bytes.decode('utf-8'))
+        except json.JSONDecodeError as e:
+            logger.error(f"Erro ao fazer parse do JSON do webhook: {e}")
+            return {"status": "error", "message": "Invalid JSON"}
         event = body.get("event", "")
         session = body.get("session", "")
         payload = body.get("payload", {})
