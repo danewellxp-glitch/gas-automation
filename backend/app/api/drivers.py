@@ -620,13 +620,16 @@ async def update_delivery_status(
             order_number = order.order_number if order else "?"
 
             if status_update.status == DeliveryStatus.IN_TRANSIT.value:
-                # Envia localização do driver ao cliente
+                # Envia link de rastreamento (localização do driver) ao cliente
                 maps_link = ""
                 if driver.current_location:
                     lat = driver.current_location.get("latitude")
                     lng = driver.current_location.get("longitude")
                     if lat and lng:
-                        maps_link = f"\n\n📍 Acompanhe: https://maps.google.com/maps?q={lat},{lng}"
+                        maps_link = (
+                            "\n\n📍 *Rastreie a entrega* (localização do entregador):\n"
+                            f"https://maps.google.com/maps?q={lat},{lng}"
+                        )
 
                 await waha_client.send_text(
                     phone=customer_phone,
@@ -1065,18 +1068,21 @@ async def get_drivers_metrics_dashboard(
         end_date = today
     else:
         raise HTTPException(status_code=400, detail="Período inválido")
-    
-    # Buscar métricas
-    ranking = await DriverTimeTrackingService.get_daily_ranking(session, today)
-    drivers_time = await DriverTimeTrackingService.get_all_drivers_time_summary(
-        session, start_date, end_date
-    )
-    
-    # Calcular resumo
+
+    try:
+        ranking = await DriverTimeTrackingService.get_daily_ranking(session, today)
+        drivers_time = await DriverTimeTrackingService.get_all_drivers_time_summary(
+            session, start_date, end_date
+        )
+    except Exception as e:
+        logger.exception("Erro ao buscar métricas de drivers: %s", e)
+        ranking = []
+        drivers_time = []
+
     total_drivers = len(drivers_time)
-    total_deliveries = sum(item['deliveries_count'] for item in ranking)
-    total_hours_worked = sum(d['total_hours'] for d in drivers_time)
-    
+    total_deliveries = sum(item.get('deliveries_count', 0) for item in ranking)
+    total_hours_worked = sum(d.get('total_hours', 0) for d in drivers_time)
+
     summary = {
         'period': period,
         'total_drivers': total_drivers,
@@ -1084,7 +1090,7 @@ async def get_drivers_metrics_dashboard(
         'total_hours_worked': round(total_hours_worked, 2),
         'average_hours_per_driver': round(total_hours_worked / total_drivers, 2) if total_drivers > 0 else 0
     }
-    
+
     return {
         'summary': summary,
         'ranking': ranking,

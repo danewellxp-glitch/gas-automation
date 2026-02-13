@@ -163,7 +163,7 @@ export default function PendingOrdersPanel() {
                   <div>
                     <span className="text-gray-500">Telefone:</span>
                     <span className="ml-2 font-medium text-gray-900">
-                      {order.customer_phone || 'N/A'}
+                      {(order.customer_phone || 'N/A').replace(/@c\.us$/i, '')}
                     </span>
                   </div>
                   {order.delivery_address && (
@@ -177,31 +177,67 @@ export default function PendingOrdersPanel() {
                 </div>
               </div>
 
-              {/* Itens do Pedido */}
-              <div className="mb-4">
-                <h4 className="text-sm font-semibold text-gray-900 mb-2">Itens</h4>
-                <div className="space-y-2">
-                  {order.items?.map((item, idx) => (
-                    <div key={idx} className="flex justify-between items-center rounded-lg bg-gray-50 p-2">
-                      <div>
-                        <span className="font-medium">{item.product_name || item.name}</span>
-                        <span className="ml-2 text-sm text-gray-500">x{item.quantity}</span>
+              {/* Itens agrupados por produto: subtotal = quantidade × preço unitário (4 × 210 = 840) */}
+              {(() => {
+                let groupedList = []
+                let totalFromItems = 0
+                if (order.items?.length) {
+                  const grouped = {}
+                  order.items.forEach((item) => {
+                    const code = item.product_code || item.product_name || 'item'
+                    const unitPrice = Number(item.unit_price ?? 0)
+                    const qty = item.quantity || 0
+                    if (!grouped[code]) {
+                      grouped[code] = {
+                        product_name: item.product_name || item.name || code,
+                        quantity: 0,
+                        unit_price: unitPrice
+                      }
+                    }
+                    grouped[code].quantity += qty
+                    if (unitPrice && !grouped[code].unit_price) grouped[code].unit_price = unitPrice
+                  })
+                  groupedList = Object.entries(grouped).map(([code, row]) => {
+                    const unit = row.unit_price || 0
+                    const subtotal = row.quantity * unit
+                    return [code, { ...row, unit_price: unit, subtotal }]
+                  })
+                  totalFromItems = groupedList.reduce((acc, [, row]) => acc + row.subtotal, 0)
+                }
+                return (
+                  <>
+                    <div className="mb-4">
+                      <h4 className="text-sm font-semibold text-gray-900 mb-2">Itens</h4>
+                      <div className="space-y-2">
+                        {groupedList.length === 0 ? (
+                          <p className="text-sm text-gray-500">Nenhum item especificado</p>
+                        ) : (
+                          groupedList.map(([code, row]) => (
+                            <div key={code} className="flex justify-between items-center rounded-lg bg-gray-50 p-2">
+                              <div>
+                                <span className="font-medium">{row.product_name}</span>
+                                <span className="ml-2 text-sm text-gray-500">x{row.quantity}</span>
+                                {row.unit_price > 0 && (
+                                  <span className="ml-2 text-xs text-gray-400">
+                                    (R$ {Number(row.unit_price).toFixed(2).replace('.', ',')}/un)
+                                  </span>
+                                )}
+                              </div>
+                              <span className="font-bold">{formatCurrency(row.subtotal)}</span>
+                            </div>
+                          ))
+                        )}
                       </div>
-                      <span className="font-bold">{formatCurrency(item.total || item.price * item.quantity)}</span>
                     </div>
-                  )) || (
-                    <p className="text-sm text-gray-500">Nenhum item especificado</p>
-                  )}
-                </div>
-              </div>
-
-              {/* Total */}
-              <div className="flex items-center justify-between border-t border-gray-200 pt-4">
-                <span className="text-sm font-semibold text-gray-900">Total</span>
-                <span className="text-xl font-semibold text-gray-900">
-                  {formatCurrency(order.total_amount || order.total || 0)}
-                </span>
-              </div>
+                    <div className="flex items-center justify-between border-t border-gray-200 pt-4">
+                      <span className="text-sm font-semibold text-gray-900">Total</span>
+                      <span className="text-xl font-semibold text-gray-900">
+                        {formatCurrency(groupedList.length > 0 ? totalFromItems : (order.total_amount || order.total || 0))}
+                      </span>
+                    </div>
+                  </>
+                )
+              })()}
 
               {/* Forma de Pagamento */}
               {order.payment_method && (

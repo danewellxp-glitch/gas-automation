@@ -702,16 +702,17 @@ async def process_whatsapp_message(
                     }
                 )
 
-            # Processar mensagem pelo flow engine
+            # Processar mensagem pelo flow engine V2
             from app.core.flow_engine import flow_engine
 
             logger.info(
                 f"[FLOW_ENGINE_START] trace_id={trace_id} phone={phone} message_id={message_id} "
-                f"content={content[:50]}",
+                f"content={content[:50]} engine_version=v2",
                 extra={
                     "trace_id": trace_id,
                     "phone": phone,
                     "message_id": message_id,
+                    "engine_version": "v2",
                     "step": "flow_engine_start"
                 }
             )
@@ -721,6 +722,7 @@ async def process_whatsapp_message(
                 message=content,
                 message_id=message_id,
                 waha_chat_id=original_chat_id or (phone if "@" in phone else None),
+                trace_id=trace_id,
             )
 
             logger.info(

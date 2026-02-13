@@ -118,6 +118,16 @@ class OrderResponse(OrderBase, TimestampSchema):
     customer: Optional[CustomerBrief] = None
 
 
+class OrderItemBrief(BaseSchema):
+    """Item do pedido para listagem."""
+
+    product_code: str
+    product_name: str
+    quantity: int
+    unit_price: Decimal
+    subtotal: Decimal
+
+
 class OrderBrief(BaseSchema):
     """Schema resumido de pedido (para listas)."""
 
@@ -128,18 +138,51 @@ class OrderBrief(BaseSchema):
     customer_name: Optional[str] = None
     customer_phone: str
     delivery_bairro: Optional[str] = None
+    delivery_address: Optional[str] = None
+    items: List[OrderItemBrief] = []
+    payment_method: Optional[str] = None
     created_at: datetime
 
     @classmethod
     def from_order(cls, order) -> "OrderBrief":
+        # Telefone para exibição: remover sufixo @c.us se existir
+        phone = ""
+        if order.customer and order.customer.phone:
+            phone = (order.customer.phone or "").replace("@c.us", "").strip()
+        # Endereço formatado para exibição
+        delivery_address_str = None
+        if order.delivery_address:
+            addr = order.delivery_address
+            if isinstance(addr, dict):
+                delivery_address_str = addr.get("full_address") or ", ".join(
+                    filter(None, [addr.get("street"), addr.get("number"), addr.get("bairro")])
+                )
+            else:
+                delivery_address_str = str(addr)
+        # Itens do pedido (order.items já carregado via selectinload)
+        item_list = []
+        if getattr(order, "items", None):
+            for it in order.items:
+                item_list.append(
+                    OrderItemBrief(
+                        product_code=it.product_code or "",
+                        product_name=it.product_name or it.product_code or "",
+                        quantity=it.quantity or 0,
+                        unit_price=it.unit_price or Decimal("0"),
+                        subtotal=it.subtotal or Decimal("0"),
+                    )
+                )
         return cls(
             id=order.id,
             order_number=order.order_number,
             status=order.status,
             total_amount=order.total_amount,
-            customer_name=order.customer.name if order.customer else None,
-            customer_phone=order.customer.phone if order.customer else "",
+            customer_name=(order.customer.name or None) if order.customer else None,
+            customer_phone=phone,
             delivery_bairro=order.delivery_bairro,
+            delivery_address=delivery_address_str,
+            items=item_list,
+            payment_method=order.payment_method,
             created_at=order.created_at,
         )
 

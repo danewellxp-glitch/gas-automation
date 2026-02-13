@@ -279,11 +279,15 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Configurar CORS (web + mobile Capacitor/Android)
-# allow_origin_regex: capacitor://, ionic://, https://localhost, Origin: null (Android WebView)
+# allow_origin_regex: capacitor, ionic, localhost com qualquer porta, 192.168.10.x com qualquer porta, null (WebView)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
-    allow_origin_regex=r"^(capacitor://|ionic://)localhost(:\d+)?$|^https://localhost(:\d+)?$|^null$",
+    allow_origin_regex=(
+        r"^(capacitor://|ionic://)localhost(:\d+)?$|^https?://localhost(:\d+)?$|^null$|"
+        r"^http://127\.0\.0\.1(:\d+)?$|"
+        r"^http://192\.168\.10\.\d{1,3}(:\d+)?$"
+    ),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
