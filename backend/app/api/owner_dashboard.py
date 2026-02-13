@@ -382,7 +382,8 @@ async def get_owner_dashboard(
         Delivery.actual_delivery_minutes.is_not(None)
     )
     avg_delivery_time_result = await session.execute(avg_delivery_time_stmt)
-    avg_delivery_time = float(avg_delivery_time_result.scalar() or 0) if avg_delivery_time_result.scalar() else None
+    avg_delivery_time_scalar = avg_delivery_time_result.scalar()
+    avg_delivery_time = float(avg_delivery_time_scalar or 0) if avg_delivery_time_scalar else None
 
     # Taxa de entrega no prazo (assumindo 60 min como padrão)
     on_time_deliveries_stmt = select(func.count(Delivery.id)).where(
@@ -588,7 +589,8 @@ async def get_owner_dashboard(
             )
         )
         avg_time_result = await session.execute(avg_time_stmt)
-        avg_time = float(avg_time_result.scalar() or 0) if avg_time_result.scalar() else None
+        avg_time_scalar = avg_time_result.scalar()
+        avg_time = float(avg_time_scalar or 0) if avg_time_scalar else None
 
         bairro_list.append(
             OrdersByBairro(
