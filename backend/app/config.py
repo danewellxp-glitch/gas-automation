@@ -115,6 +115,16 @@ class Settings(BaseSettings):
     # Métricas
     metrics_token: Optional[str] = Field(None, description="Token para acesso ao endpoint /metrics")
 
+    # DLQ Alertas
+    dlq_alert_email: Optional[str] = Field(
+        None,
+        description="Email para receber alertas quando mensagens vão para DLQ"
+    )
+    dlq_alert_webhook_url: Optional[str] = Field(
+        None,
+        description="URL do webhook para receber alertas de DLQ (ex: Slack, Discord, etc)"
+    )
+
     # Negócio
     default_delivery_time_minutes: int = 40
     supported_bairros: List[str] = [

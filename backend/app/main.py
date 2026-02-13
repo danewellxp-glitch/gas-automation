@@ -169,6 +169,26 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             secure_logger.warning(f"Erro ao iniciar WAHA Poller: {e}")
 
+    # Iniciar Message Stream Consumer (substitui BackgroundTask)
+    try:
+        from app.services.message_stream_consumer import MessageStreamConsumer
+        global message_stream_consumer
+        message_stream_consumer = MessageStreamConsumer()
+        await message_stream_consumer.start()
+        print("[OK] Message Stream Consumer iniciado (Redis Streams)")
+    except Exception as e:
+        secure_logger.error(f"Erro ao iniciar Message Stream Consumer: {e}", exc_info=True)
+
+    # Iniciar DLQ Alerter (monitora Dead Letter Queue e envia alertas)
+    try:
+        from app.services.dlq_alerter import DLQAlerter
+        global dlq_alerter
+        dlq_alerter = DLQAlerter()
+        await dlq_alerter.start()
+        print("[OK] DLQ Alerter iniciado (monitoramento de DLQ)")
+    except Exception as e:
+        secure_logger.warning(f"Erro ao iniciar DLQ Alerter: {e}", exc_info=True)
+
     # TODO: Pré-carregar modelo Ollama se necessário
     # TODO: Verificar conexão com Firebird se habilitado
 
@@ -198,6 +218,26 @@ async def lifespan(app: FastAPI):
             print("[OK] WAHA Poller parado")
         except Exception as e:
             secure_logger.warning(f"Erro ao parar WAHA Poller: {e}")
+    
+    # Parar Message Stream Consumer
+    try:
+        # message_stream_consumer é uma variável global definida no módulo
+        import app.services.message_stream_consumer as stream_module
+        consumer = getattr(stream_module, 'message_stream_consumer', None)
+        if consumer:
+            await consumer.stop()
+            print("[OK] Message Stream Consumer parado")
+    except Exception as e:
+        secure_logger.warning(f"Erro ao parar Message Stream Consumer: {e}")
+    
+    # Parar DLQ Alerter
+    try:
+        from app.services.dlq_alerter import dlq_alerter
+        if dlq_alerter:
+            await dlq_alerter.stop()
+            print("[OK] DLQ Alerter parado")
+    except Exception as e:
+        secure_logger.warning(f"Erro ao parar DLQ Alerter: {e}")
     
     # Parar Event Batcher
     await ws_manager.disable_batching()
@@ -285,7 +325,7 @@ async def health_check():
 
     # Verificar Redis
     try:
-        await redis_manager.client.ping()
+        await redis_manager._redis.ping()
         health_status["services"]["redis"] = "healthy"
     except Exception as e:
         health_status["services"]["redis"] = f"unhealthy: {str(e)}"
@@ -299,6 +339,27 @@ async def health_check():
     except Exception as e:
         health_status["services"]["postgres"] = f"unhealthy: {str(e)}"
         health_status["status"] = "degraded"
+    
+    # Verificar Stream Consumer
+    try:
+        from app.services.message_stream_consumer import message_stream_consumer
+        if message_stream_consumer and message_stream_consumer.running:
+            health_status["services"]["stream_consumer"] = "healthy"
+        else:
+            health_status["services"]["stream_consumer"] = "not_running"
+            health_status["status"] = "degraded"
+    except Exception as e:
+        health_status["services"]["stream_consumer"] = f"error: {str(e)}"
+    
+    # Verificar DLQ Alerter
+    try:
+        from app.services.dlq_alerter import dlq_alerter
+        if dlq_alerter and dlq_alerter.running:
+            health_status["services"]["dlq_alerter"] = "healthy"
+        else:
+            health_status["services"]["dlq_alerter"] = "not_running"
+    except Exception as e:
+        health_status["services"]["dlq_alerter"] = f"error: {str(e)}"
 
     return health_status
 
@@ -427,6 +488,20 @@ app.include_router(daily_summary.router, prefix="/api/daily-summary", tags=["Dai
 app.include_router(promotions.router, prefix="/api/promotions", tags=["Promotions"])
 app.include_router(whatsapp_broadcast.router, prefix="/api/whatsapp", tags=["WhatsApp Broadcast"])
 app.include_router(test_flow.router, prefix="/api/test", tags=["Test Flow"])
+
+# DLQ Monitoring API
+try:
+    from app.api import dlq
+    app.include_router(dlq.router)
+except ImportError:
+    secure_logger.warning("DLQ API não disponível")
+
+# Alerts API (Alertmanager webhook)
+try:
+    from app.api import alerts
+    app.include_router(alerts.router)
+except ImportError:
+    secure_logger.warning("Alerts API não disponível")
 
 
 # ==================== AUDIT LOGS (rota direta para compatibilidade) ====================

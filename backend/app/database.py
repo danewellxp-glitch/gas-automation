@@ -4,6 +4,7 @@ Configuração de conexões com banco de dados PostgreSQL e Redis.
 
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator, List, Optional, Union
+import uuid
 
 import redis.asyncio as aioredis
 from sqlalchemy.ext.asyncio import (
@@ -77,9 +78,10 @@ async def close_db() -> None:
 
 class RedisManager:
     """Gerenciador de conexão Redis."""
-
+    
     def __init__(self):
         self._redis: Optional[aioredis.Redis] = None
+        self.instance_id: str = str(uuid.uuid4())[:8]  # ID único para métricas
 
     async def connect(self) -> None:
         """Estabelece conexão com Redis."""
@@ -226,6 +228,73 @@ class RedisManager:
         return bool(result)
 
     # ==================== Deduplicação de mensagens ====================
+
+    # ==================== Redis Streams ====================
+
+    async def add_message_to_stream(
+        self, message_data: dict, original_chat_id: Optional[str] = None, trace_id: Optional[str] = None
+    ) -> Optional[str]:
+        """
+        Adiciona mensagem ao Redis Stream para processamento distribuído.
+        
+        Args:
+            message_data: Dados da mensagem (dict serializável)
+            original_chat_id: Chat ID original do WAHA (pode ser @lid)
+            
+        Returns:
+            Message ID do stream ou None se falhar
+        """
+        import json
+        import time
+        import logging
+        
+        logger = logging.getLogger(__name__)
+        
+        try:
+            stream_data = {
+                "message": json.dumps(message_data),
+                "original_chat_id": original_chat_id or "",
+                "timestamp": str(time.time()),
+            }
+            # Incluir trace_id se fornecido
+            if trace_id:
+                stream_data["trace_id"] = trace_id
+            
+            # Usar cliente Redis direto para streams (precisa de bytes)
+            import redis.asyncio as redis_streams
+            redis_url = settings.redis_url
+            stream_client = redis_streams.from_url(
+                redis_url,
+                encoding="utf-8",
+                decode_responses=False,  # Streams precisam de bytes
+            )
+            
+            message_id = await stream_client.xadd(
+                "stream:messages",
+                stream_data,
+                maxlen=10000,  # Manter apenas últimos 10k mensagens
+            )
+            
+            await stream_client.close()
+            
+            message_id_str = message_id.decode() if isinstance(message_id, bytes) else message_id
+            logger.debug(f"[RedisStream] Mensagem adicionada ao stream: {message_id_str}")
+            
+            # Métricas
+            try:
+                from app.metrics import stream_messages_added_total
+                stream_messages_added_total.labels(
+                    stream="stream:messages",
+                    instance_id=getattr(self, 'instance_id', 'unknown')
+                ).inc()
+            except Exception:
+                pass  # Métricas opcionais
+            
+            return message_id_str
+            
+        except Exception as e:
+            logger.error(f"[RedisStream] Erro ao adicionar mensagem ao stream: {e}")
+            return None
 
     async def check_message_processed(self, message_id: str) -> bool:
         """

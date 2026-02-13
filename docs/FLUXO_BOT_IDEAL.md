@@ -1,15 +1,65 @@
 # Fluxo Ideal do Bot de WhatsApp - Gas Automation
 
+**📅 Última Atualização:** 13 de Fevereiro de 2026  
+**📊 Status Geral:** ✅ Core Funcionando | ⚠️ Melhorias de UX Pendentes
+
+---
+
+## 🚀 RESUMO EXECUTIVO
+
+### O Que Está Funcionando ✅
+- **Pipeline completo:** Webhook → Redis Stream → Consumer → Flow Engine → WAHA → WebSocket
+- **Deduplicação:** Mensagens duplicadas são ignoradas corretamente
+- **State Machine:** Fluxo conversacional completo implementado
+- **Contexto persistido:** Redis (rápido) + PostgreSQL (backup)
+- **Tracing:** Rastreamento completo com trace_id único
+- **Atendente humano:** Integração funcionando com nome do atendente nas mensagens
+
+### O Que Falta Implementar ❌
+- **Feedback imediato:** "digitando..." e marcar como lida (prioridade ALTA)
+- **Reconhecimento Firebird:** Integração completa para buscar clientes existentes
+- **Repetir pedido:** Funcionalidade para clientes conhecidos
+- **UX pedido abandonado:** Perguntar se quer continuar de onde parou
+
+### Próximos Passos 📋
+1. **Prioridade ALTA:** Implementar feedback imediato (typing + marcar como lida)
+2. **Prioridade MÉDIA:** Integração Firebird + repetir pedido
+3. **Prioridade BAIXA:** Melhorias de UX (perguntas fora contexto, agregação)
+
+---
+
+## 📋 STATUS DE IMPLEMENTAÇÃO
+
+### ✅ Implementado e Funcionando
+- ✅ **Deduplicação de mensagens** - Redis SET com TTL 1h
+- ✅ **Processamento assíncrono** - Redis Stream + Consumer Groups
+- ✅ **State Machine (FSM)** - Flow Engine completo
+- ✅ **Contexto persistido** - Redis (30min) + PostgreSQL snapshot (24h)
+- ✅ **Tracing completo** - Trace ID único em todo o pipeline
+- ✅ **Integração atendente** - Nome do atendente nas mensagens
+
+### ⚠️ Parcialmente Implementado
+- ⚠️ **Reconhecimento cliente** - Busca PostgreSQL OK, falta integração Firebird
+- ⚠️ **Continuar pedido abandonado** - Funciona, falta UX (perguntar se quer continuar)
+
+### ❌ Ainda Não Implementado
+- ❌ **Feedback imediato** - "digitando..." e marcar como lida
+- ❌ **Repetir último pedido** - Para clientes conhecidos
+- ❌ **Perguntas fora contexto** - NLU para responder e voltar ao fluxo
+- ❌ **Agregação mensagens** - Combinar mensagens rápidas
+
+---
+
 ## 1. Visão Geral do Problema
 
-### Problemas Atuais Identificados
-| # | Problema | Impacto no Cliente |
-|---|----------|-------------------|
-| 1 | Mensagens duplicadas processadas | Cliente recebe respostas duplicadas, pedidos duplicados |
-| 2 | Estado perdido entre mensagens | Cliente precisa recomeçar do zero |
-| 3 | Cliente não reconhecido | Pede dados que já temos |
-| 4 | Ordem das mensagens incorreta | Confusão, experiência ruim |
-| 5 | Sem feedback de "digitando..." | Cliente acha que bot travou |
+### Problemas Identificados e Status
+| # | Problema | Impacto no Cliente | Status |
+|---|----------|-------------------|--------|
+| 1 | Mensagens duplicadas processadas | Cliente recebe respostas duplicadas, pedidos duplicados | ✅ **RESOLVIDO** |
+| 2 | Estado perdido entre mensagens | Cliente precisa recomeçar do zero | ✅ **RESOLVIDO** (Redis + PostgreSQL) |
+| 3 | Cliente não reconhecido | Pede dados que já temos | ⚠️ **PARCIAL** (falta Firebird) |
+| 4 | Ordem das mensagens incorreta | Confusão, experiência ruim | ✅ **RESOLVIDO** (Lock distribuído) |
+| 5 | Sem feedback de "digitando..." | Cliente acha que bot travou | ❌ **PENDENTE** |
 
 ---
 
@@ -38,6 +88,7 @@
 │                     ┌──────────────────┐                                    │
 │                     │ Adicionar à fila │                                    │
 │                     │  (background)    │                                    │
+│                     │ ✅ Redis Stream  │                                    │
 │                     └──────────────────┘                                    │
 └─────────────────────────────────────────────────────────────────────────────┘
                                       │
@@ -49,6 +100,7 @@
 │  ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────────┐     │
 │  │ Mostrar "typing"│    │ Notificar painel│    │  Marcar como lida   │     │
 │  │ para o cliente  │    │ (WebSocket)     │    │  (✓✓ azul)          │     │
+│  │ ❌ PENDENTE     │    │ ✅ IMPLEMENTADO │    │  ❌ PENDENTE         │     │
 │  └─────────────────┘    └─────────────────┘    └─────────────────────┘     │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -61,6 +113,7 @@
 │  ┌─────────────────┐                                                        │
 │  │ Buscar contexto │                                                        │
 │  │ Redis + Fallback│                                                        │
+│  │ ✅ IMPLEMENTADO │                                                        │
 │  └────────┬────────┘                                                        │
 │           │                                                                 │
 │           ▼                                                                 │
@@ -72,9 +125,10 @@
 │  ┌─────────────────┐            ┌─────────────────┐                        │
 │  │ Carregar dados: │            │ Buscar Firebird │                        │
 │  │ - Nome          │            │ pelo telefone   │                        │
-│  │ - Endereço      │            └────────┬────────┘                        │
-│  │ - Último pedido │                     │                                  │
-│  │ - Preferências  │                     ▼                                  │
+│  │ - Endereço      │            │ ⚠️ PARCIAL      │                        │
+│  │ - Último pedido │            └────────┬────────┘                        │
+│  │ - Preferências  │                     │                                  │
+│  │ ✅ PostgreSQL   │                     ▼                                  │
 │  └─────────────────┘            ┌─────────────────┐                        │
 │                                 │ Encontrou?      │                        │
 │                                 └────────┬────────┘                        │
@@ -83,6 +137,7 @@
 │                         ┌──────────────┐ │ ┌──────────────┐                │
 │                         │Migrar dados  │ │ │Criar cliente │                │
 │                         │do Firebird   │ │ │novo          │                │
+│                         │ ❌ PENDENTE  │ │ │✅ IMPLEMENTADO│                │
 │                         └──────────────┘ │ └──────────────┘                │
 │                                          │                                  │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -109,7 +164,7 @@
 │  │  ┌───────┐   ┌─────────┐   ┌──────────┐   ┌─────────────┐   │         │
 │  │  │ START │──▶│PRODUTO  │──▶│QUANTIDADE│──▶│  ENDEREÇO   │   │         │
 │  │  └───────┘   └─────────┘   └──────────┘   └──────┬──────┘   │         │
-│  │                                                   │          │         │
+│  │  ✅ IMPLEMENTADO                                  │          │         │
 │  │                                                   ▼          │         │
 │  │  ┌──────────┐   ┌─────────┐   ┌──────────┐   ┌─────────┐   │         │
 │  │  │CONFIRMADO│◀──│PAGAMENTO│◀──│CONFIRMAR │◀──│ENDEREÇO │   │         │
@@ -126,8 +181,8 @@
 │                                                                             │
 │  ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────────┐     │
 │  │ Parar "typing"  │───▶│ Enviar resposta │───▶│ Salvar no EventLog  │     │
-│  └─────────────────┘    │ (texto/botões)  │    └─────────────────────┘     │
-│                         └─────────────────┘                                 │
+│  │ ❌ PENDENTE     │    │ ✅ IMPLEMENTADO │    │ ✅ IMPLEMENTADO      │     │
+│  └─────────────────┘    └─────────────────┘    └─────────────────────┘     │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -271,6 +326,7 @@
 │                     ▼                                            │
 │  ┌─────────────────────────────────────┐                        │
 │  │ Redis: EXISTS msg_processed:ABC123  │                        │
+│  │ ✅ IMPLEMENTADO                     │                        │
 │  └─────────────────────────────────────┘                        │
 │                     │                                            │
 │         ┌──────────┴──────────┐                                 │
@@ -279,12 +335,14 @@
 │  ┌─────────────┐      ┌─────────────────┐                       │
 │  │ Processar   │      │ IGNORAR         │                       │
 │  │ mensagem    │      │ Log: "Duplicada"│                       │
+│  │ ✅ Stream   │      │ ✅ Funcionando  │                       │
 │  └──────┬──────┘      └─────────────────┘                       │
 │         │                                                        │
 │         ▼                                                        │
 │  ┌─────────────────────────────────────┐                        │
 │  │ Redis: SET msg_processed:ABC123     │                        │
 │  │        EX 3600 (1 hora TTL)         │                        │
+│  │ ✅ IMPLEMENTADO                     │                        │
 │  └─────────────────────────────────────┘                        │
 │                                                                  │
 └──────────────────────────────────────────────────────────────────┘
@@ -317,9 +375,9 @@
 └───────────────────────────────────────┴──────────────────────────┘
 
 LÓGICA:
-- Salvar último estado no PostgreSQL (não apenas Redis)
-- Mesmo se TTL expirar, recuperar do banco
-- Perguntar se quer continuar de onde parou
+- ✅ Salvar último estado no PostgreSQL (não apenas Redis) - **IMPLEMENTADO**
+- ✅ Mesmo se TTL expirar, recuperar do banco - **IMPLEMENTADO**
+- ❌ Perguntar se quer continuar de onde parou - **PENDENTE** (falta UX)
 ```
 
 ### 4.3 Mensagem Fora de Contexto
@@ -382,38 +440,40 @@ LÓGICA:
 
 ### Fase 1: Correções Críticas (1-2 dias)
 ```
-┌────┬────────────────────────────────────┬───────────┬──────────┐
-│ #  │ Item                               │ Impacto   │ Esforço  │
-├────┼────────────────────────────────────┼───────────┼──────────┤
-│ 1  │ Deduplicação de mensagens          │ 🔴 ALTO   │ 2h       │
-│ 2  │ Mostrar "digitando..." ao cliente  │ 🔴 ALTO   │ 1h       │
-│ 3  │ Marcar como lida IMEDIATAMENTE     │ 🔴 ALTO   │ 30min    │
-│ 4  │ Sincronizar estado context/new     │ 🟠 MÉDIO  │ Feito ✓  │
-└────┴────────────────────────────────────┴───────────┴──────────┘
+┌────┬────────────────────────────────────┬───────────┬──────────┬──────────────┐
+│ #  │ Item                               │ Impacto   │ Esforço  │ Status      │
+├────┼────────────────────────────────────┼───────────┼──────────┼──────────────┤
+│ 1  │ Deduplicação de mensagens          │ 🔴 ALTO   │ 2h       │ ✅ FEITO    │
+│ 2  │ Mostrar "digitando..." ao cliente  │ 🔴 ALTO   │ 1h       │ ❌ PENDENTE │
+│ 3  │ Marcar como lida IMEDIATAMENTE     │ 🔴 ALTO   │ 30min    │ ❌ PENDENTE │
+│ 4  │ Sincronizar estado context/new     │ 🟠 MÉDIO  │ -        │ ✅ FEITO    │
+└────┴────────────────────────────────────┴───────────┴──────────┴──────────────┘
 ```
 
 ### Fase 2: Melhoria de UX (3-5 dias)
 ```
-┌────┬────────────────────────────────────┬───────────┬──────────┐
-│ #  │ Item                               │ Impacto   │ Esforço  │
-├────┼────────────────────────────────────┼───────────┼──────────┤
-│ 5  │ Reconhecer cliente do Firebird     │ 🟠 MÉDIO  │ 4h       │
-│ 6  │ "Repetir último pedido" p/ conhec. │ 🟠 MÉDIO  │ 4h       │
-│ 7  │ Continuar pedido abandonado        │ 🟠 MÉDIO  │ 3h       │
-│ 8  │ Responder perguntas fora contexto  │ 🟡 BAIXO  │ 8h       │
-└────┴────────────────────────────────────┴───────────┴──────────┘
+┌────┬────────────────────────────────────┬───────────┬──────────┬──────────────┐
+│ #  │ Item                               │ Impacto   │ Esforço  │ Status      │
+├────┼────────────────────────────────────┼───────────┼──────────┼──────────────┤
+│ 5  │ Reconhecer cliente do Firebird     │ 🟠 MÉDIO  │ 4h       │ ⚠️ PARCIAL  │
+│ 6  │ "Repetir último pedido" p/ conhec. │ 🟠 MÉDIO  │ 4h       │ ❌ PENDENTE │
+│ 7  │ Continuar pedido abandonado        │ 🟠 MÉDIO  │ 3h       │ ⚠️ PARCIAL  │
+│ 8  │ Responder perguntas fora contexto  │ 🟡 BAIXO  │ 8h       │ ❌ PENDENTE │
+└────┴────────────────────────────────────┴───────────┴──────────┴──────────────┘
 ```
 
 ### Fase 3: Robustez (1 semana)
 ```
-┌────┬────────────────────────────────────┬───────────┬──────────┐
-│ #  │ Item                               │ Impacto   │ Esforço  │
-├────┼────────────────────────────────────┼───────────┼──────────┤
-│ 9  │ Agregação de mensagens rápidas     │ 🟡 BAIXO  │ 6h       │
-│ 10 │ Rate limiting por telefone         │ 🟡 BAIXO  │ 2h       │
-│ 11 │ Timeout em background tasks        │ 🟡 BAIXO  │ 2h       │
-│ 12 │ Métricas de tempo de resposta      │ 🟡 BAIXO  │ 4h       │
-└────┴────────────────────────────────────┴───────────┴──────────┘
+┌────┬────────────────────────────────────┬───────────┬──────────┬──────────────┐
+│ #  │ Item                               │ Impacto   │ Esforço  │ Status      │
+├────┼────────────────────────────────────┼───────────┼──────────┼──────────────┤
+│ 9  │ Agregação de mensagens rápidas     │ 🟡 BAIXO  │ 6h       │ ❌ PENDENTE │
+│ 10 │ Rate limiting por telefone         │ 🟡 BAIXO  │ 2h       │ ❌ PENDENTE │
+│ 11 │ Timeout em background tasks        │ 🟡 BAIXO  │ 2h       │ ✅ FEITO*   │
+│ 12 │ Métricas de tempo de resposta      │ 🟡 BAIXO  │ 4h       │ ⚠️ PARCIAL  │
+└────┴────────────────────────────────────┴───────────┴──────────┴──────────────┘
+
+* Timeout implementado via Redis Stream retry/DLQ
 ```
 
 ---
@@ -477,19 +537,49 @@ LÓGICA:
 ## 8. Checklist de Implementação
 
 ### Imediato (Fase 1)
-- [ ] Implementar deduplicação de mensagens por message_id
-- [ ] Adicionar "typing" indicator antes de processar
-- [ ] Marcar mensagem como lida imediatamente no webhook
-- [ ] Corrigir dessincronização de estados (FEITO ✓)
+- [x] ✅ Implementar deduplicação de mensagens por message_id - **FEITO**
+- [ ] ❌ Adicionar "typing" indicator antes de processar - **PENDENTE**
+- [ ] ❌ Marcar mensagem como lida imediatamente no webhook - **PENDENTE**
+- [x] ✅ Corrigir dessincronização de estados - **FEITO**
 
 ### Curto Prazo (Fase 2)
-- [ ] Integrar busca de cliente no Firebird
-- [ ] Implementar "repetir último pedido"
-- [ ] Salvar contexto no PostgreSQL (backup do Redis)
-- [ ] Recuperar pedido abandonado
+- [ ] ⚠️ Integrar busca de cliente no Firebird - **PARCIAL** (PostgreSQL OK, falta Firebird)
+- [ ] ❌ Implementar "repetir último pedido" - **PENDENTE**
+- [x] ✅ Salvar contexto no PostgreSQL (backup do Redis) - **FEITO**
+- [x] ⚠️ Recuperar pedido abandonado - **FEITO** (falta UX de perguntar se quer continuar)
 
 ### Médio Prazo (Fase 3)
-- [ ] Agregação de mensagens rápidas
-- [ ] NLU para perguntas fora de contexto
-- [ ] Dashboard de métricas de conversão
-- [ ] A/B testing de mensagens
+- [ ] ❌ Agregação de mensagens rápidas - **PENDENTE**
+- [ ] ❌ NLU para perguntas fora de contexto - **PENDENTE**
+- [ ] ⚠️ Dashboard de métricas de conversão - **PARCIAL** (logs estruturados existem)
+- [ ] ❌ A/B testing de mensagens - **PENDENTE**
+
+---
+
+## 🎉 MELHORIAS ADICIONAIS IMPLEMENTADAS
+
+### ✅ Tracing Completo
+- Trace ID único por mensagem
+- Logs estruturados em todo o pipeline
+- Rastreamento de ponta a ponta (Webhook → Stream → Consumer → Flow → WAHA → WebSocket)
+
+### ✅ Nome do Atendente nas Mensagens
+- Quando atendente assume conversa, nome aparece nas mensagens
+- Formato: `"Nome do Atendente: mensagem"`
+- Implementado em todos os endpoints de envio
+
+### ✅ Pipeline Robusto
+- Redis Stream para processamento assíncrono
+- Consumer Groups com retry automático
+- DLQ para mensagens com falha
+- Lock distribuído por telefone
+
+---
+
+## 📊 RESUMO DO STATUS
+
+**✅ Core Funcionando:** Pipeline completo, deduplicação, state machine, contexto persistido  
+**⚠️ UX Melhorável:** Feedback imediato, reconhecimento Firebird, repetir pedido  
+**📋 Roadmap:** Este documento serve como guia para próximas melhorias
+
+**Última atualização:** 13/02/2026

@@ -16,6 +16,8 @@ from app.models.customer import Customer
 from app.models.event_log import EventLog
 from app.integrations.waha import waha_client
 from app.api.websocket import emit_new_message
+from app.auth import get_current_user
+from app.models.auth_models import User
 
 logger = logging.getLogger(__name__)
 
@@ -267,6 +269,7 @@ async def send_message(
     phone: str,
     request: SendMessageRequest,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Envia mensagem manual para um cliente."""
     # Formatar telefone para WAHA (resolver @lid se necessário)
@@ -277,10 +280,34 @@ async def send_message(
     else:
         chat_id = f"{phone}@c.us"
 
+    # Verificar se conversa está em talking_to_human e obter nome do atendente
+    redis = redis_manager.client
+    message_to_send = request.message
+    attendant_name = None
+    
+    if redis:
+        try:
+            context_data = await redis.hgetall(f"conversation:{phone}")
+            state = context_data.get("state", "start") if context_data else "start"
+            
+            if state == "talking_to_human":
+                # Obter nome do atendente do Redis (salvo quando assumiu) ou usar nome do usuário atual
+                attendant_name = context_data.get("attendant_name")
+                if not attendant_name:
+                    # Fallback: usar nome do usuário atual
+                    attendant_name = current_user.full_name or current_user.username
+                
+                # Formatar mensagem com nome do atendente: "Nome: mensagem"
+                message_to_send = f"{attendant_name}: {request.message}"
+                logger.info(f"Mensagem formatada com nome do atendente: {attendant_name}")
+        except Exception as e:
+            logger.warning(f"Erro ao verificar estado da conversa {phone}: {e}")
+            # Continuar sem formatação se houver erro
+
     # 1. Enviar via WAHA (prioridade máxima)
     try:
         logger.info(f"Enviando mensagem manual para {chat_id}")
-        result = await waha_client.send_text(chat_id, request.message)
+        result = await waha_client.send_text(chat_id, message_to_send)
 
         if not result:
             logger.error(f"WAHA retornou resultado vazio para {chat_id}")
@@ -301,8 +328,9 @@ async def send_message(
             entity_type="chat",
             payload={
                 "phone": phone,
-                "message": request.message,
-                "manual": True
+                "message": message_to_send,
+                "manual": True,
+                "attendant_name": attendant_name if attendant_name else None
             }
         )
         db.add(event)
@@ -434,7 +462,11 @@ async def list_conversations_operator(
 
 
 @router.post("/conversations/{conversation_id}/assign", response_model=SuccessResponse)
-async def assign_conversation(conversation_id: str, db: AsyncSession = Depends(get_db)):
+async def assign_conversation(
+    conversation_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """Atribui conversa ao operador atual."""
     phone = conversation_id
     redis = redis_manager.client
@@ -444,7 +476,10 @@ async def assign_conversation(conversation_id: str, db: AsyncSession = Depends(g
             # Setar estado para talking_to_human no Redis
             await redis.hset(f"conversation:{phone}", "state", "talking_to_human")
             await redis.hset(f"conversation:{phone}", "assigned_operator", "operator")
-            logger.info(f"Conversa {phone} assumida: estado -> talking_to_human")
+            # Salvar nome do atendente para usar nas mensagens
+            attendant_name = current_user.full_name or current_user.username
+            await redis.hset(f"conversation:{phone}", "attendant_name", attendant_name)
+            logger.info(f"Conversa {phone} assumida por {attendant_name}: estado -> talking_to_human")
 
         # Registrar no EventLog
         event = EventLog(
@@ -512,6 +547,7 @@ async def reply_to_conversation(
     conversation_id: str,
     request: ReplyMessageRequest,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Responde a uma conversa."""
     # Formatar telefone para WAHA - resolver @lid se necessário
@@ -523,10 +559,34 @@ async def reply_to_conversation(
     else:
         chat_id = f"{conversation_id}@c.us"
 
+    # Verificar se conversa está em talking_to_human e obter nome do atendente
+    redis = redis_manager.client
+    message_to_send = request.message
+    attendant_name = None
+    
+    if redis:
+        try:
+            context_data = await redis.hgetall(f"conversation:{conversation_id}")
+            state = context_data.get("state", "start") if context_data else "start"
+            
+            if state == "talking_to_human":
+                # Obter nome do atendente do Redis (salvo quando assumiu) ou usar nome do usuário atual
+                attendant_name = context_data.get("attendant_name")
+                if not attendant_name:
+                    # Fallback: usar nome do usuário atual
+                    attendant_name = current_user.full_name or current_user.username
+                
+                # Formatar mensagem com nome do atendente: "Nome: mensagem"
+                message_to_send = f"{attendant_name}: {request.message}"
+                logger.info(f"Mensagem formatada com nome do atendente: {attendant_name}")
+        except Exception as e:
+            logger.warning(f"Erro ao verificar estado da conversa {conversation_id}: {e}")
+            # Continuar sem formatação se houver erro
+
     # 1. Enviar via WAHA (prioridade máxima)
     try:
-        logger.info(f"Enviando mensagem para {chat_id}: {request.message[:50]}...")
-        result = await waha_client.send_text(chat_id, request.message)
+        logger.info(f"Enviando mensagem para {chat_id}: {message_to_send[:50]}...")
+        result = await waha_client.send_text(chat_id, message_to_send)
 
         if not result:
             logger.error(f"WAHA retornou resultado vazio para {chat_id}")
@@ -547,8 +607,9 @@ async def reply_to_conversation(
             entity_type="chat",
             payload={
                 "phone": conversation_id,
-                "message": request.message,
-                "manual": True
+                "message": message_to_send,
+                "manual": True,
+                "attendant_name": attendant_name if attendant_name else None
             }
         )
         db.add(event)
@@ -561,7 +622,7 @@ async def reply_to_conversation(
     try:
         await emit_new_message(
             phone=conversation_id,
-            message=request.message,
+            message=message_to_send,
             direction="outgoing",
         )
     except Exception as e:
@@ -590,6 +651,7 @@ async def end_conversation(conversation_id: str, db: AsyncSession = Depends(get_
             await redis.hset(f"conversation:{phone}", "state", "start")
             # Limpar dados temporários do atendimento humano
             await redis.hdel(f"conversation:{phone}", "assigned_operator")
+            await redis.hdel(f"conversation:{phone}", "attendant_name")
             logger.info(f"Estado resetado para 'start' no Redis para {phone}")
 
         # 2. Enviar mensagem ao cliente informando que voltou ao bot
@@ -665,8 +727,9 @@ async def transfer_to_bot(conversation_id: str, db: AsyncSession = Depends(get_d
         # 2. Voltar para estado do bot e limpar atribuição
         new_state = current_state
         if redis:
-            # Sempre limpar assigned_operator ao transferir para bot
+            # Sempre limpar assigned_operator e attendant_name ao transferir para bot
             await redis.hdel(f"conversation:{phone}", "assigned_operator")
+            await redis.hdel(f"conversation:{phone}", "attendant_name")
 
             if current_state == "talking_to_human":
                 new_state = "awaiting_product"

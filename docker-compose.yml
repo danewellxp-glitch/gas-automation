@@ -426,6 +426,7 @@ services:
       - "9090:9090"
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/alerts:/etc/prometheus/alerts:ro
       - prometheus_data:/prometheus
     networks:
       - gas_network
@@ -455,7 +456,7 @@ services:
     volumes:
       - grafana_data:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
-      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - ./grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
     networks:
       - gas_network
     depends_on:
@@ -465,6 +466,77 @@ services:
       - "traefik.http.routers.grafana.rule=Host(`grafana.localhost`)"
       - "traefik.http.routers.grafana.entrypoints=web"
       - "traefik.http.services.grafana.loadbalancer.server.port=3000"
+    profiles:
+      - monitoring
+
+  # ===========================================
+  # OBSERVABILIDADE - ALERTMANAGER
+  # ===========================================
+  alertmanager:
+    image: prom/alertmanager:latest
+    container_name: gas_alertmanager
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+      - '--web.external-url=http://alertmanager.localhost'
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager_data:/alertmanager
+    networks:
+      - gas_network
+    depends_on:
+      - prometheus
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.alertmanager.rule=Host(`alertmanager.localhost`)"
+      - "traefik.http.routers.alertmanager.entrypoints=web"
+      - "traefik.http.services.alertmanager.loadbalancer.server.port=9093"
+    profiles:
+      - monitoring
+
+  # ===========================================
+  # OBSERVABILIDADE - LOKI (LOG AGGREGATION)
+  # ===========================================
+  loki:
+    image: grafana/loki:latest
+    container_name: gas_loki
+    restart: unless-stopped
+    command: -config.file=/etc/loki/loki-config.yml
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./loki/loki-config.yml:/etc/loki/loki-config.yml:ro
+      - loki_data:/loki
+    networks:
+      - gas_network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.loki.rule=Host(`loki.localhost`)"
+      - "traefik.http.routers.loki.entrypoints=web"
+      - "traefik.http.services.loki.loadbalancer.server.port=3100"
+    profiles:
+      - monitoring
+
+  # ===========================================
+  # OBSERVABILIDADE - PROMTAIL (LOG SHIPPING)
+  # ===========================================
+  promtail:
+    image: grafana/promtail:latest
+    container_name: gas_promtail
+    restart: unless-stopped
+    command: -config.file=/etc/promtail/promtail-config.yml
+    volumes:
+      - ./promtail/promtail-config.yml:/etc/promtail/promtail-config.yml:ro
+      - /var/log:/var/log:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - gas_network
+    depends_on:
+      - loki
     profiles:
       - monitoring
 

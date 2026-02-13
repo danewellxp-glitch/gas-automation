@@ -257,13 +257,78 @@ class WAHAPoller:
                 pushName=push_name,
             )
 
-            logger.info(f"[Poller] Processando: {resolved_chat_id}: {body[:50] if body else '(vazio)'}")
-
-            # Processar como se fosse webhook (passando original_chat_id para routing)
-            await process_whatsapp_message(
-                message,
-                original_chat_id=original_chat_id,
+            # Gerar trace_id único para rastreamento completo do pipeline
+            import uuid
+            trace_id = f"trace-{uuid.uuid4().hex[:12]}"
+            
+            logger.info(
+                f"[POLLER_MESSAGE_FOUND] trace_id={trace_id} chat={resolved_chat_id} "
+                f"msg_id={msg_id_str} body={body[:50] if body else '(vazio)'}",
+                extra={
+                    "trace_id": trace_id,
+                    "chat_id": resolved_chat_id,
+                    "message_id": msg_id_str,
+                    "step": "poller_message_found"
+                }
             )
+
+            # Adicionar mensagem ao Redis Stream em vez de processar diretamente
+            # Isso garante que todas as mensagens passem pelo mesmo pipeline
+            message_data = {
+                "key": key_data,
+                "message": {"conversation": body} if body else None,
+                "messageTimestamp": timestamp,
+                "pushName": push_name,
+            }
+            
+            logger.info(
+                f"[POLLER_STREAM_ADD_START] trace_id={trace_id} message_id={msg_id_str} "
+                f"phone={resolved_chat_id}",
+                extra={
+                    "trace_id": trace_id,
+                    "message_id": msg_id_str,
+                    "phone": resolved_chat_id,
+                    "step": "poller_stream_add_start"
+                }
+            )
+            
+            stream_message_id = await redis_manager.add_message_to_stream(
+                message_data=message_data,
+                original_chat_id=original_chat_id,
+                trace_id=trace_id,  # Passar trace_id para o stream
+            )
+            
+            if stream_message_id:
+                logger.info(
+                    f"[POLLER_STREAM_ADDED] trace_id={trace_id} stream_id={stream_message_id} "
+                    f"message_id={msg_id_str} phone={resolved_chat_id} success=True",
+                    extra={
+                        "trace_id": trace_id,
+                        "stream_id": stream_message_id,
+                        "message_id": msg_id_str,
+                        "phone": resolved_chat_id,
+                        "step": "poller_stream_added",
+                        "success": True
+                    }
+                )
+            else:
+                # Fallback: processar diretamente se stream falhar
+                logger.warning(
+                    f"[POLLER_STREAM_FAILED] trace_id={trace_id} message_id={msg_id_str} "
+                    f"phone={resolved_chat_id} using_fallback=True",
+                    extra={
+                        "trace_id": trace_id,
+                        "message_id": msg_id_str,
+                        "phone": resolved_chat_id,
+                        "step": "poller_stream_failed",
+                        "fallback": True
+                    }
+                )
+                # Processar como se fosse webhook (passando original_chat_id para routing)
+                await process_whatsapp_message(
+                    message,
+                    original_chat_id=original_chat_id,
+                )
 
         except Exception as e:
             logger.error(f"Erro ao processar mensagem do poller: {e}", exc_info=True)

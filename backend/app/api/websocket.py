@@ -582,6 +582,11 @@ async def emit_new_message(phone: str, message: str, direction: str = "incoming"
     Mensagens são enviadas para todos, pois qualquer operador pode responder.
     Mas poderia filtrar por bairro do cliente se disponível.
     """
+    # Obter trace_id do contexto
+    from app.utils.structured_logging import get_message_context
+    context_data = get_message_context()
+    trace_id = context_data.get("trace_id")
+    
     bairro = None
     if customer_data:
         bairro = customer_data.get("bairro")
@@ -596,11 +601,45 @@ async def emit_new_message(phone: str, message: str, direction: str = "incoming"
         },
     }
     
-    if bairro:
-        await manager.broadcast_to_neighborhood(msg, bairro=bairro)
-    else:
-        # Broadcast geral para mensagens sem bairro
-        await manager.broadcast(msg)
+    logger.info(
+        f"[WEBSOCKET_PUBLISH_START] trace_id={trace_id} phone={phone} "
+        f"event_type=new_message bairro={bairro}",
+        extra={
+            "trace_id": trace_id,
+            "phone": phone,
+            "event_type": "new_message",
+            "bairro": bairro,
+            "step": "websocket_publish_start"
+        }
+    )
+    
+    try:
+        if bairro:
+            await manager.broadcast_to_neighborhood(msg, bairro=bairro)
+        else:
+            # Broadcast geral para mensagens sem bairro
+            await manager.broadcast(msg)
+        
+        logger.info(
+            f"[WEBSOCKET_PUBLISH_COMPLETE] trace_id={trace_id} phone={phone} success=True",
+            extra={
+                "trace_id": trace_id,
+                "phone": phone,
+                "step": "websocket_publish_complete",
+                "success": True
+            }
+        )
+    except Exception as e:
+        logger.error(
+            f"[WEBSOCKET_PUBLISH_ERROR] trace_id={trace_id} phone={phone} error={e}",
+            exc_info=True,
+            extra={
+                "trace_id": trace_id,
+                "phone": phone,
+                "step": "websocket_publish_error"
+            }
+        )
+        # Não propagar exceção - evento não é crítico para resposta ao cliente
 
 
 async def emit_metrics_update(metrics: dict):

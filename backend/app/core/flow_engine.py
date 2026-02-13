@@ -5,8 +5,9 @@ fluxo conversacional inteligente em vez de menus rigidos.
 """
 
 import logging
+import asyncio
 from dataclasses import dataclass
-from typing import Optional, Callable, Awaitable, List, Dict
+from typing import Optional, Callable, Awaitable, List, Dict, Any
 from datetime import datetime, timezone
 
 from app.config import settings
@@ -236,12 +237,29 @@ class FlowEngine:
         4. Mescla entidades no contexto
         5. Roteia para handler baseado em intencao + estado
         """
+        # Obter trace_id do contexto
+        from app.utils.structured_logging import get_message_context
+        context_data = get_message_context()
+        trace_id = context_data.get("trace_id") or (f"trace-{message_id[:8]}" if message_id else None)
+        
         # Normalizar phone para evitar inconsistencias de formato WAHA
         # WAHA pode enviar @lid ou @c.us - normalizamos para garantir mesma chave Redis
         original_phone = phone
         if "@" in phone:
             phone = phone.split("@")[0]
-        logger.info(f"Phone: {original_phone} -> {phone} | chat_id={waha_chat_id}")
+        
+        logger.info(
+            f"[FLOW_ENGINE_START] trace_id={trace_id} phone={phone} original_phone={original_phone} "
+            f"message_id={message_id} waha_chat_id={waha_chat_id} message={message[:50]}",
+            extra={
+                "trace_id": trace_id,
+                "phone": phone,
+                "original_phone": original_phone,
+                "message_id": message_id,
+                "waha_chat_id": waha_chat_id,
+                "step": "flow_engine_start"
+            }
+        )
 
         # Carregar contexto
         context = await self.get_context(phone)
@@ -252,7 +270,18 @@ class FlowEngine:
         elif not context.waha_chat_id and "@" in original_phone:
             context.waha_chat_id = original_phone
         previous_state = context.state  # Guardar para otimizar snapshot
-        logger.info(f"[DEBUG-1] Estado CARREGADO do Redis: {context.state} (phone={phone})")
+        
+        logger.info(
+            f"[FLOW_CONTEXT_LOADED] trace_id={trace_id} phone={phone} "
+            f"state={context.state.value} previous_state={previous_state.value}",
+            extra={
+                "trace_id": trace_id,
+                "phone": phone,
+                "state": context.state.value,
+                "previous_state": previous_state.value,
+                "step": "flow_context_loaded"
+            }
+        )
         context.message_count += 1
 
         # Guardar mensagem no historico recente (ultimas 3)
@@ -261,21 +290,42 @@ class FlowEngine:
             context.recent_messages = context.recent_messages[-3:]
 
         logger.info(
-            f"Processando mensagem de {phone} | "
-            f"Estado: {context.state} | "
-            f"Mensagem: {message[:50]}..."
+            f"[FLOW_PROCESSING] trace_id={trace_id} phone={phone} state={context.state.value} "
+            f"message={message[:50]}",
+            extra={
+                "trace_id": trace_id,
+                "phone": phone,
+                "state": context.state.value,
+                "step": "flow_processing"
+            }
         )
 
         # Extrair entidades da mensagem (produto, quantidade, pagamento, etc)
         entities = extract_entities(message, settings.supported_bairros)
         if entities:
             context.pending_entities.update(entities)
-            logger.info(f"Entidades extraidas: {entities}")
+            logger.info(
+                f"[FLOW_ENTITIES_EXTRACTED] trace_id={trace_id} phone={phone} entities={entities}",
+                extra={
+                    "trace_id": trace_id,
+                    "phone": phone,
+                    "entities": entities,
+                    "step": "flow_entities_extracted"
+                }
+            )
 
         # Detectar intencao com NLP
         intention = detect_intention(message, context)
         context.last_intent = intention
-        logger.info(f"Intencao detectada: {intention}")
+        logger.info(
+            f"[FLOW_INTENTION_DETECTED] trace_id={trace_id} phone={phone} intention={intention}",
+            extra={
+                "trace_id": trace_id,
+                "phone": phone,
+                "intention": intention,
+                "step": "flow_intention_detected"
+            }
+        )
 
         # Verificar comandos globais via NLP (prioridade alta)
         global_result = await self._check_global_commands_nlp(context, message, intention)
@@ -298,16 +348,47 @@ class FlowEngine:
             if new_state != previous_state:
                 result.context.retry_count = 0
             result.context.state = new_state
+            
+            logger.info(
+                f"[FLOW_ENGINE_COMPLETE] trace_id={trace_id} phone={phone} "
+                f"new_state={new_state.value} responses_count={len(result.responses)} "
+                f"success={result.success}",
+                extra={
+                    "trace_id": trace_id,
+                    "phone": phone,
+                    "new_state": new_state.value,
+                    "responses_count": len(result.responses),
+                    "success": result.success,
+                    "step": "flow_engine_complete"
+                }
+            )
+            
             try:
                 await self.save_context(result.context, previous_state=previous_state)
             except Exception as save_err:
-                logger.error(f"Falha ao salvar contexto: {save_err}")
+                logger.error(
+                    f"[FLOW_CONTEXT_SAVE_FAILED] trace_id={trace_id} phone={phone} error={save_err}",
+                    exc_info=True,
+                    extra={
+                        "trace_id": trace_id,
+                        "phone": phone,
+                        "step": "flow_context_save_failed"
+                    }
+                )
                 result.context.state = previous_state
 
             return result
 
         except Exception as e:
-            logger.error(f"Erro ao processar mensagem: {e}", exc_info=True)
+            logger.error(
+                f"[FLOW_ENGINE_ERROR] trace_id={trace_id} phone={phone} error={e}",
+                exc_info=True,
+                extra={
+                    "trace_id": trace_id,
+                    "phone": phone,
+                    "step": "flow_engine_error"
+                }
+            )
             return ProcessedMessage(
                 context=context,
                 responses=[
@@ -732,49 +813,195 @@ class FlowEngine:
         self,
         phone: str,
         responses: List[MessageResponse],
-    ) -> None:
-        """Envia as respostas ao cliente via WAHA."""
-        for response in responses:
-            try:
-                if response.image_url or response.image_base64:
-                    await waha_client.send_image(
-                        phone=phone,
-                        image_url=response.image_url,
-                        image_base64=response.image_base64,
-                        caption=response.text,
-                    )
-                elif response.has_buttons():
-                    await waha_client.send_buttons(
-                        phone=phone,
-                        text=response.text,
-                        buttons=response.buttons,
-                        footer=response.footer,
-                    )
-                else:
-                    await waha_client.send_text(
-                        phone=phone,
-                        text=response.text,
-                    )
-
-                # Salvar mensagem enviada no EventLog
-                async with AsyncSessionLocal() as db:
-                    event = EventLog(
-                        event_type="message_sent",
-                        entity_type="chat",
-                        payload={"phone": phone, "message": response.text}
-                    )
-                    db.add(event)
-                    await db.commit()
-
-            except Exception as e:
-                logger.error(f"Erro ao enviar resposta para {phone}: {e}", exc_info=True)
+        trace_id: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Envia respostas geradas pelo flow engine com tratamento robusto de erros.
+        
+        Returns:
+            Dict com status de cada resposta enviada: {"sent": int, "failed": int, "errors": list}
+        """
+        from typing import Dict, Any
+        import httpx
+        
+        results: Dict[str, Any] = {
+            "sent": 0,
+            "failed": 0,
+            "errors": []
+        }
+        
+        # Garantir que typing será parado mesmo em caso de erro
+        try:
+            for idx, response in enumerate(responses):
                 try:
-                    await waha_client.send_text(
-                        phone,
-                        "Desculpe, houve um problema ao enviar. Digite *menu* para recomecar.",
+                    logger.info(
+                        f"[WAHA_SEND_START] trace_id={trace_id} phone={phone} "
+                        f"response_idx={idx} type={'buttons' if response.has_buttons() else 'text'}",
+                        extra={
+                            "trace_id": trace_id,
+                            "phone": phone,
+                            "response_idx": idx,
+                            "response_type": "buttons" if response.has_buttons() else "text",
+                            "step": "waha_send_start"
+                        }
                     )
-                except Exception as fallback_err:
-                    logger.error(f"Fallback send tambem falhou: {fallback_err}")
+                    
+                    if response.image_url or response.image_base64:
+                        result = await waha_client.send_image(
+                            phone=phone,
+                            image_url=response.image_url,
+                            image_base64=response.image_base64,
+                            caption=response.text,
+                        )
+                    elif response.has_buttons():
+                        result = await waha_client.send_buttons(
+                            phone=phone,
+                            text=response.text,
+                            buttons=response.buttons,
+                            footer=response.footer,
+                        )
+                    else:
+                        result = await waha_client.send_text(
+                            phone=phone,
+                            text=response.text,
+                        )
+                    
+                    logger.info(
+                        f"[WAHA_SEND_COMPLETE] trace_id={trace_id} phone={phone} "
+                        f"response_idx={idx} success=True",
+                        extra={
+                            "trace_id": trace_id,
+                            "phone": phone,
+                            "response_idx": idx,
+                            "step": "waha_send_complete",
+                            "success": True
+                        }
+                    )
+                    results["sent"] += 1
+                    
+                    # Salvar mensagem enviada no EventLog
+                    try:
+                        async with AsyncSessionLocal() as db:
+                            event = EventLog(
+                                event_type="message_sent",
+                                entity_type="chat",
+                                payload={"phone": phone, "message": response.text}
+                            )
+                            db.add(event)
+                            await db.commit()
+                    except Exception:
+                        pass  # Não crítico
+                    
+                except httpx.HTTPStatusError as e:
+                    # Erro HTTP específico (422, 500, etc)
+                    status_code = e.response.status_code if e.response else 0
+                    logger.error(
+                        f"[WAHA_SEND_ERROR] trace_id={trace_id} phone={phone} "
+                        f"response_idx={idx} status_code={status_code} error={e}",
+                        exc_info=True,
+                        extra={
+                            "trace_id": trace_id,
+                            "phone": phone,
+                            "response_idx": idx,
+                            "status_code": status_code,
+                            "step": "waha_send_error"
+                        }
+                    )
+                    results["failed"] += 1
+                    results["errors"].append({
+                        "idx": idx,
+                        "status_code": status_code,
+                        "error": str(e)
+                    })
+                    
+                    # Se for erro 422 (sessão não WORKING), tentar reiniciar uma vez
+                    if status_code == 422:
+                        try:
+                            logger.warning(
+                                f"[WAHA_SESSION_RESTART] trace_id={trace_id} phone={phone}",
+                                extra={"trace_id": trace_id, "step": "waha_session_restart"}
+                            )
+                            await waha_client.ensure_session_ready()
+                            await asyncio.sleep(2)
+                            # Tentar enviar novamente
+                            if response.has_buttons():
+                                result = await waha_client.send_buttons(
+                                    phone, response.text, response.buttons, footer=response.footer
+                                )
+                            else:
+                                result = await waha_client.send_text(phone, response.text)
+                            results["sent"] += 1
+                            results["failed"] -= 1
+                            logger.info(
+                                f"[WAHA_SEND_RETRY_SUCCESS] trace_id={trace_id} phone={phone} response_idx={idx}",
+                                extra={"trace_id": trace_id, "step": "waha_send_retry_success"}
+                            )
+                        except Exception as retry_err:
+                            logger.error(
+                                f"[WAHA_SEND_RETRY_FAILED] trace_id={trace_id} phone={phone} "
+                                f"response_idx={idx} error={retry_err}",
+                                exc_info=True,
+                                extra={"trace_id": trace_id, "step": "waha_send_retry_failed"}
+                            )
+                    
+                except Exception as e:
+                    # Outros erros (timeout, conexão, etc)
+                    logger.error(
+                        f"[WAHA_SEND_ERROR] trace_id={trace_id} phone={phone} "
+                        f"response_idx={idx} error={e}",
+                        exc_info=True,
+                        extra={
+                            "trace_id": trace_id,
+                            "phone": phone,
+                            "response_idx": idx,
+                            "error_type": type(e).__name__,
+                            "step": "waha_send_error"
+                        }
+                    )
+                    results["failed"] += 1
+                    results["errors"].append({
+                        "idx": idx,
+                        "error": str(e),
+                        "error_type": type(e).__name__
+                    })
+            
+            # Se todas as respostas falharam, lançar exceção
+            if results["failed"] == len(responses) and results["sent"] == 0:
+                error_msg = f"Todas as respostas falharam para {phone}. Erros: {results['errors']}"
+                logger.error(
+                    f"[WAHA_SEND_ALL_FAILED] trace_id={trace_id} phone={phone} errors={results['errors']}",
+                    extra={
+                        "trace_id": trace_id,
+                        "phone": phone,
+                        "step": "waha_send_all_failed"
+                    }
+                )
+                raise Exception(error_msg)
+        finally:
+            # ── PARAR "DIGITANDO..." APÓS ENVIAR RESPOSTAS ──
+            # Sempre parar o typing indicator, mesmo se houver erro
+            try:
+                await waha_client.stop_typing(phone)
+                logger.info(
+                    f"[TYPING_STOP] trace_id={trace_id} phone={phone}",
+                    extra={
+                        "trace_id": trace_id,
+                        "phone": phone,
+                        "step": "typing_stop"
+                    }
+                )
+            except Exception as e:
+                # Não é crítico se falhar - apenas logar
+                logger.debug(
+                    f"[TYPING_STOP_ERROR] trace_id={trace_id} phone={phone} error={e}",
+                    extra={
+                        "trace_id": trace_id,
+                        "phone": phone,
+                        "step": "typing_stop_error"
+                    }
+                )
+        
+        return results
 
 
 # Instancia global

@@ -90,6 +90,52 @@ websocket_dead_connections_cleaned = Counter(
     ['instance_id']
 )
 
+# ==================== Métricas Redis Streams ====================
+
+stream_messages_added_total = Counter(
+    'stream_messages_added_total',
+    'Total de mensagens adicionadas ao Redis Stream',
+    ['stream', 'instance_id']
+)
+
+stream_messages_processed_total = Counter(
+    'stream_messages_processed_total',
+    'Total de mensagens processadas do Redis Stream',
+    ['status', 'consumer', 'instance_id']
+)
+
+stream_messages_dlq_total = Counter(
+    'stream_messages_dlq_total',
+    'Total de mensagens movidas para Dead Letter Queue',
+    ['instance_id']
+)
+
+stream_processing_duration_seconds = Histogram(
+    'stream_processing_duration_seconds',
+    'Tempo de processamento de mensagens do stream',
+    ['consumer', 'instance_id'],
+    buckets=[0.01, 0.05, 0.1, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0]
+)
+
+stream_lag = Gauge(
+    'stream_lag',
+    'Número de mensagens pendentes no stream',
+    ['stream', 'consumer_group', 'instance_id']
+)
+
+stream_retry_count = Histogram(
+    'stream_retry_count',
+    'Número de tentativas antes de processar mensagem com sucesso',
+    ['consumer', 'instance_id'],
+    buckets=[1, 2, 3, 5, 10]
+)
+
+stream_consumer_running = Gauge(
+    'stream_consumer_running',
+    'Status do Stream Consumer (1 = rodando, 0 = parado)',
+    ['consumer', 'instance_id']
+)
+
 # ==================== Métricas Redis Pub/Sub ====================
 
 redis_pubsub_messages_published = Counter(
