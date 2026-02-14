@@ -13,6 +13,9 @@ import Orders from './pages/Orders'
 import Chats from './pages/Chats'
 import ChangePassword from './pages/ChangePassword'
 
+// Página de Teste - Notificações V2
+import TestNotificationsPage from './pages/TestNotificationsPage'
+
 // Pages por Role
 import OperatorDashboard from './pages/operator/OperatorDashboard'
 import AdminDashboard from './pages/admin/AdminDashboard'
@@ -88,6 +91,9 @@ function AppRoutes() {
         <Route path="pedidos" element={<Orders />} />
         <Route path="chats" element={<Chats />} />
       </Route>
+
+      {/* Página de Teste - Notificações V2 (sem autenticação para facilitar testes) */}
+      <Route path="/test-notifications-v2" element={<TestNotificationsPage />} />
 
       {/* Paineis por Role (com layout próprio) */}
       <Route 
