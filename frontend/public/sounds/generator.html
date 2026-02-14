@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gerador de Som de Notificação</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 600px;
+      margin: 50px auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .container {
+      background: white;
+      padding: 30px;
+      border-radius: 10px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    h1 {
+      color: #333;
+      margin-top: 0;
+    }
+    button {
+      background: #10B981;
+      color: white;
+      border: none;
+      padding: 15px 30px;
+      font-size: 16px;
+      border-radius: 5px;
+      cursor: pointer;
+      margin: 10px 5px;
+    }
+    button:hover {
+      background: #059669;
+    }
+    .info {
+      background: #FEF3C7;
+      padding: 15px;
+      border-radius: 5px;
+      margin: 20px 0;
+      border-left: 4px solid #F59E0B;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🔔 Gerador de Som de Notificação</h1>
+    
+    <div class="info">
+      <strong>📝 Como usar:</strong>
+      <ol>
+        <li>Clique em "Gerar Som"</li>
+        <li>Ouça o som gerado</li>
+        <li>Se gostar, grave usando um gravador de áudio</li>
+        <li>Salve como <code>notification.mp3</code></li>
+      </ol>
+    </div>
+    
+    <button onclick="generateSound('bell')">🔔 Som de Campainha</button>
+    <button onclick="generateSound('ding')">✨ Som de Ding</button>
+    <button onclick="generateSound('alert')">⚠️ Som de Alerta</button>
+    
+    <div style="margin-top: 20px;">
+      <audio id="audio" controls></audio>
+    </div>
+  </div>
+  
+  <script>
+    function generateSound(type) {
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+      
+      // Configurar tipo de som
+      if (type === 'bell') {
+        oscillator.frequency.value = 800;
+        oscillator.type = 'sine';
+        gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+      } else if (type === 'ding') {
+        oscillator.frequency.value = 1000;
+        oscillator.type = 'sine';
+        gainNode.gain.setValueAtTime(0.2, audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+      } else if (type === 'alert') {
+        oscillator.frequency.value = 600;
+        oscillator.type = 'square';
+        gainNode.gain.setValueAtTime(0.2, audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.4);
+      }
+      
+      oscillator.start(audioContext.currentTime);
+      oscillator.stop(audioContext.currentTime + 1);
+      
+      alert('Som gerado! Use um gravador de áudio para capturar e salvar como notification.mp3');
+    }
+  </script>
+</body>
+</html>
