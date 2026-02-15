@@ -58,12 +58,14 @@ export default function OperatorDashboard() {
 function MapView() {
   const {
     drivers,
+    orders,
     deliveries,
     customerLocations,
     isLoading,
     error,
-    refresh
-  } = useMapData({ autoRefresh: true, refreshInterval: 30000 })
+    refresh,
+    orderCounts,
+  } = useMapData({ autoRefresh: true, refreshInterval: 30000, todayOnly: true })
 
   if (error) {
     return (
@@ -83,7 +85,7 @@ function MapView() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-semibold text-gray-900">Mapa de Entregas</h2>
+        <h2 className="text-2xl font-semibold text-gray-900">Mapa de Pedidos - Hoje</h2>
         <button
           onClick={refresh}
           disabled={isLoading}
@@ -91,6 +93,26 @@ function MapView() {
         >
           {isLoading ? 'Atualizando...' : 'Atualizar'}
         </button>
+      </div>
+
+      {/* Cards de resumo por status */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 shadow-sm">
+          <p className="text-2xl font-bold text-amber-600">{orderCounts.pending}</p>
+          <p className="text-xs text-amber-700">Pendentes</p>
+        </div>
+        <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 shadow-sm">
+          <p className="text-2xl font-bold text-blue-600">{orderCounts.in_route}</p>
+          <p className="text-xs text-blue-700">Em Rota</p>
+        </div>
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 shadow-sm">
+          <p className="text-2xl font-bold text-emerald-600">{orderCounts.completed}</p>
+          <p className="text-xs text-emerald-700">Concluidos</p>
+        </div>
+        <div className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
+          <p className="text-2xl font-bold text-gray-700">{drivers.filter(d => d.location).length}</p>
+          <p className="text-xs text-gray-500">Entregadores</p>
+        </div>
       </div>
 
       <Suspense fallback={
@@ -101,41 +123,15 @@ function MapView() {
       }>
         <DeliveryMap
           drivers={drivers}
+          orders={orders}
           deliveries={deliveries}
           customerLocations={customerLocations}
-          height="500px"
+          height="600px"
           onDriverClick={(driver) => console.log('Driver clicked:', driver)}
+          onOrderClick={(order) => console.log('Order clicked:', order)}
           onDeliveryClick={(delivery) => console.log('Delivery clicked:', delivery)}
         />
       </Suspense>
-
-      {/* Resumo */}
-      <div className="grid grid-cols-3 gap-4">
-        <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-          <div className="flex items-center gap-3">
-            <div>
-              <p className="text-2xl font-bold text-primary-700">{drivers.length}</p>
-              <p className="text-sm text-gray-500">Entregadores</p>
-            </div>
-          </div>
-        </div>
-        <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-          <div className="flex items-center gap-3">
-            <div>
-              <p className="text-2xl font-bold text-green-600">{deliveries.length}</p>
-              <p className="text-sm text-gray-500">Entregas Ativas</p>
-            </div>
-          </div>
-        </div>
-        <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-          <div className="flex items-center gap-3">
-            <div>
-              <p className="text-2xl font-bold text-red-600">{customerLocations.length}</p>
-              <p className="text-sm text-gray-500">Localizações</p>
-            </div>
-          </div>
-        </div>
-      </div>
     </div>
   )
 }

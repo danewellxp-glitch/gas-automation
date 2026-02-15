@@ -4,14 +4,17 @@ import api from '../services/api';
 /**
  * Hook para buscar e manter dados do mapa atualizados.
  * Integra com WebSocket para atualizacoes em tempo real.
+ * Suporta filtro de pedidos do dia (todayOnly).
  */
 export default function useMapData({
   autoRefresh = true,
   refreshInterval = 30000, // 30 segundos
   includeOfflineDrivers = false,
+  todayOnly = true,
   hoursBack = 24,
 } = {}) {
   const [drivers, setDrivers] = useState([]);
+  const [orders, setOrders] = useState([]);
   const [deliveries, setDeliveries] = useState([]);
   const [customerLocations, setCustomerLocations] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -30,6 +33,7 @@ export default function useMapData({
       const response = await api.get('/locations/map-data', {
         params: {
           include_offline_drivers: includeOfflineDrivers,
+          today_only: todayOnly,
           hours_back: hoursBack,
         },
       });
@@ -37,6 +41,7 @@ export default function useMapData({
       const data = response.data;
 
       setDrivers(data.drivers || []);
+      setOrders(data.orders || []);
       setDeliveries(data.deliveries || []);
       setCustomerLocations(data.customer_locations || []);
       setLastUpdate(new Date(data.updated_at));
@@ -47,7 +52,7 @@ export default function useMapData({
     } finally {
       setIsLoading(false);
     }
-  }, [includeOfflineDrivers, hoursBack]);
+  }, [includeOfflineDrivers, todayOnly, hoursBack]);
 
   // Atualizar localizacao de um entregador (via WebSocket)
   const handleDriverLocationUpdate = useCallback((data) => {
@@ -108,13 +113,13 @@ export default function useMapData({
             case 'new_message':
               // Verificar se e uma mensagem de localizacao
               if (message.content?.includes('Localização recebida')) {
-                // Refetch para pegar nova localizacao
                 fetchMapData();
               }
               break;
+            case 'new_order':
             case 'delivery_assigned':
             case 'order_update':
-              // Refetch para atualizar entregas
+              // Refetch para atualizar pedidos e entregas
               fetchMapData();
               break;
           }
@@ -161,13 +166,23 @@ export default function useMapData({
     return fetchMapData();
   }, [fetchMapData]);
 
+  // Contagens por status
+  const orderCounts = {
+    pending: orders.filter(o => o.status === 'pending').length,
+    in_route: orders.filter(o => o.status === 'in_route').length,
+    completed: orders.filter(o => o.status === 'completed').length,
+    total: orders.length,
+  };
+
   return {
     drivers,
+    orders,
     deliveries,
     customerLocations,
     isLoading,
     error,
     lastUpdate,
     refresh,
+    orderCounts,
   };
 }
