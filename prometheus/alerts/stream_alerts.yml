@@ -1,0 +1,111 @@
+# Alertas para Redis Streams e Message Processing
+# Gas Automation System
+
+groups:
+  - name: stream_alerts
+    interval: 30s
+    rules:
+      # Alerta: Stream Consumer não está rodando
+      - alert: StreamConsumerDown
+        expr: stream_consumer_running == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: stream_consumer
+        annotations:
+          summary: "Stream Consumer está parado"
+          description: "O Stream Consumer não está processando mensagens há mais de 2 minutos. Mensagens podem estar acumulando no stream."
+
+      # Alerta: Alto lag no stream
+      - alert: HighStreamLag
+        expr: stream_lag > 100
+        for: 5m
+        labels:
+          severity: warning
+          component: stream
+        annotations:
+          summary: "Alto lag no stream de mensagens"
+          description: "O stream tem {{ $value }} mensagens pendentes. O processamento pode estar lento."
+
+      # Alerta: Taxa de erro alta no processamento
+      - alert: HighStreamErrorRate
+        expr: |
+          rate(stream_messages_processed_total{status="error"}[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          component: stream
+        annotations:
+          summary: "Taxa de erro alta no processamento de mensagens"
+          description: "{{ $value | humanizePercentage }} das mensagens estão falhando no processamento."
+
+      # Alerta: Mensagens na DLQ
+      - alert: MessagesInDLQ
+        expr: stream_messages_dlq_total > 0
+        for: 1m
+        labels:
+          severity: critical
+          component: dlq
+        annotations:
+          summary: "Mensagens na Dead Letter Queue"
+          description: "{{ $value }} mensagem(ns) foram movidas para DLQ após múltiplas tentativas falhadas."
+
+      # Alerta: Taxa de retry alta
+      - alert: HighRetryRate
+        expr: |
+          rate(stream_retry_count[5m]) > 5
+        for: 5m
+        labels:
+          severity: warning
+          component: stream
+        annotations:
+          summary: "Taxa de retry alta no stream"
+          description: "Mensagens estão sendo retentadas frequentemente. Verifique a causa dos erros."
+
+      # Alerta: Tempo de processamento alto
+      - alert: HighProcessingTime
+        expr: |
+          histogram_quantile(0.95, stream_processing_duration_seconds_bucket) > 10
+        for: 5m
+        labels:
+          severity: warning
+          component: stream
+        annotations:
+          summary: "Tempo de processamento alto (p95)"
+          description: "O p95 do tempo de processamento está em {{ $value }}s, acima do esperado."
+
+  - name: system_alerts
+    interval: 30s
+    rules:
+      # Alerta: Redis down
+      - alert: RedisDown
+        expr: redis_up == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: redis
+        annotations:
+          summary: "Redis está inacessível"
+          description: "Não foi possível conectar ao Redis. O sistema pode estar degradado."
+
+      # Alerta: PostgreSQL down
+      - alert: PostgreSQLDown
+        expr: pg_up == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: postgres
+        annotations:
+          summary: "PostgreSQL está inacessível"
+          description: "Não foi possível conectar ao PostgreSQL. O sistema pode estar degradado."
+
+      # Alerta: WAHA session down
+      - alert: WAHASessionDown
+        expr: waha_session_status{status="disconnected"} == 1
+        for: 5m
+        labels:
+          severity: critical
+          component: waha
+        annotations:
+          summary: "Sessão WAHA desconectada"
+          description: "A sessão WhatsApp está desconectada. Mensagens não estão sendo recebidas."

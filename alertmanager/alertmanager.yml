@@ -1,0 +1,135 @@
+# Alertmanager Configuration
+# Gas Automation System
+
+global:
+  # Resolver para notificações
+  resolve_timeout: 5m
+  
+  # Templates de notificação
+  # slack_api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
+  # email_from: 'alerts@gasautomation.local'
+  # smtp_smarthost: 'smtp.gmail.com:587'
+  # smtp_auth_username: 'your-email@gmail.com'
+  # smtp_auth_password: 'your-password'
+
+# Templates para mensagens
+templates:
+  - '/etc/alertmanager/templates/*.tmpl'
+
+# Roteamento de alertas
+route:
+  # Rota padrão
+  receiver: 'default'
+  
+  # Agrupar alertas por labels
+  group_by: ['alertname', 'cluster', 'service']
+  
+  # Tempo de espera antes de enviar notificação de grupo
+  group_wait: 10s
+  
+  # Tempo de espera antes de enviar alertas adicionais no grupo
+  group_interval: 10s
+  
+  # Tempo mínimo entre dois alertas do mesmo grupo
+  repeat_interval: 12h
+  
+  # Rotas específicas
+  routes:
+    # Alertas críticos - enviar imediatamente
+    - match:
+        severity: critical
+      receiver: 'critical-alerts'
+      group_wait: 0s
+      repeat_interval: 1h
+    
+    # Alertas de DLQ - alta prioridade
+    - match:
+        component: dlq
+      receiver: 'dlq-alerts'
+      group_wait: 0s
+      repeat_interval: 30m
+    
+    # Alertas de stream - média prioridade
+    - match:
+        component: stream
+      receiver: 'stream-alerts'
+      group_wait: 30s
+      repeat_interval: 2h
+    
+    # Alertas de sistema - baixa prioridade
+    - match:
+        component: redis
+      receiver: 'system-alerts'
+      group_wait: 1m
+      repeat_interval: 6h
+
+# Receivers (destinos de notificação)
+receivers:
+  # Receiver padrão
+  - name: 'default'
+    webhook_configs:
+      - url: 'http://backend:8000/api/alerts/webhook'
+        send_resolved: true
+        http_config:
+          bearer_token: '${ALERTMANAGER_WEBHOOK_TOKEN}'
+  
+  # Alertas críticos
+  - name: 'critical-alerts'
+    webhook_configs:
+      - url: 'http://backend:8000/api/alerts/webhook'
+        send_resolved: true
+    # email_configs:
+    #   - to: 'admin@gasautomation.local'
+    #     headers:
+    #       Subject: '🚨 ALERTA CRÍTICO: {{ .GroupLabels.alertname }}'
+    # slack_configs:
+    #   - api_url: '${SLACK_WEBHOOK_URL}'
+    #     channel: '#alerts-critical'
+    #     title: '🚨 ALERTA CRÍTICO'
+    #     text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+  
+  # Alertas de DLQ
+  - name: 'dlq-alerts'
+    webhook_configs:
+      - url: 'http://backend:8000/api/alerts/webhook'
+        send_resolved: true
+    # email_configs:
+    #   - to: '${DLQ_ALERT_EMAIL}'
+    #     headers:
+    #       Subject: '⚠️ DLQ Alert: {{ .GroupLabels.alertname }}'
+    # slack_configs:
+    #   - api_url: '${SLACK_WEBHOOK_URL}'
+    #     channel: '#alerts-dlq'
+    #     title: '⚠️ DLQ Alert'
+  
+  # Alertas de stream
+  - name: 'stream-alerts'
+    webhook_configs:
+      - url: 'http://backend:8000/api/alerts/webhook'
+        send_resolved: true
+    # slack_configs:
+    #   - api_url: '${SLACK_WEBHOOK_URL}'
+    #     channel: '#alerts-stream'
+    #     title: '📊 Stream Alert'
+  
+  # Alertas de sistema
+  - name: 'system-alerts'
+    webhook_configs:
+      - url: 'http://backend:8000/api/alerts/webhook'
+        send_resolved: true
+
+# Inibição de alertas (evitar spam)
+inhibit_rules:
+  # Se Redis está down, não alertar sobre problemas de stream
+  - source_match:
+      alertname: 'RedisDown'
+    target_match:
+      component: stream
+    equal: ['instance_id']
+  
+  # Se PostgreSQL está down, não alertar sobre problemas de processamento
+  - source_match:
+      alertname: 'PostgreSQLDown'
+    target_match:
+      component: stream
+    equal: ['instance_id']

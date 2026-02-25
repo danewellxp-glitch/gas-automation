@@ -87,6 +87,8 @@ class FlowEngineWrapper:
                         "type": r.get("type", "text"),
                         "content": r.get("text", ""),
                         "buttons": r.get("buttons"),
+                        "list_sections": r.get("list_sections"),
+                        "list_button_text": r.get("list_button_text"),
                         "media_url": r.get("media_url"),
                     })
                 self.success = True
@@ -106,19 +108,58 @@ class FlowEngineWrapper:
         from app.integrations.waha import waha_client
         
         results = {"sent": 0, "failed": 0}
-        
-        for response in responses:
+        last_content_sent = None
+        last_had_list = False  # para não enviar lista + botões em sequência (duplicata de CTA)
+
+        for i, response in enumerate(responses):
             try:
-                content = response.get("content") or response.get("text", "")
+                content = (response.get("content") or response.get("text", "") or "").strip()
                 buttons = response.get("buttons")
-                
+                list_sections = response.get("list_sections")
+                list_button_text = response.get("list_button_text", "Ver opcoes")
+
+                # Deduplicação: não reenviar o mesmo texto
+                if content and content == last_content_sent:
+                    logger.info(
+                        f"[SEND_RESPONSE] idx={i} skip duplicate content_len={len(content)}",
+                        extra={"trace_id": trace_id, "response_index": i},
+                    )
+                    continue
+                # Evitar lista + botões em sequência (handler retornou os dois; enviar só a lista)
+                if last_had_list and buttons and not list_sections:
+                    logger.info(
+                        f"[SEND_RESPONSE] idx={i} skip buttons after list content_len={len(content)}",
+                        extra={"trace_id": trace_id, "response_index": i},
+                    )
+                    continue
+
+                has_buttons = bool(buttons)
+                has_list = bool(list_sections)
+                logger.info(
+                    f"[SEND_RESPONSE] idx={i} phone={phone} has_buttons={has_buttons} "
+                    f"has_list_sections={has_list} content_len={len(content or '')}",
+                    extra={
+                        "trace_id": trace_id,
+                        "response_index": i,
+                        "has_buttons": has_buttons,
+                        "has_list_sections": has_list,
+                        "buttons_count": len(buttons) if buttons else 0,
+                    },
+                )
+
                 if buttons:
                     await waha_client.send_buttons(phone, content, buttons)
+                elif list_sections:
+                    await waha_client.send_list(
+                        phone, content, list_button_text, list_sections
+                    )
                 else:
                     await waha_client.send_text(phone, content)
-                
+
                 results["sent"] += 1
-                
+                last_content_sent = content
+                last_had_list = bool(list_sections)
+
             except Exception as e:
                 logger.error(f"Erro ao enviar resposta: {e}")
                 results["failed"] += 1

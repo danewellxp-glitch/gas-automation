@@ -159,8 +159,8 @@ class DriverTimeTrackingService:
                 'position': idx,
                 'driver_id': str(row.id),
                 'driver_name': row.name,
-                'rating': float(row.rating),
-                'vehicle_type': row.vehicle_type,
+                'rating': float(row.rating) if row.rating is not None else 0.0,
+                'vehicle_type': row.vehicle_type or '',
                 'deliveries_count': row.deliveries_count
             })
         
@@ -191,7 +191,7 @@ class DriverTimeTrackingService:
             summary['driver_id'] = str(driver.id)  # Adicionar ID para identificar duplicatas
             summary['driver_name'] = driver.name
             summary['current_status'] = driver.status
-            summary['rating'] = float(driver.rating)
+            summary['rating'] = float(driver.rating) if driver.rating is not None else 0.0
             summaries.append(summary)
         
         return summaries

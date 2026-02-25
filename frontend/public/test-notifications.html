@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teste - NotificationService</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .animate-enter {
+            animation: slideIn 0.3s ease-out;
+        }
+        .animate-leave {
+            animation: slideOut 0.3s ease-in;
+        }
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        @keyframes slideOut {
+            from {
+                transform: translateX(0);
+                opacity: 1;
+            }
+            to {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 p-8">
+    <div class="max-w-4xl mx-auto">
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+            <h1 class="text-3xl font-bold text-gray-900 mb-4">
+                🔔 Teste do NotificationService
+            </h1>
+            <p class="text-gray-600 mb-6">
+                Teste todas as funcionalidades do serviço de notificações
+            </p>
+
+            <!-- Status -->
+            <div class="grid grid-cols-3 gap-4 mb-6">
+                <div class="bg-blue-50 p-4 rounded-lg">
+                    <div class="text-blue-900 font-semibold">Notificações</div>
+                    <div id="status-enabled" class="text-2xl font-bold text-blue-600">-</div>
+                </div>
+                <div class="bg-green-50 p-4 rounded-lg">
+                    <div class="text-green-900 font-semibold">Permissão</div>
+                    <div id="status-permission" class="text-2xl font-bold text-green-600">-</div>
+                </div>
+                <div class="bg-purple-50 p-4 rounded-lg">
+                    <div class="text-purple-900 font-semibold">Pendentes</div>
+                    <div id="status-pending" class="text-2xl font-bold text-purple-600">0</div>
+                </div>
+            </div>
+
+            <!-- Botões de Teste -->
+            <div class="space-y-4">
+                <h2 class="text-xl font-semibold text-gray-900">Testes</h2>
+                
+                <div class="grid grid-cols-2 gap-4">
+                    <button onclick="testNotification()" class="bg-primary-600 text-white px-4 py-3 rounded-lg font-medium hover:bg-primary-700 transition-colors">
+                        🔔 Notificação de Teste
+                    </button>
+                    
+                    <button onclick="testSound()" class="bg-blue-600 text-white px-4 py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors">
+                        🔊 Testar Som
+                    </button>
+                    
+                    <button onclick="testVibration()" class="bg-green-600 text-white px-4 py-3 rounded-lg font-medium hover:bg-green-700 transition-colors">
+                        📳 Testar Vibração
+                    </button>
+                    
+                    <button onclick="requestPermission()" class="bg-yellow-600 text-white px-4 py-3 rounded-lg font-medium hover:bg-yellow-700 transition-colors">
+                        🔐 Solicitar Permissão
+                    </button>
+                    
+                    <button onclick="testMultiple()" class="bg-purple-600 text-white px-4 py-3 rounded-lg font-medium hover:bg-purple-700 transition-colors">
+                        🔔🔔🔔 Múltiplas Notificações
+                    </button>
+                    
+                    <button onclick="showHistory()" class="bg-indigo-600 text-white px-4 py-3 rounded-lg font-medium hover:bg-indigo-700 transition-colors">
+                        📜 Ver Histórico
+                    </button>
+                    
+                    <button onclick="clearAll()" class="bg-red-600 text-white px-4 py-3 rounded-lg font-medium hover:bg-red-700 transition-colors">
+                        🗑️ Limpar Histórico
+                    </button>
+                    
+                    <button onclick="toggleSettings()" class="bg-gray-600 text-white px-4 py-3 rounded-lg font-medium hover:bg-gray-700 transition-colors">
+                        ⚙️ Configurações
+                    </button>
+                </div>
+            </div>
+
+            <!-- Configurações -->
+            <div id="settings-panel" class="hidden mt-6 bg-gray-50 p-4 rounded-lg">
+                <h3 class="text-lg font-semibold mb-4">⚙️ Configurações</h3>
+                
+                <div class="space-y-3">
+                    <label class="flex items-center justify-between">
+                        <span>Som</span>
+                        <input type="checkbox" id="setting-sound" onchange="updateSetting('sound', this.checked)" class="rounded">
+                    </label>
+                    
+                    <label class="flex items-center justify-between">
+                        <span>Vibração</span>
+                        <input type="checkbox" id="setting-vibration" onchange="updateSetting('vibration', this.checked)" class="rounded">
+                    </label>
+                    
+                    <label class="flex items-center justify-between">
+                        <span>Notificações Nativas</span>
+                        <input type="checkbox" id="setting-native" onchange="updateSetting('nativeNotifications', this.checked)" class="rounded">
+                    </label>
+                    
+                    <div>
+                        <label class="block mb-2">Volume: <span id="volume-value">70%</span></label>
+                        <input type="range" id="setting-volume" min="0" max="1" step="0.1" value="0.7" onchange="updateVolume(this.value)" class="w-full">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Histórico -->
+            <div id="history-panel" class="hidden mt-6 bg-gray-50 p-4 rounded-lg max-h-96 overflow-y-auto">
+                <h3 class="text-lg font-semibold mb-4">📜 Histórico de Notificações</h3>
+                <div id="history-list"></div>
+            </div>
+
+            <!-- Console de Logs -->
+            <div class="mt-6 bg-gray-900 text-green-400 p-4 rounded-lg font-mono text-sm max-h-64 overflow-y-auto">
+                <div class="font-bold mb-2">Console:</div>
+                <div id="console-log"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Simulação do NotificationService (versão simplificada para teste) -->
+    <script>
+        // Simulação simplificada do NotificationService para este teste
+        const notificationService = {
+            settings: {
+                enabled: true,
+                sound: true,
+                vibration: true,
+                nativeNotifications: true,
+                soundVolume: 0.7
+            },
+            pendingCount: 0,
+            history: [],
+            audio: null,
+            permissionGranted: false,
+
+            init() {
+                this.loadSettings()
+                this.loadAudio()
+                this.checkPermission()
+                this.updateStatus()
+            },
+
+            loadAudio() {
+                this.audio = new Audio('/sounds/notification.mp3')
+                this.audio.volume = this.settings.soundVolume
+                this.audio.onerror = () => {
+                    this.log('⚠️ Som não encontrado em /sounds/notification.mp3')
+                    this.log('ℹ️ Crie o arquivo ou use um data URI temporário')
+                }
+            },
+
+            checkPermission() {
+                if ('Notification' in window) {
+                    this.permissionGranted = Notification.permission === 'granted'
+                }
+                this.updateStatus()
+            },
+
+            async requestPermission() {
+                if ('Notification' in window && Notification.permission !== 'denied') {
+                    const permission = await Notification.requestPermission()
+                    this.permissionGranted = permission === 'granted'
+                    this.log(permission === 'granted' ? '✅ Permissão concedida' : '❌ Permissão negada')
+                    this.updateStatus()
+                    return this.permissionGranted
+                }
+                return false
+            },
+
+            notifyNewOrder(orderData) {
+                this.log(`📬 Nova notificação: Pedido #${orderData.order_number}`)
+
+                const notification = {
+                    id: Date.now(),
+                    ...orderData,
+                    timestamp: new Date()
+                }
+
+                this.history.unshift(notification)
+                this.pendingCount++
+                this.updateStatus()
+
+                if (this.settings.sound) this.playSound()
+                if (this.settings.vibration) this.vibrate()
+                if (this.settings.nativeNotifications) this.showNative(notification)
+
+                this.showToast(notification)
+            },
+
+            playSound() {
+                if (this.audio) {
+                    this.audio.currentTime = 0
+                    this.audio.play().then(() => {
+                        this.log('🔊 Som tocado')
+                    }).catch(err => {
+                        this.log('⚠️ Erro ao tocar som: ' + err.message)
+                    })
+                }
+            },
+
+            vibrate() {
+                if ('vibrate' in navigator) {
+                    navigator.vibrate([200, 100, 200])
+                    this.log('📳 Dispositivo vibrou')
+                } else {
+                    this.log('ℹ️ Vibração não suportada')
+                }
+            },
+
+            showNative(notification) {
+                if (this.permissionGranted) {
+                    const n = new Notification('🔔 Novo Pedido!', {
+                        body: `Pedido #${notification.order_number} - ${notification.customer_name}`,
+                        icon: '/logo192.png'
+                    })
+                    setTimeout(() => n.close(), 5000)
+                    this.log('💻 Notificação nativa exibida')
+                }
+            },
+
+            showToast(notification) {
+                // Simulação de toast
+                const toast = document.createElement('div')
+                toast.className = 'fixed top-4 right-4 bg-white shadow-lg rounded-lg p-4 max-w-md animate-enter'
+                toast.innerHTML = `
+                    <div class="flex items-start gap-3">
+                        <div class="text-2xl">🔔</div>
+                        <div class="flex-1">
+                            <div class="font-semibold">Novo Pedido!</div>
+                            <div class="text-sm text-gray-600">Pedido #${notification.order_number} - ${notification.customer_name}</div>
+                            <div class="mt-2 text-xs">
+                                <span class="bg-yellow-100 text-yellow-800 px-2 py-1 rounded">Pendente</span>
+                                <span class="bg-blue-100 text-blue-800 px-2 py-1 rounded ml-2">📍 ${notification.bairro}</span>
+                            </div>
+                            <div class="mt-3 flex gap-2">
+                                <button onclick="alert('Ver Detalhes: #${notification.order_number}')" class="flex-1 bg-blue-600 text-white px-2 py-1 rounded text-xs hover:bg-blue-700">
+                                    👁️ Ver
+                                </button>
+                                <button onclick="alert('Aprovar: #${notification.order_number}')" class="flex-1 bg-green-600 text-white px-2 py-1 rounded text-xs hover:bg-green-700">
+                                    ✅ Aprovar
+                                </button>
+                            </div>
+                        </div>
+                        <button onclick="this.parentElement.parentElement.remove()" class="text-gray-400 hover:text-gray-600">✕</button>
+                    </div>
+                `
+                document.body.appendChild(toast)
+                setTimeout(() => toast.remove(), 10000)
+                this.log('🎨 Toast popup exibido')
+            },
+
+            loadSettings() {
+                const saved = localStorage.getItem('notification_settings')
+                if (saved) {
+                    this.settings = { ...this.settings, ...JSON.parse(saved) }
+                }
+            },
+
+            saveSettings() {
+                localStorage.setItem('notification_settings', JSON.stringify(this.settings))
+            },
+
+            updateStatus() {
+                document.getElementById('status-enabled').textContent = this.settings.enabled ? '✅ Ativo' : '❌ Desativado'
+                document.getElementById('status-permission').textContent = this.permissionGranted ? '✅ Sim' : '❌ Não'
+                document.getElementById('status-pending').textContent = this.pendingCount
+
+                // Atualizar checkboxes
+                document.getElementById('setting-sound').checked = this.settings.sound
+                document.getElementById('setting-vibration').checked = this.settings.vibration
+                document.getElementById('setting-native').checked = this.settings.nativeNotifications
+                document.getElementById('setting-volume').value = this.settings.soundVolume
+                document.getElementById('volume-value').textContent = Math.round(this.settings.soundVolume * 100) + '%'
+            },
+
+            log(message) {
+                const timestamp = new Date().toLocaleTimeString()
+                const logDiv = document.getElementById('console-log')
+                logDiv.innerHTML = `<div>[${timestamp}] ${message}</div>` + logDiv.innerHTML
+                console.log(message)
+            }
+        }
+
+        // Funções de teste
+        function testNotification() {
+            notificationService.notifyNewOrder({
+                order_number: Math.floor(Math.random() * 1000),
+                customer_name: 'Cliente Teste',
+                bairro: 'Centro',
+                total_amount: 150.00
+            })
+        }
+
+        function testSound() {
+            notificationService.playSound()
+        }
+
+        function testVibration() {
+            notificationService.vibrate()
+        }
+
+        async function requestPermission() {
+            await notificationService.requestPermission()
+        }
+
+        function testMultiple() {
+            for (let i = 0; i < 3; i++) {
+                setTimeout(() => testNotification(), i * 1000)
+            }
+        }
+
+        function showHistory() {
+            const panel = document.getElementById('history-panel')
+            const list = document.getElementById('history-list')
+            
+            if (notificationService.history.length === 0) {
+                list.innerHTML = '<div class="text-gray-500">Nenhuma notificação no histórico</div>'
+            } else {
+                list.innerHTML = notificationService.history.map(n => `
+                    <div class="bg-white p-3 rounded mb-2">
+                        <div class="font-semibold">Pedido #${n.order_number}</div>
+                        <div class="text-sm text-gray-600">${n.customer_name} - ${n.bairro}</div>
+                        <div class="text-xs text-gray-400">${new Date(n.timestamp).toLocaleString()}</div>
+                    </div>
+                `).join('')
+            }
+            
+            panel.classList.toggle('hidden')
+        }
+
+        function clearAll() {
+            notificationService.history = []
+            notificationService.pendingCount = 0
+            notificationService.updateStatus()
+            notificationService.log('🗑️ Histórico limpo')
+        }
+
+        function toggleSettings() {
+            document.getElementById('settings-panel').classList.toggle('hidden')
+        }
+
+        function updateSetting(key, value) {
+            notificationService.settings[key] = value
+            notificationService.saveSettings()
+            notificationService.log(`⚙️ ${key} = ${value}`)
+        }
+
+        function updateVolume(value) {
+            notificationService.settings.soundVolume = parseFloat(value)
+            if (notificationService.audio) {
+                notificationService.audio.volume = parseFloat(value)
+            }
+            notificationService.saveSettings()
+            notificationService.updateStatus()
+            notificationService.log(`🔊 Volume = ${Math.round(value * 100)}%`)
+        }
+
+        // Inicializar ao carregar
+        window.onload = () => {
+            notificationService.init()
+            notificationService.log('✅ Página de teste carregada')
+            notificationService.log('ℹ️ Clique nos botões para testar')
+        }
+    </script>
+</body>
+</html>

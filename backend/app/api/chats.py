@@ -319,7 +319,15 @@ async def send_message(
         raise
     except Exception as e:
         logger.error(f"Erro WAHA ao enviar mensagem para {phone}: {e}")
-        raise HTTPException(status_code=500, detail=f"Erro ao enviar mensagem: {str(e)}")
+        msg = str(e)
+        if "SCAN_QR_CODE" in msg or "WHATSAPP_DESCONECTADO" in msg or "Session status is not as expected" in msg:
+            detail = (
+                "WhatsApp desconectado. Abra o painel do WAHA (http://seu-servidor:3000), "
+                "escaneie o QR Code com o celular e tente enviar novamente."
+            )
+        else:
+            detail = f"Erro ao enviar mensagem: {msg}"
+        raise HTTPException(status_code=503, detail=detail)
 
     # 2. Log no banco (não deve falhar o fluxo se der erro)
     try:
@@ -598,7 +606,15 @@ async def reply_to_conversation(
         raise
     except Exception as e:
         logger.error(f"Erro WAHA ao enviar mensagem para {conversation_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Erro ao enviar mensagem: {str(e)}")
+        msg = str(e)
+        if "SCAN_QR_CODE" in msg or "WHATSAPP_DESCONECTADO" in msg or "Session status is not as expected" in msg:
+            detail = (
+                "WhatsApp desconectado. Abra o painel do WAHA (http://seu-servidor:3000), "
+                "escaneie o QR Code com o celular e tente enviar novamente."
+            )
+        else:
+            detail = f"Erro ao enviar mensagem: {msg}"
+        raise HTTPException(status_code=503, detail=detail)
 
     # 2. Log no banco (não deve falhar o fluxo se der erro)
     try:

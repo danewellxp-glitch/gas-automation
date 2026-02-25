@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "4866873326",
+    "project_id": "gas-driver-404d8",
+    "storage_bucket": "gas-driver-404d8.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:4866873326:android:63ed46f6900a8125a9a0ff",
+        "android_client_info": {
+          "package_name": "com.gasautomation.driver"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBbe7npxl4inPQfk-vGq7x9E1KWRjQhpBw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -200,34 +200,19 @@ class IdentifyNamePFHandler(BaseHandler):
         order_context: Optional[OrderContext],
         name: str,
     ) -> HandlerResult:
-        """Vai para seleção de produtos."""
-        
-        from app.core.product_catalog import get_active_products
-        products = get_active_products()
-        
-        product_buttons = []
-        product_text_lines = []
-        
-        for product in products:
-            product_buttons.append({
-                "id": product.code,
-                "text": f"{product.emoji} {product.code} - {self._format_currency(product.price_exchange)}"
-            })
-            label = f" {getattr(product, 'usage_label', '')}" if getattr(product, 'usage_label', None) else ""
-            product_text_lines.append(
-                f"{product.emoji} *{product.code}* ({product.weight_kg}kg){label} - {self._format_currency(product.price_exchange)}"
-            )
-        
-        product_text = "\n".join(product_text_lines)
-        
+        """Vai para selecao de produtos."""
+        sections = self._build_product_list_sections()
+        product_text = self._build_product_text()
+
         return self._create_result(
             conversation_context=conversation_context,
             customer_context=customer_context,
             order_context=order_context,
             responses=[
                 self._create_response(
-                    text=f"Prazer, *{name}*!\n\n🛒 Qual botijão você precisa?\n\n{product_text}",
-                    buttons=product_buttons[:3]
+                    text="Prazer, *{}*!\n\n🛒 Qual botijão você precisa?\n\n{}".format(name, product_text),
+                    list_sections=sections,
+                    list_button_text="Ver Produtos",
                 )
             ],
             next_state=ConversationState.ORDERING_PRODUCT
@@ -287,33 +272,19 @@ class IdentifyNamePJHandler(BaseHandler):
                 customer.tipo_documento = "PJ"
                 await db.commit()
         
-        # Ir para produtos (CNPJ será pedido antes de confirmar)
-        from app.core.product_catalog import get_active_products
-        products = get_active_products()
-        
-        product_buttons = []
-        product_text_lines = []
-        
-        for product in products:
-            product_buttons.append({
-                "id": product.code,
-                "text": f"{product.emoji} {product.code} - {self._format_currency(product.price_exchange)}"
-            })
-            label = f" {getattr(product, 'usage_label', '')}" if getattr(product, 'usage_label', None) else ""
-            product_text_lines.append(
-                f"{product.emoji} *{product.code}* ({product.weight_kg}kg){label} - {self._format_currency(product.price_exchange)}"
-            )
-        
-        product_text = "\n".join(product_text_lines)
-        
+        # Ir para produtos (CNPJ sera pedido antes de confirmar)
+        sections = self._build_product_list_sections()
+        product_text = self._build_product_text()
+
         return self._create_result(
             conversation_context=conversation_context,
             customer_context=customer_context,
             order_context=order_context,
             responses=[
                 self._create_response(
-                    text=f"Prazer, *{name}*!\n\n🛒 Qual botijão você precisa?\n\n{product_text}",
-                    buttons=product_buttons[:3]
+                    text="Prazer, *{}*!\n\n🛒 Qual botijão você precisa?\n\n{}".format(name, product_text),
+                    list_sections=sections,
+                    list_button_text="Ver Produtos",
                 )
             ],
             next_state=ConversationState.ORDERING_PRODUCT
@@ -366,10 +337,10 @@ class IdentifyDocumentCPFHandler(BaseHandler):
         # Salvar CPF
         if not customer_context:
             customer_context = CustomerContext()
-        
+
         customer_context.document = cpf
         conversation_context.collected_data["document"] = cpf
-        
+
         # Salvar no banco
         customer = await self._get_customer_by_phone(conversation_context.phone)
         if customer:
@@ -377,16 +348,59 @@ class IdentifyDocumentCPFHandler(BaseHandler):
             async with AsyncSessionLocal() as db:
                 customer.cpf_cnpj = cpf
                 await db.commit()
-        
-        # Voltar para resumo do pedido (será chamado pelo flow engine)
+
+        # Auto-finalizar pedido (o cliente ja confirmou antes de pedir CPF)
+        customer_context = await self._ensure_customer_for_order(
+            conversation_context, customer_context
+        )
+
+        if not customer_context or not customer_context.customer_id:
+            return self._create_result(
+                conversation_context=conversation_context,
+                customer_context=customer_context,
+                order_context=order_context,
+                responses=[
+                    self._create_response(
+                        text="✅ CPF registrado!\n\nNao consegui identificar seu cadastro. Digite *menu* para recomecar."
+                    )
+                ],
+                next_state=ConversationState.GREETING_INITIAL,
+                success=False,
+            )
+
+        order = await self._create_order(
+            conversation_context, customer_context, order_context
+        )
+
+        if not order:
+            return self._create_result(
+                conversation_context=conversation_context,
+                customer_context=customer_context,
+                order_context=order_context,
+                responses=[
+                    self._create_response(
+                        text="✅ CPF registrado!\n\nErro ao criar pedido. Tente novamente ou fale com um atendente."
+                    )
+                ],
+                next_state=ConversationState.SUPPORT_HUMAN,
+                needs_human=True,
+                success=False,
+            )
+
+        conversation_context.collected_data["order_id"] = str(order.id)
+
+        confirmation_text = self._build_order_confirmation_text(
+            order, order_context, customer_context
+        )
+
         return self._create_result(
             conversation_context=conversation_context,
             customer_context=customer_context,
             order_context=order_context,
             responses=[
-                self._create_response(text="✅ CPF registrado!")
+                self._create_response(text="✅ CPF registrado!\n\n" + confirmation_text)
             ],
-            next_state=ConversationState.CHECKOUT_SUMMARY
+            next_state=ConversationState.COMPLETE_FOLLOWUP
         )
 
 
@@ -436,10 +450,10 @@ class IdentifyDocumentCNPJHandler(BaseHandler):
         # Salvar CNPJ
         if not customer_context:
             customer_context = CustomerContext()
-        
+
         customer_context.document = cnpj
         conversation_context.collected_data["document"] = cnpj
-        
+
         # Salvar no banco
         customer = await self._get_customer_by_phone(conversation_context.phone)
         if customer:
@@ -447,14 +461,57 @@ class IdentifyDocumentCNPJHandler(BaseHandler):
             async with AsyncSessionLocal() as db:
                 customer.cpf_cnpj = cnpj
                 await db.commit()
-        
-        # Voltar para resumo do pedido
+
+        # Auto-finalizar pedido (o cliente ja confirmou antes de pedir CNPJ)
+        customer_context = await self._ensure_customer_for_order(
+            conversation_context, customer_context
+        )
+
+        if not customer_context or not customer_context.customer_id:
+            return self._create_result(
+                conversation_context=conversation_context,
+                customer_context=customer_context,
+                order_context=order_context,
+                responses=[
+                    self._create_response(
+                        text="✅ CNPJ registrado!\n\nNao consegui identificar seu cadastro. Digite *menu* para recomecar."
+                    )
+                ],
+                next_state=ConversationState.GREETING_INITIAL,
+                success=False,
+            )
+
+        order = await self._create_order(
+            conversation_context, customer_context, order_context
+        )
+
+        if not order:
+            return self._create_result(
+                conversation_context=conversation_context,
+                customer_context=customer_context,
+                order_context=order_context,
+                responses=[
+                    self._create_response(
+                        text="✅ CNPJ registrado!\n\nErro ao criar pedido. Tente novamente ou fale com um atendente."
+                    )
+                ],
+                next_state=ConversationState.SUPPORT_HUMAN,
+                needs_human=True,
+                success=False,
+            )
+
+        conversation_context.collected_data["order_id"] = str(order.id)
+
+        confirmation_text = self._build_order_confirmation_text(
+            order, order_context, customer_context
+        )
+
         return self._create_result(
             conversation_context=conversation_context,
             customer_context=customer_context,
             order_context=order_context,
             responses=[
-                self._create_response(text="✅ CNPJ registrado!")
+                self._create_response(text="✅ CNPJ registrado!\n\n" + confirmation_text)
             ],
-            next_state=ConversationState.CHECKOUT_SUMMARY
+            next_state=ConversationState.COMPLETE_FOLLOWUP
         )

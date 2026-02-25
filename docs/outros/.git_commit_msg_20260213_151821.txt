@@ -1,0 +1,12 @@
+fix(P0): implementa hotfix anti-duplicação + melhora resolução LID
+
+- Adiciona WAHA Poller como fallback quando webhooks não funcionam
+- Melhora extração de message_id no poller (suporta múltiplos formatos WAHA)
+- Adiciona logs de debug no poller para diagnóstico
+- Melhora documentação do resolve_lid() conforme GUIA-RESOLUCAO-LID-WAHA.md
+- Poller já usa Redis dedup para evitar duplicatas
+- Phone lock já implementado em process_whatsapp_message()
+- Guards context.order_id já existem em handlers
+- create_order() já tem 3 camadas de proteção
+
+Resolve: duplicação de mensagens e pedidos em produção

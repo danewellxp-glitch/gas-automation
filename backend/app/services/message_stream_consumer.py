@@ -412,6 +412,18 @@ class MessageStreamConsumer:
                 await asyncio.sleep(5)
                 await self.connect()
 
+            except redis.ResponseError as e:
+                # Stream recriado (ex.: reset) → consumer group não existe; recriar
+                if "NOGROUP" in str(e) or "unknown consumer group" in str(e).lower():
+                    logger.warning(
+                        f"[StreamConsumer] Consumer group ausente (stream recriado?). Recriando: {e}"
+                    )
+                    await self.connect()
+                    await asyncio.sleep(1)
+                else:
+                    logger.error(f"[StreamConsumer] Erro Redis: {e}", exc_info=True)
+                    await asyncio.sleep(5)
+
             except asyncio.CancelledError:
                 logger.info(f"[StreamConsumer] Consumer cancelado: {self.consumer_name}")
                 break
@@ -498,12 +510,13 @@ class MessageStreamConsumer:
                             "step": "extract_context_error"
                         }
                     )
-                    # Garantir que trace_id tenha um valor mesmo em caso de erro
                     if not trace_id:
                         trace_id = f"trace-{event_id_str[:8]}" if event_id_str else "trace-unknown"
-                    trace_id = f"trace-{event_id_str[:8]}"
-                    phone = None
-                    msg_id = None
+                    # phone/msg_id permanecem None em caso de erro na extração
+                
+                # Garantir trace_id apenas se ainda estiver vazio (não sobrescrever valores extraídos)
+                if not trace_id:
+                    trace_id = f"trace-{event_id_str[:8]}" if event_id_str else "trace-unknown"
                 
                 logger.info(
                     f"[CONSUMER_MESSAGE_RECEIVED] trace_id={trace_id} stream_id={event_id_str} "

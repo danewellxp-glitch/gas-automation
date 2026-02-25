@@ -30,6 +30,14 @@ class LocationData(BaseModel):
     timestamp: Optional[datetime] = None
 
 
+class TagConfig(BaseModel):
+    """Configuração visual de uma tag."""
+    color: str
+    icon: str
+    label: str
+    category: str
+
+
 class DriverLocation(BaseModel):
     id: str
     name: str
@@ -37,6 +45,8 @@ class DriverLocation(BaseModel):
     status: str
     location: Optional[LocationData] = None
     active_deliveries: int = 0
+    tags: List[str] = []
+    tag_config: Optional[TagConfig] = None
 
 
 class DeliveryLocation(BaseModel):
@@ -49,6 +59,8 @@ class DeliveryLocation(BaseModel):
     address: Optional[str] = None
     driver_id: Optional[str] = None
     driver_name: Optional[str] = None
+    tags: List[str] = []
+    tag_config: Optional[TagConfig] = None
 
 
 class CustomerLocation(BaseModel):
@@ -58,13 +70,42 @@ class CustomerLocation(BaseModel):
     longitude: float
     address: Optional[str] = None
     timestamp: datetime
+    tags: List[str] = []
+    tag_config: Optional[TagConfig] = None
+    order_count: int = 0
+
+
+class FiltersData(BaseModel):
+    """Filtros disponíveis para o mapa."""
+    available_tags: List[str]
+    tag_configs: dict
 
 
 class MapDataResponse(BaseModel):
     drivers: List[DriverLocation]
     deliveries: List[DeliveryLocation]
     customer_locations: List[CustomerLocation]
+    filters: FiltersData
     updated_at: datetime
+
+
+class GeocodeRequest(BaseModel):
+    """Request para geocodificação."""
+    cep: Optional[str] = None
+    address: Optional[dict] = None
+
+
+class GeocodeResponse(BaseModel):
+    """Response de geocodificação."""
+    cep: Optional[str]
+    logradouro: Optional[str]
+    bairro: Optional[str]
+    cidade: Optional[str]
+    estado: Optional[str]
+    latitude: Optional[float]
+    longitude: Optional[float]
+    source: Optional[str]
+    accuracy: Optional[str]
 
 
 # ==================== Endpoints ====================
@@ -78,8 +119,24 @@ async def get_map_data(
     """
     Retorna dados para o mapa em tempo real.
     Inclui: entregadores ativos, entregas em andamento, localizacoes de clientes.
+    Com sistema de tags e geocoding automático.
     """
     try:
+        # Importar funções de tags
+        from app.models.location_tag import (
+            get_tag_for_driver, 
+            get_tag_for_customer, 
+            get_tag_for_delivery,
+            get_tag_config,
+            get_all_tag_configs
+        )
+        from app.services.geocoding_service import GeocodingService
+        from app.models.customer import Customer
+        from sqlalchemy import func
+        
+        # Inicializar serviço de geocoding
+        geocoding_service = GeocodingService(db, redis_manager)
+        
         # 1. Buscar entregadores
         driver_query = select(Driver)
         if not include_offline_drivers:
@@ -111,6 +168,10 @@ async def get_map_data(
             )
             active_result = await db.execute(active_count_query)
             active_count = len(active_result.scalars().all())
+            
+            # Determinar tag
+            tag = get_tag_for_driver(d)
+            tag_cfg = get_tag_config(tag)
 
             drivers.append(DriverLocation(
                 id=str(d.id),
@@ -119,11 +180,12 @@ async def get_map_data(
                 status=d.status or "offline",
                 location=loc,
                 active_deliveries=active_count,
+                tags=[tag],
+                tag_config=TagConfig(**tag_cfg) if tag_cfg else None,
             ))
 
         # 2. Buscar entregas em andamento
         from sqlalchemy.orm import selectinload
-        from app.models.customer import Customer
 
         delivery_query = select(Delivery, Order, Customer).join(
             Order, Delivery.order_id == Order.id
@@ -159,6 +221,21 @@ async def get_map_data(
                         latitude=addr["location"].get("latitude"),
                         longitude=addr["location"].get("longitude"),
                     )
+            
+            # Se não tem localização, tentar geocodificar pelo CEP
+            if not loc and order.delivery_address and order.delivery_address.get("cep"):
+                cep = order.delivery_address.get("cep")
+                geo_data = await geocoding_service.geocode_by_cep(cep)
+                
+                if geo_data and geo_data.get("latitude") and geo_data.get("longitude"):
+                    loc = LocationData(
+                        latitude=geo_data["latitude"],
+                        longitude=geo_data["longitude"],
+                    )
+            
+            # Determinar tag
+            tag = get_tag_for_delivery(delivery)
+            tag_cfg = get_tag_config(tag)
 
             deliveries.append(DeliveryLocation(
                 id=str(delivery.id),
@@ -170,15 +247,25 @@ async def get_map_data(
                 address=delivery.bairro or (order.delivery_address.get("formatted") if order.delivery_address else None),
                 driver_id=str(delivery.driver_id) if delivery.driver_id else None,
                 driver_name=delivery.driver_name,
+                tags=[tag],
+                tag_config=TagConfig(**tag_cfg) if tag_cfg else None,
             ))
 
         # 3. Buscar localizacoes de clientes recentes (do Redis/EventLog)
-        customer_locations = await get_recent_customer_locations(db, hours_back)
+        customer_locations = await get_recent_customer_locations(db, hours_back, geocoding_service)
+
+        # 4. Preparar filtros
+        all_tag_configs = get_all_tag_configs()
+        filters = FiltersData(
+            available_tags=list(all_tag_configs.keys()),
+            tag_configs=all_tag_configs
+        )
 
         return MapDataResponse(
             drivers=drivers,
             deliveries=deliveries,
             customer_locations=customer_locations,
+            filters=filters,
             updated_at=datetime.now(timezone.utc),
         )
 
@@ -189,12 +276,16 @@ async def get_map_data(
 
 async def get_recent_customer_locations(
     db: AsyncSession,
-    hours_back: int = 24
+    hours_back: int = 24,
+    geocoding_service=None
 ) -> List[CustomerLocation]:
     """
     Busca localizacoes de clientes recentes do EventLog.
     """
     from app.models.event_log import EventLog
+    from app.models.customer import Customer
+    from app.models.location_tag import get_tag_for_customer, get_tag_config
+    from sqlalchemy import func
 
     try:
         cutoff = datetime.now(timezone.utc) - timedelta(hours=hours_back)
@@ -222,6 +313,23 @@ async def get_recent_customer_locations(
             seen_phones.add(phone)
 
             if payload.get("latitude") and payload.get("longitude"):
+                # Buscar dados do cliente e contar pedidos
+                customer_query = select(Customer).where(Customer.phone == phone)
+                customer_result = await db.execute(customer_query)
+                customer = customer_result.scalar_one_or_none()
+                
+                order_count = 0
+                if customer:
+                    order_count_query = select(func.count(Order.id)).where(
+                        Order.customer_id == customer.id
+                    )
+                    order_count_result = await db.execute(order_count_query)
+                    order_count = order_count_result.scalar() or 0
+                
+                # Determinar tag
+                tag = get_tag_for_customer(customer, order_count)
+                tag_cfg = get_tag_config(tag)
+                
                 locations.append(CustomerLocation(
                     phone=phone,
                     name=payload.get("name"),
@@ -229,6 +337,9 @@ async def get_recent_customer_locations(
                     longitude=payload["longitude"],
                     address=payload.get("address"),
                     timestamp=event.created_at,
+                    tags=[tag],
+                    tag_config=TagConfig(**tag_cfg) if tag_cfg else None,
+                    order_count=order_count,
                 ))
 
         return locations
@@ -320,3 +431,64 @@ async def get_active_drivers(
         )
         for d in drivers
     ]
+
+
+@router.post("/geocode", response_model=GeocodeResponse)
+async def geocode_address(
+    request: GeocodeRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Geocodifica um CEP ou endereço completo.
+    
+    Exemplos:
+    - POST /api/locations/geocode {"cep": "80010-000"}
+    - POST /api/locations/geocode {"address": {"street": "Rua XV de Novembro", "cidade": "Curitiba", "estado": "PR"}}
+    
+    Retorna coordenadas geográficas + endereço enriquecido.
+    """
+    from app.services.geocoding_service import GeocodingService
+    
+    try:
+        service = GeocodingService(db, redis_manager)
+        
+        result = None
+        
+        if request.cep:
+            result = await service.geocode_by_cep(request.cep)
+        elif request.address:
+            result = await service.geocode_by_address(request.address)
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail="CEP ou endereço necessário"
+            )
+        
+        if not result:
+            raise HTTPException(
+                status_code=404,
+                detail="Não foi possível geocodificar o endereço"
+            )
+        
+        return GeocodeResponse(**result)
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erro ao geocodificar: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/tags")
+async def get_available_tags():
+    """
+    Retorna todas as tags disponíveis com suas configurações visuais.
+    
+    Útil para o frontend construir filtros e legendas do mapa.
+    """
+    from app.models.location_tag import get_all_tag_configs, get_tags_by_category
+    
+    return {
+        "tags": get_all_tag_configs(),
+        "categories": get_tags_by_category()
+    }

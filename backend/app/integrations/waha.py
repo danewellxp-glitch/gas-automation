@@ -339,6 +339,13 @@ class WAHAClient:
                         return result
                     retry_body = retry.json() if retry.content else {}
                     logger.error(f"Retry também falhou: {retry.status_code} {retry_body}")
+                    status = retry_body.get("status", "")
+                    if status == "SCAN_QR_CODE":
+                        raise httpx.HTTPStatusError(
+                            "WHATSAPP_DESCONECTADO: Abra o painel do WAHA (porta 3000), escaneie o QR Code com o WhatsApp para reconectar a sessão e tente enviar novamente.",
+                            request=retry.request,
+                            response=retry,
+                        )
                     raise httpx.HTTPStatusError(
                         f"WAHA sendText falhou após retry: {retry_body}",
                         request=retry.request,
@@ -366,7 +373,12 @@ class WAHAClient:
         footer: Optional[str] = None,
     ) -> Dict:
         """
-        Envia mensagem com botões interativos.
+        Envia mensagem com botões interativos (nova mensagem com até 3 botões).
+
+        NOTA: POST /api/send/buttons/reply no Swagger é "Reply on a button message":
+        serve para responder quando o usuário JÁ CLICOU um botão (replyTo, selectedButtonID,
+        selectedDisplayText). Não é para enviar mensagem nova com botões. Por isso usamos
+        apenas POST /api/sendButtons (Core/deprecated); em Plus retorna 501 e cai no fallback.
 
         Args:
             phone: Número do destinatário
@@ -379,32 +391,39 @@ class WAHAClient:
         client = await self._get_client()
         chat_id = await self._get_chat_id(phone)
 
-        # Formatar botões para o formato WAHA
-        formatted_buttons = [
-            {"id": btn["id"], "text": btn["text"][:20]}  # Max 20 chars
-            for btn in buttons[:3]  # Max 3 botões
+        # Botões: max 3, texto até 20 chars (WhatsApp). Schema SendButtonsRequest (Core)
+        formatted = [
+            {"id": btn["id"], "text": (btn.get("text") or "")[:20]}
+            for btn in buttons[:3]
         ]
 
         payload = {
             "chatId": chat_id,
             "text": text,
-            "buttons": formatted_buttons,
+            "buttons": formatted,
             "session": self.session_name,
         }
-
         if footer:
             payload["footer"] = footer
 
+        # Único endpoint para ENVIAR nova mensagem com botões: POST /api/sendButtons (Core/deprecated).
+        # Em WAHA Plus retorna 501 → fallback em texto. /api/send/buttons/reply é para outro uso
+        # (responder ao clique do usuário: replyTo, selectedButtonID, selectedDisplayText).
         try:
             response = await client.post("/api/sendButtons", json=payload)
             response.raise_for_status()
-            result = response.json()
-            logger.info(f"Botões enviados para {phone}")
-            return result
+            logger.info(f"Botões enviados para {phone} (WAHA sendButtons)")
+            return response.json()
         except httpx.HTTPError as e:
-            logger.error(f"Erro ao enviar botões para {phone}: {e}")
-            # Fallback: enviar como texto com opções numeradas
-            return await self._send_buttons_as_text(phone, text, buttons, footer)
+            code = getattr(getattr(e, "response", None), "status_code", None)
+            if code not in (404, 501):
+                logger.warning(f"send_buttons /api/sendButtons para {phone}: status={code}")
+
+        # Fallback: texto com opções numeradas (Plus não implementa sendButtons; Core 501)
+        logger.info(
+            "Nenhum endpoint de botões disponível; usando fallback em texto."
+        )
+        return await self._send_buttons_as_text(phone, text, buttons, footer)
 
     async def _send_buttons_as_text(
         self,
@@ -453,10 +472,35 @@ class WAHAClient:
         try:
             response = await client.post("/api/sendList", json=payload)
             response.raise_for_status()
+            logger.info(f"Lista enviada para {phone}")
             return response.json()
         except httpx.HTTPError as e:
-            logger.error(f"Erro ao enviar lista para {phone}: {e}")
-            raise
+            code = getattr(getattr(e, "response", None), "status_code", None)
+            if code == 501:
+                logger.info("WAHA retornou 501 para sendList; usando fallback em texto.")
+            else:
+                logger.warning(f"Erro ao enviar lista para {phone}: {e}")
+            return await self._send_list_as_text(phone, text, button_text, sections)
+
+    async def _send_list_as_text(
+        self,
+        phone: str,
+        text: str,
+        button_text: str,
+        sections: List[Dict],
+    ) -> Dict:
+        """Fallback: envia lista como texto com opções numeradas."""
+        lines = [text, ""]
+        idx = 1
+        for section in sections:
+            title = section.get("title")
+            if title:
+                lines.append(f"*{title}*")
+            for row in section.get("rows", []):
+                desc = f" - {row['description']}" if row.get("description") else ""
+                lines.append(f"{idx}. {row.get('title', '')}{desc}")
+                idx += 1
+        return await self.send_text(phone, "\n".join(lines))
 
     async def send_image(
         self,
