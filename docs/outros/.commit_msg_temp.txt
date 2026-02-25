@@ -1,0 +1,7 @@
+feat(bot): Flow Engine v2, UX do fluxo e preços GÁSMASTER
+
+Flow Engine 2.0 handlers, state machine, NLU. Bot: opcoes 1/2/3,
+endereco+complemento junto. Produtos residencial/industrial, merge itens.
+Checkout: resumo apos pagamento e troco, confirmacao completa. Cliente
+garantido antes de criar pedido. Dashboard: OrderBrief com items,
+telefone sem @c.us, total = qty x preco. Precos P13 110 P20 210 P45 430.

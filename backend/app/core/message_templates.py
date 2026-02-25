@@ -21,7 +21,9 @@ Para começar, você é:"""
 
 GREETING_RETURNING = """👋 Olá, {name}!
 
-Último pedido: {last_order_summary}
+📦 Seu último pedido:
+{last_order_items}
+💰 Total: {last_order_total}
 
 Deseja repetir?"""
 

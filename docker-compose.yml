@@ -139,10 +139,11 @@ services:
       retries: 5
 
   # ===========================================
-  # WHATSAPP - WAHA
+  # WHATSAPP - WAHA Plus (oficial devlikeapro)
+  # Botões e List Messages: use login/pull/logout antes do up (ver docs/configuracao/WAHA_PLUS_PULL.md)
   # ===========================================
   waha:
-    image: devlikeapro/waha:latest
+    image: devlikeapro/waha-plus:latest
     container_name: gas_waha
     restart: unless-stopped
     environment:
@@ -154,10 +155,10 @@ services:
       WHATSAPP_API_KEY: ${WAHA_API_KEY}
       WAHA_API_KEY_PLAIN: ${WAHA_API_KEY}
       WAHA_APPS_ENABLED: "true"
-      WAHA_DASHBOARD_USERNAME: ${WAHA_DASHBOARD_USERNAME}
-      WAHA_DASHBOARD_PASSWORD: ${WAHA_DASHBOARD_PASSWORD}
-      WHATSAPP_SWAGGER_USERNAME: ${WHATSAPP_SWAGGER_USERNAME}
-      WHATSAPP_SWAGGER_PASSWORD: ${WHATSAPP_SWAGGER_PASSWORD}
+      WAHA_DASHBOARD_USERNAME: ${WAHA_DASHBOARD_USERNAME:-admin}
+      WAHA_DASHBOARD_PASSWORD: ${WAHA_DASHBOARD_PASSWORD:-GasWaha2026Secure}
+      WHATSAPP_SWAGGER_USERNAME: ${WHATSAPP_SWAGGER_USERNAME:-admin}
+      WHATSAPP_SWAGGER_PASSWORD: "${WHATSAPP_SWAGGER_PASSWORD:-Gas@Swagger2026!Secure}"
       REDIS_URL: redis://redis:6379/1
       WAHA_REDIS_HOST: redis
       WAHA_REDIS_PORT: 6379

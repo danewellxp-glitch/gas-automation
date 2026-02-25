@@ -71,31 +71,19 @@ class OrderingProductHandler(BaseHandler):
                     needs_human=True
                 )
             
-            # Mostrar produtos disponíveis
-            products = get_active_products()
-            product_buttons = []
-            product_text_lines = []
-            
-            for product in products:
-                product_buttons.append({
-                    "id": product.code,
-                    "text": f"{product.emoji} {product.code} - {self._format_currency(product.price_exchange)}"
-                })
-                label = f" {getattr(product, 'usage_label', '')}" if getattr(product, 'usage_label', None) else ""
-                product_text_lines.append(
-                    f"{product.emoji} *{product.code}* ({product.weight_kg}kg){label} - {self._format_currency(product.price_exchange)}"
-                )
-            
-            product_text = "\n".join(product_text_lines)
-            
+            # Mostrar produtos disponíveis com List Message
+            sections = self._build_product_list_sections()
+            product_text = self._build_product_text()
+
             return self._create_result(
                 conversation_context=conversation_context,
                 customer_context=customer_context,
                 order_context=order_context,
                 responses=[
                     self._create_response(
-                        text=f"🤔 Não entendi. Por favor, escolha um produto:\n\n{product_text}",
-                        buttons=product_buttons[:3]
+                        text="🤔 Não entendi. Por favor, escolha um produto:\n\n{}".format(product_text),
+                        list_sections=sections,
+                        list_button_text="Ver Produtos",
                     )
                 ],
                 next_state=ConversationState.ORDERING_PRODUCT
@@ -220,7 +208,7 @@ class OrderingQuantityHandler(BaseHandler):
                         text=ASK_OPERATION_TYPE,
                         buttons=[
                             {"id": "exchange", "text": "1. 🔄 Troca"},
-                            {"id": "sale", "text": "2. 🆕 Venda"},
+                            {"id": "sale", "text": "2. 🆕 Comprar"},
                             {"id": "pickup", "text": "3. 🏪 Retira"},
                         ]
                     )
@@ -288,7 +276,7 @@ class OrderingOperationHandler(BaseHandler):
                         text="Por favor, escolha o tipo de operação (pode digitar 1, 2 ou 3):",
                         buttons=[
                             {"id": "exchange", "text": "1. 🔄 Troca"},
-                            {"id": "sale", "text": "2. 🆕 Venda"},
+                            {"id": "sale", "text": "2. 🆕 Comprar"},
                             {"id": "pickup", "text": "3. 🏪 Retira"},
                         ]
                     )
@@ -374,31 +362,19 @@ class OrderingMoreItemsHandler(BaseHandler):
             conversation_context.collected_data.pop("product_code", None)
             conversation_context.collected_data.pop("quantity", None)
             
-            # Voltar para seleção de produto
-            products = get_active_products()
-            product_buttons = []
-            product_text_lines = []
-            
-            for product in products:
-                product_buttons.append({
-                    "id": product.code,
-                    "text": f"{product.emoji} {product.code} - {self._format_currency(product.price_exchange)}"
-                })
-                label = f" {getattr(product, 'usage_label', '')}" if getattr(product, 'usage_label', None) else ""
-                product_text_lines.append(
-                    f"{product.emoji} *{product.code}* ({product.weight_kg}kg){label} - {self._format_currency(product.price_exchange)}"
-                )
-            
-            product_text = "\n".join(product_text_lines)
-            
+            # Voltar para seleção de produto com List Message
+            sections = self._build_product_list_sections()
+            product_text = self._build_product_text()
+
             return self._create_result(
                 conversation_context=conversation_context,
                 customer_context=customer_context,
                 order_context=order_context,
                 responses=[
                     self._create_response(
-                        text=f"🛒 Qual outro produto?\n\n{product_text}",
-                        buttons=product_buttons[:3]
+                        text="🛒 Qual outro produto?\n\n{}".format(product_text),
+                        list_sections=sections,
+                        list_button_text="Ver Produtos",
                     )
                 ],
                 next_state=ConversationState.ORDERING_PRODUCT
@@ -752,27 +728,88 @@ class OrderingConfirmRepeatHandler(BaseHandler):
                     order_context=order_context,
                     responses=[
                         self._create_response(
-                            text="❌ Não encontrei seu último pedido.\n\nVamos fazer um novo?"
+                            text="Não encontrei seu último pedido.\n\nVamos fazer um novo?"
                         )
                     ],
                     next_state=ConversationState.ORDERING_PRODUCT
                 )
-            
+
             # Criar contexto do pedido com dados do último
             if not order_context:
                 order_context = OrderContext()
-            
+
             last_order = customer_context.last_order
-            
+
             # Copiar itens
             order_context.items = last_order.get("items", [])
             order_context.subtotal = last_order.get("total", 0.0)
-            
+
             # Copiar endereço se disponível
-            if customer_context.addresses:
+            if last_order.get("address"):
+                order_context.address = last_order["address"]
+            elif customer_context.addresses:
                 order_context.address = customer_context.addresses[customer_context.default_address_idx]
-            
-            # Ir direto para pagamento
+
+            # Copiar pagamento anterior se disponível
+            if last_order.get("payment_method"):
+                order_context.payment_method = last_order["payment_method"]
+
+            # Se temos tudo (itens + endereço + pagamento), ir direto para summary
+            if order_context.items and order_context.address and order_context.payment_method:
+                # Calcular total
+                order_context.total = float(order_context.subtotal)
+                if order_context.delivery_fee:
+                    order_context.total += order_context.delivery_fee
+
+                from app.core.message_templates import ORDER_SUMMARY
+                from app.core.product_catalog import get_coverage_area
+
+                items_text = []
+                for item in order_context.items:
+                    qty = item.get("quantity", 1)
+                    code = item.get("product_code", "")
+                    subtotal = Decimal(str(item.get("subtotal", 0)))
+                    items_text.append("• {}x {} - {}".format(qty, code, self._format_currency(subtotal)))
+                items_summary = "\n".join(items_text)
+                address_text = self._format_address(order_context.address)
+                payment_labels = {
+                    "cash": "Dinheiro", "credit_card": "Cartao",
+                    "pix": "PIX", "invoice": "Faturado",
+                }
+                payment_text = payment_labels.get(order_context.payment_method, order_context.payment_method or "")
+                delivery_estimate = "30-60 min"
+                if order_context.address and order_context.address.get("bairro"):
+                    area = get_coverage_area(order_context.address["bairro"])
+                    if area:
+                        delivery_estimate = "{}-{} min".format(area.delivery_time_min, area.delivery_time_max)
+
+                summary_text = ORDER_SUMMARY.format(
+                    customer_name=customer_context.name if customer_context else "Cliente",
+                    address=address_text,
+                    items=items_summary,
+                    total=self._format_currency(Decimal(str(order_context.subtotal))),
+                    payment_method=payment_text,
+                    delivery_estimate=delivery_estimate,
+                )
+
+                return self._create_result(
+                    conversation_context=conversation_context,
+                    customer_context=customer_context,
+                    order_context=order_context,
+                    responses=[
+                        self._create_response(
+                            text="🔄 Repetindo seu último pedido!\n\n" + summary_text,
+                            buttons=[
+                                {"id": "confirm", "text": "✅ Confirmar"},
+                                {"id": "edit", "text": "✏️ Alterar"},
+                                {"id": "cancel", "text": "❌ Cancelar"},
+                            ]
+                        )
+                    ],
+                    next_state=ConversationState.CHECKOUT_SUMMARY
+                )
+
+            # Se falta pagamento, pedir
             return self._create_result(
                 conversation_context=conversation_context,
                 customer_context=customer_context,

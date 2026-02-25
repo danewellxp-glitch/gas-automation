@@ -200,16 +200,21 @@ class ContextManager:
                     return None
                 
                 # Construir contexto
+                # Model tem 'address' (singular), converter para lista
+                addresses = []
+                if customer.address:
+                    addresses = [customer.address]
+                
                 context = CustomerContext(
                     customer_id=str(customer.id),
                     name=customer.name,
-                    document=customer.document,
-                    customer_type=customer.customer_type,
-                    addresses=customer.addresses or [],
-                    default_address_idx=customer.default_address_idx or 0,
-                    last_order=customer.last_order_data,
-                    preferences=customer.preferences or {},
-                    order_count=customer.order_count or 0,
+                    document=customer.cpf_cnpj,  # Mapear cpf_cnpj para document
+                    customer_type=getattr(customer, 'customer_type', None) or "PF",
+                    addresses=addresses,
+                    default_address_idx=0,
+                    last_order=getattr(customer, 'last_order_data', None),
+                    preferences=getattr(customer, 'preferences', None) or {},
+                    order_count=getattr(customer, 'order_count', 0) or 0,
                 )
                 
                 # Salvar no cache
@@ -249,25 +254,24 @@ class ContextManager:
                 if customer:
                     # Atualizar
                     customer.name = context.name
-                    customer.document = context.document
-                    customer.customer_type = context.customer_type
-                    customer.addresses = context.addresses
-                    customer.default_address_idx = context.default_address_idx
-                    customer.last_order_data = context.last_order
-                    customer.preferences = context.preferences
-                    customer.order_count = context.order_count
+                    customer.cpf_cnpj = context.document  # Mapear document para cpf_cnpj
+                    if hasattr(customer, 'customer_type'):
+                        customer.customer_type = context.customer_type
+                    # Model tem 'address' (singular), pegar primeiro da lista
+                    customer.address = context.addresses[0] if context.addresses else None
+                    if hasattr(customer, 'last_order_data'):
+                        customer.last_order_data = context.last_order
+                    if hasattr(customer, 'preferences'):
+                        customer.preferences = context.preferences
+                    if hasattr(customer, 'order_count'):
+                        customer.order_count = context.order_count
                 else:
                     # Criar novo
                     customer = Customer(
                         phone=phone,
                         name=context.name,
-                        document=context.document,
-                        customer_type=context.customer_type,
-                        addresses=context.addresses,
-                        default_address_idx=context.default_address_idx,
-                        last_order_data=context.last_order,
-                        preferences=context.preferences,
-                        order_count=context.order_count,
+                        cpf_cnpj=context.document,
+                        address=context.addresses[0] if context.addresses else None,
                     )
                     db.add(customer)
                 

@@ -416,7 +416,7 @@ class FlowEngineV2:
                 f"[{trace_id}] Tempo de resposta acima da meta: {processing_time:.2f}ms"
             )
         
-        # Formatar respostas (MessageResponse tem: text, buttons, image_url, image_base64, footer)
+        # Formatar respostas (MessageResponse tem: text, buttons, list_sections, image_url, image_base64, footer)
         formatted_responses = []
         for response in result.responses:
             resp_type = "image" if (getattr(response, "image_url", None) or getattr(response, "image_base64", None)) else "text"
@@ -424,6 +424,8 @@ class FlowEngineV2:
                 "type": resp_type,
                 "text": response.text,
                 "buttons": response.buttons,
+                "list_sections": getattr(response, "list_sections", None),
+                "list_button_text": getattr(response, "list_button_text", None),
                 "media_url": getattr(response, "image_url", None) or getattr(response, "media_url", None),
             })
         

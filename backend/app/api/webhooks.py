@@ -235,6 +235,21 @@ async def waha_webhook(
                     }
                 )
                 
+                # ── DEDUP POR CONTEÚDO: mesmo (phone, texto) em janela curta = 1 processamento ──
+                if not from_me and message_body:
+                    try:
+                        if await redis_manager.check_recent_same_content(chat_id, message_body, window_sec=5):
+                            logger.info(
+                                f"[CONTENT_DEDUP_SKIP] trace_id={trace_id} phone={chat_id} same_content_recent",
+                                extra={"trace_id": trace_id, "phone": chat_id, "step": "content_dedup_skip"}
+                            )
+                            return {"status": "duplicate_content", "trace_id": trace_id}
+                    except Exception as e:
+                        logger.warning(
+                            f"[CONTENT_DEDUP_ERROR] trace_id={trace_id} error={e}",
+                            extra={"trace_id": trace_id, "step": "content_dedup_error"}
+                        )
+                
                 # ── FEEDBACK IMEDIATO: Marcar como lida e mostrar "digitando..." ──
                 # Isso melhora muito a UX, dando feedback imediato ao cliente
                 if message_id and not from_me:
@@ -421,14 +436,35 @@ async def process_whatsapp_message(
     
     # Definir contexto de mensagem para logging estruturado
     with MessageContextManager(message_id=message_id, phone=phone, trace_id=trace_id):
-        # ── ETAPA 1: Deduplicação (< 100ms) ──
-        # NOTA: Dedup já foi feito no webhook ANTES de adicionar ao stream
-        # Este dedup aqui é redundante e pode causar problemas se mensagem já foi processada antes
-        # REMOVIDO: Dedup duplicado causa mensagens serem descartadas incorretamente
-        # Se mensagem chegou aqui via stream, já passou pelo dedup do webhook
-        # Se chegou via Poller direto (fallback), dedup pode estar marcando como duplicada incorretamente
-        
-        # Log apenas para debug, mas não descartar mensagem
+        # ── Idempotência real: lock por message_id (evita processar o mesmo id 2x) ──
+        if message_id:
+            try:
+                process_lock_acquired = await redis_manager.acquire_process_lock(
+                    message_id, owner=trace_id or "", ttl=60
+                )
+                if not process_lock_acquired:
+                    logger.info(
+                        f"[PROCESS_LOCK_SKIP] trace_id={trace_id} message_id={message_id} phone={phone} "
+                        f"já em processamento ou já processado (idempotência)",
+                        extra={
+                            "trace_id": trace_id,
+                            "message_id": message_id,
+                            "phone": phone,
+                            "step": "process_lock_skip",
+                        },
+                    )
+                    return
+                logger.debug(
+                    f"[PROCESS_LOCK_ACQUIRED] trace_id={trace_id} message_id={message_id}",
+                    extra={"trace_id": trace_id, "message_id": message_id, "step": "process_lock_acquired"},
+                )
+            except Exception as e:
+                logger.warning(
+                    f"[PROCESS_LOCK_ERROR] trace_id={trace_id} message_id={message_id} error={e} - processando mesmo assim",
+                    extra={"trace_id": trace_id, "message_id": message_id, "step": "process_lock_error"},
+                )
+
+        # ── ETAPA 1: Deduplicação (apenas log; dedup real no webhook) ──
         if message_id:
             try:
                 is_duplicate = await redis_manager.check_message_processed(message_id)

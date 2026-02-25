@@ -70,11 +70,19 @@ class GreetingInitialHandler(BaseHandler):
             )
         
         # Cliente conhecido - criar contexto do cliente
+        # Determinar tipo de cliente baseado no CPF/CNPJ
+        customer_type = "PF"
+        if customer.cpf_cnpj:
+            # CNPJ tem 14 dígitos, CPF tem 11
+            cpf_cnpj_clean = ''.join(filter(str.isdigit, customer.cpf_cnpj))
+            if len(cpf_cnpj_clean) == 14:
+                customer_type = "PJ"
+        
         customer_context = CustomerContext(
             customer_id=str(customer.id),
             name=customer.name,
             document=customer.cpf_cnpj,
-            customer_type=customer.tipo_documento or "PF",
+            customer_type=customer_type,
             addresses=[customer.address] if customer.address else [],
             order_count=0,  # TODO: buscar do banco
         )
@@ -89,19 +97,38 @@ class GreetingInitialHandler(BaseHandler):
                 order_context
             )
         
-        # Cliente conhecido - verificar último pedido
-        last_order = await self._get_last_order(customer_context.customer_id)
-        
+        # Cliente conhecido - verificar último pedido (com itens)
+        last_order = await self._get_last_order_with_items(customer_context.customer_id)
+
         if last_order:
-            # Tem histórico - oferecer repetir
+            # Formatar itens do último pedido
+            order_items = getattr(last_order, "items", []) or []
+            items_list = []
+            for oi in order_items:
+                items_list.append({
+                    "product_code": oi.product_code,
+                    "quantity": oi.quantity,
+                    "unit_price": float(oi.unit_price),
+                    "subtotal": float(oi.subtotal),
+                    "operation_type": "exchange",
+                })
+
             customer_context.last_order = {
                 "order_number": last_order.order_number,
                 "total": float(last_order.total_amount),
-                "items": [],  # TODO: buscar itens
+                "items": items_list,
+                "payment_method": last_order.payment_method,
+                "address": last_order.delivery_address,
             }
-            
-            last_order_summary = f"{last_order.order_number} - {self._format_currency(last_order.total_amount)}"
-            
+
+            # Texto dos itens para o greeting
+            items_text_lines = []
+            for oi in order_items:
+                items_text_lines.append(
+                    "• {}x {} - {}".format(oi.quantity, oi.product_code, self._format_currency(oi.subtotal))
+                )
+            items_text = "\n".join(items_text_lines) if items_text_lines else "Pedido anterior"
+
             return self._create_result(
                 conversation_context=conversation_context,
                 customer_context=customer_context,
@@ -109,7 +136,8 @@ class GreetingInitialHandler(BaseHandler):
                     self._create_response(
                         text=GREETING_RETURNING.format(
                             name=customer_context.name,
-                            last_order_summary=last_order_summary
+                            last_order_items=items_text,
+                            last_order_total=self._format_currency(last_order.total_amount),
                         ),
                         buttons=[
                             {"id": "repeat_order", "text": "🔄 Repetir"},
@@ -205,15 +233,21 @@ class GreetingReturningHandler(BaseHandler):
         
         msg_lower = message.lower().strip()
         
-        # Repetir pedido
-        if msg_lower in ["repeat_order", "repetir", "o de sempre"]:
-            if not customer_context or not customer_context.last_order:
-                # Não tem pedido anterior - ir para novo pedido
-                return await self._start_new_order(
-                    conversation_context,
-                    customer_context,
-                    order_context
-                )
+        # Verificar se tem histórico de pedido para saber qual menu foi mostrado
+        # Verificar no banco, não apenas no context que pode estar vazio
+        has_order_history = False
+        if customer_context and customer_context.customer_id:
+            # Tentar buscar último pedido do banco
+            last_order = await self._get_last_order(customer_context.customer_id)
+            has_order_history = last_order is not None
+        elif customer_context and customer_context.last_order:
+            # Fallback: verificar se tem no context
+            has_order_history = True
+        
+        # Detectar button IDs (sempre funciona)
+        if msg_lower == "repeat_order":
+            if not has_order_history:
+                return await self._start_new_order(conversation_context, customer_context, order_context)
             
             return self._create_result(
                 conversation_context=conversation_context,
@@ -231,16 +265,10 @@ class GreetingReturningHandler(BaseHandler):
                 next_state=ConversationState.ORDERING_CONFIRM_REPEAT
             )
         
-        # Novo pedido
-        if msg_lower in ["new_order", "novo", "fazer_pedido"]:
-            return await self._start_new_order(
-                conversation_context,
-                customer_context,
-                order_context
-            )
+        if msg_lower in ["new_order", "fazer_pedido", "novo"]:
+            return await self._start_new_order(conversation_context, customer_context, order_context)
         
-        # Rastrear pedido
-        if msg_lower in ["track_order", "rastrear", "ver_pedido"]:
+        if msg_lower in ["track_order", "ver_pedido", "rastrear", "meus pedidos"]:
             return self._create_result(
                 conversation_context=conversation_context,
                 customer_context=customer_context,
@@ -253,9 +281,92 @@ class GreetingReturningHandler(BaseHandler):
                 next_state=ConversationState.TRACKING_STATUS
             )
         
+        if msg_lower in ["falar_atendente", "atendente", "humano"]:
+            return self._create_result(
+                conversation_context=conversation_context,
+                customer_context=customer_context,
+                order_context=order_context,
+                responses=[
+                    self._create_response(
+                        text="Vou te conectar com um atendente."
+                    )
+                ],
+                next_state=ConversationState.SUPPORT_HUMAN,
+                needs_human=True
+            )
+        
+        # Detectar números baseado no menu mostrado
+        if msg_lower == "1":
+            if has_order_history:
+                # Menu com histórico: 1 = Repetir
+                return self._create_result(
+                    conversation_context=conversation_context,
+                    customer_context=customer_context,
+                    order_context=order_context,
+                    responses=[
+                        self._create_response(
+                            text="🔄 Vou repetir seu último pedido!\n\nConfirma?",
+                            buttons=[
+                                {"id": "confirm_repeat", "text": "✅ Confirmar"},
+                                {"id": "change_repeat", "text": "✏️ Alterar"},
+                            ]
+                        )
+                    ],
+                    next_state=ConversationState.ORDERING_CONFIRM_REPEAT
+                )
+            else:
+                # Menu sem histórico: 1 = Fazer Pedido
+                return await self._start_new_order(conversation_context, customer_context, order_context)
+        
+        if msg_lower == "2":
+            if has_order_history:
+                # Menu com histórico: 2 = Novo Pedido
+                return await self._start_new_order(conversation_context, customer_context, order_context)
+            else:
+                # Menu sem histórico: 2 = Meus Pedidos
+                return self._create_result(
+                    conversation_context=conversation_context,
+                    customer_context=customer_context,
+                    order_context=order_context,
+                    responses=[
+                        self._create_response(
+                            text="📦 Buscando seus pedidos..."
+                        )
+                    ],
+                    next_state=ConversationState.TRACKING_STATUS
+                )
+        
+        if msg_lower == "3":
+            if has_order_history:
+                # Menu com histórico: 3 = Rastrear
+                return self._create_result(
+                    conversation_context=conversation_context,
+                    customer_context=customer_context,
+                    order_context=order_context,
+                    responses=[
+                        self._create_response(
+                            text="📦 Buscando seus pedidos..."
+                        )
+                    ],
+                    next_state=ConversationState.TRACKING_STATUS
+                )
+            else:
+                # Menu sem histórico: 3 = Atendente
+                return self._create_result(
+                    conversation_context=conversation_context,
+                    customer_context=customer_context,
+                    order_context=order_context,
+                    responses=[
+                        self._create_response(
+                            text="Vou te conectar com um atendente."
+                        )
+                    ],
+                    next_state=ConversationState.SUPPORT_HUMAN,
+                    needs_human=True
+                )
+        
         # Continuar pedido abandonado
         if msg_lower == "continue_order":
-            # Retornar ao estado onde estava
             return self._create_result(
                 conversation_context=conversation_context,
                 customer_context=customer_context,
@@ -305,42 +416,26 @@ class GreetingReturningHandler(BaseHandler):
         order_context: Optional[OrderContext],
     ) -> HandlerResult:
         """Inicia novo pedido."""
-        
+
         # Criar novo contexto de pedido
         if not order_context:
             order_context = OrderContext()
-        
-        # Buscar produtos ativos
-        from app.core.product_catalog import get_active_products
-        products = get_active_products()
-        
-        # Criar botões de produtos
-        product_buttons = []
-        product_text_lines = []
-        
-        for product in products:
-            product_buttons.append({
-                "id": product.code,
-                "text": f"{product.emoji} {product.code} - {self._format_currency(product.price_exchange)}"
-            })
-            label = f" {getattr(product, 'usage_label', '')}" if getattr(product, 'usage_label', None) else ""
-            product_text_lines.append(
-                f"{product.emoji} *{product.code}* ({product.weight_kg}kg){label} - {self._format_currency(product.price_exchange)}"
-            )
-        
-        product_text = "\n".join(product_text_lines)
-        
+
         name = customer_context.name if customer_context else ""
-        greeting = f"Oi {name}!\n\n" if name else "Olá!\n\n"
-        
+        greeting = "Oi {}!\n\n".format(name) if name else ""
+
+        sections = self._build_product_list_sections()
+        product_text = self._build_product_text()
+
         return self._create_result(
             conversation_context=conversation_context,
             customer_context=customer_context,
             order_context=order_context,
             responses=[
                 self._create_response(
-                    text=f"{greeting}🛒 Qual botijão você precisa?\n\n{product_text}",
-                    buttons=product_buttons[:3]  # Máximo 3 botões
+                    text="{}🛒 Qual botijão você precisa?\n\n{}".format(greeting, product_text),
+                    list_sections=sections,
+                    list_button_text="Ver Produtos",
                 )
             ],
             next_state=ConversationState.ORDERING_PRODUCT

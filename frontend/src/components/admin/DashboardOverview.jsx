@@ -3,53 +3,41 @@
  * Métricas gerais e visão executiva do sistema
  */
 
-import { useState, useEffect } from 'react'
-import { Activity, Truck, Users, Package } from 'lucide-react'
+import { useState, useEffect, useCallback } from 'react'
+import { Activity, Truck, Users, Package, RefreshCw } from 'lucide-react'
+import { getApiUrl, getAuthHeaders } from '../../utils/api'
 
 export default function DashboardOverview() {
   const [metrics, setMetrics] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [errorMsg, setErrorMsg] = useState(null)
 
-  useEffect(() => {
-    fetchMetrics()
-    // Atualizar a cada 30 segundos
-    const interval = setInterval(fetchMetrics, 30000)
-    return () => clearInterval(interval)
-  }, [])
-
-  const fetchMetrics = async () => {
+  const fetchMetrics = useCallback(async () => {
     try {
       setLoading(true)
-      
-      // Buscar múltiplas métricas em paralelo usando variável de ambiente
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://192.168.10.156:8000/api'
-      const token = localStorage.getItem('token')
-      
+      setErrorMsg(null)
+      const apiUrl = getApiUrl()
+      const headers = getAuthHeaders()
+
       const [usersRes, driversRes, metricsRes] = await Promise.all([
-        fetch(`${apiUrl}/users`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        }),
-        fetch(`${apiUrl}/drivers`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        }),
-        fetch(`${apiUrl}/drivers/metrics/dashboard?period=today`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        })
+        fetch(`${apiUrl}/users`, { headers }),
+        fetch(`${apiUrl}/drivers`, { headers }),
+        fetch(`${apiUrl}/drivers/metrics/dashboard?period=today`, { headers })
       ])
 
-      const users = await usersRes.json()
-      const drivers = await driversRes.json()
-      const driverMetrics = await metricsRes.json()
+      const [usersData, driversData, metricsData] = await Promise.all([
+        usersRes.ok ? usersRes.json().catch(() => []) : [],
+        driversRes.ok ? driversRes.json().catch(() => []) : [],
+        metricsRes.ok ? metricsRes.json().catch(() => ({})) : {}
+      ])
 
-      // Calcular estatísticas
+      const users = Array.isArray(usersData) ? usersData : []
+      const driversList = Array.isArray(driversData) ? driversData : []
+      const driverMetrics = metricsData && typeof metricsData === 'object' ? metricsData : {}
+
       const activeUsers = users.filter(u => u.is_active).length
-      // Contar drivers pela role de usuário (fonte única da verdade)
-      const driversUsers = users.filter(u => u.role === 'driver')
-      const totalDrivers = driversUsers.length
-      const activeDrivers = driversUsers.filter(u => u.is_active).length
-      
-      // Para status dos drivers, usar a tabela drivers (se disponível)
-      const activeDriversFromTable = drivers.filter(d => d.is_active && d.status !== 'offline').length
+      const totalDrivers = users.filter(u => u.role === 'driver').length
+      const activeDriversFromTable = driversList.filter(d => d.is_active && d.status !== 'offline').length
 
       setMetrics({
         users: {
@@ -64,24 +52,32 @@ export default function DashboardOverview() {
           }
         },
         drivers: {
-          total: totalDrivers, // Usa contagem de usuários com role 'driver'
-          active: activeDriversFromTable, // Usa status da tabela drivers
-          offline: drivers.filter(d => d.status === 'offline').length,
-          available: drivers.filter(d => d.status === 'available').length,
-          busy: drivers.filter(d => d.status === 'busy').length,
-          break: drivers.filter(d => d.status === 'break').length
+          total: totalDrivers,
+          active: activeDriversFromTable,
+          offline: driversList.filter(d => d.status === 'offline').length,
+          available: driversList.filter(d => d.status === 'available').length,
+          busy: driversList.filter(d => d.status === 'busy').length,
+          break: driversList.filter(d => d.status === 'break').length
         },
         deliveries: {
-          today: driverMetrics.summary?.total_deliveries || 0,
-          hoursWorked: driverMetrics.summary?.total_hours_worked || 0
+          today: driverMetrics.summary?.total_deliveries ?? 0,
+          hoursWorked: driverMetrics.summary?.total_hours_worked ?? 0
         }
       })
     } catch (error) {
       console.error('Erro ao buscar métricas:', error)
+      setErrorMsg(error.message || 'Falha ao conectar. Verifique a rede e tente novamente.')
+      setMetrics(null)
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
+
+  useEffect(() => {
+    fetchMetrics()
+    const interval = setInterval(fetchMetrics, 30000)
+    return () => clearInterval(interval)
+  }, [fetchMetrics])
 
   if (loading) {
     return (
@@ -94,8 +90,17 @@ export default function DashboardOverview() {
 
   if (!metrics) {
     return (
-      <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-        Erro ao carregar métricas
+      <div className="rounded-lg border border-red-200 bg-red-50 p-6 text-sm text-red-700">
+        <p className="font-medium">Erro ao carregar métricas</p>
+        {errorMsg && <p className="mt-1 text-red-600">{errorMsg}</p>}
+        <button
+          type="button"
+          onClick={() => fetchMetrics()}
+          className="mt-4 inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
+        >
+          <RefreshCw className="h-4 w-4" />
+          Tentar novamente
+        </button>
       </div>
     )
   }

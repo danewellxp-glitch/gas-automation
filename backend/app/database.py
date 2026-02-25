@@ -310,6 +310,39 @@ class RedisManager:
         was_set = await self._redis.set(key, "1", nx=True, ex=3600)
         return not was_set  # was_set=None significa que a chave já existia
 
+    async def acquire_process_lock(self, message_id: str, owner: str = "", ttl: int = 60) -> bool:
+        """
+        Lock de processamento por message_id (idempotência real).
+
+        Garante que cada message_id seja processado no máximo uma vez, mesmo que
+        apareça duas vezes no stream ou que webhook e consumer disputem.
+        Retorna True se o lock foi adquirido (pode processar), False caso contrário.
+        """
+        if not message_id:
+            return True  # sem id não há dedup; processar
+        key = f"lock:process:{message_id}"
+        value = owner or self.instance_id
+        was_set = await self._redis.set(key, value, nx=True, ex=ttl)
+        return bool(was_set)
+
+    async def check_recent_same_content(self, phone: str, body: str, window_sec: int = 5) -> bool:
+        """
+        Verifica se o mesmo (phone, texto) já foi recebido na janela recente.
+        Evita processar múltiplas entregas do mesmo "1" (ex.: WAHA/network duplicando).
+        Retorna True se for duplicata de conteúdo (deve pular); False para seguir.
+        Só grava no Redis quando NÃO for duplicata, para não resetar a janela.
+        """
+        if not body or not phone:
+            return False
+        key = f"last_msg_content:{phone}"
+        text = (body or "").strip()[:500]
+        current = await self._redis.get(key)
+        prev = current.decode() if isinstance(current, bytes) else current
+        if prev is not None and prev == text:
+            return True
+        await self._redis.set(key, text, ex=window_sec)
+        return False
+
     # ==================== Pub/Sub para WebSocket ====================
     
     async def publish(self, channel: str, message: str) -> int:

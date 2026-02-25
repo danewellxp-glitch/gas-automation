@@ -309,7 +309,15 @@ function Chats() {
       }])
     } catch (error) {
       logger.error('Erro ao enviar mensagem:', error)
-      toast.error('Erro ao enviar mensagem')
+      const detail = error?.response?.data?.detail || error?.message
+      const isWhatsAppDisconnected = detail && (
+        typeof detail === 'string' && (
+          detail.includes('WhatsApp desconectado') ||
+          detail.includes('SCAN_QR_CODE') ||
+          detail.includes('escaneie o QR Code')
+        )
+      )
+      toast.error(isWhatsAppDisconnected ? detail : 'Erro ao enviar mensagem')
     }
   }
 

@@ -260,8 +260,9 @@ class TrackingStatusHandler(BaseHandler):
                 .where(Order.customer_id == customer_context.customer_id)
                 .where(Order.status.in_([
                     OrderStatus.PENDING.value,
-                    OrderStatus.CONFIRMED.value,
-                    OrderStatus.IN_TRANSIT.value,
+                    OrderStatus.PAID.value,
+                    OrderStatus.PREPARING.value,
+                    OrderStatus.DISPATCHED.value,
                 ]))
                 .order_by(desc(Order.created_at))
                 .limit(5)
@@ -286,14 +287,18 @@ class TrackingStatusHandler(BaseHandler):
         for order in orders:
             status_emoji = {
                 OrderStatus.PENDING.value: "⏳",
-                OrderStatus.CONFIRMED.value: "✅",
-                OrderStatus.IN_TRANSIT.value: "🚚",
+                OrderStatus.PAID.value: "💰",
+                OrderStatus.PREPARING.value: "👨‍🍳",
+                OrderStatus.DISPATCHED.value: "🚚",
+                OrderStatus.DELIVERED.value: "✅",
             }
             
             status_labels = {
-                OrderStatus.PENDING.value: "Aguardando confirmação",
-                OrderStatus.CONFIRMED.value: "Confirmado",
-                OrderStatus.IN_TRANSIT.value: "Em rota de entrega",
+                OrderStatus.PENDING.value: "Aguardando pagamento",
+                OrderStatus.PAID.value: "Pago - Aguardando preparo",
+                OrderStatus.PREPARING.value: "Em preparação",
+                OrderStatus.DISPATCHED.value: "Saiu para entrega",
+                OrderStatus.DELIVERED.value: "Entregue",
             }
             
             emoji = status_emoji.get(order.status, "📦")
@@ -339,8 +344,8 @@ class TrackingOptionsHandler(BaseHandler):
         
         msg_lower = message.lower().strip()
         
-        # Novo pedido
-        if msg_lower in ["new_order", "novo", "comprar"]:
+        # Novo pedido (opção 1)
+        if msg_lower in ["new_order", "novo", "comprar", "1"]:
             # Limpar contexto
             conversation_context.collected_data = {}
             order_context = OrderContext()
@@ -357,8 +362,8 @@ class TrackingOptionsHandler(BaseHandler):
                 next_state=ConversationState.ORDERING_PRODUCT
             )
         
-        # Menu
-        if msg_lower in ["menu", "voltar"]:
+        # Menu (opção 2)
+        if msg_lower in ["menu", "voltar", "2"]:
             return self._create_result(
                 conversation_context=conversation_context,
                 customer_context=customer_context,

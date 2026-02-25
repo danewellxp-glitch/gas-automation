@@ -1,0 +1,1338 @@
+# 📱 Guia Completo: Criar APK com React Native + Expo
+
+## 🎯 O que você vai fazer:
+Transformar o dashboard do motorista em um app Android (APK) usando Expo - a forma mais fácil!
+
+---
+
+## 📋 PARTE 1: PREPARAÇÃO DO AMBIENTE
+
+### 1️⃣ Instalar Node.js
+
+```bash
+# Baixe e instale Node.js LTS (versão recomendada)
+# Link: https://nodejs.org/
+
+# Após instalar, verifique se funcionou:
+node --version
+npm --version
+```
+
+### 2️⃣ Instalar Expo CLI
+
+```bash
+# Instalar Expo CLI globalmente
+npm install -g expo-cli
+
+# Verificar instalação
+expo --version
+```
+
+### 3️⃣ Criar Conta no Expo
+
+```bash
+# Acesse: https://expo.dev/signup
+# Crie sua conta gratuita
+# Anote seu usuário e senha
+```
+
+---
+
+## 🚀 PARTE 2: CRIAR O PROJETO
+
+### 1️⃣ Criar Novo Projeto
+
+```bash
+# Criar projeto
+npx create-expo-app@latest gas-driver-app
+
+# Entrar na pasta
+cd gas-driver-app
+
+# Testar se funciona
+npx expo start
+```
+
+### 2️⃣ Instalar Dependências
+
+```bash
+# Navegação
+npm install @react-navigation/native
+npm install @react-navigation/native-stack
+npm install react-native-screens react-native-safe-area-context
+
+# Ícones
+npm install lucide-react-native
+
+# HTTP Client
+npm install axios
+
+# Storage local
+npm install @react-native-async-storage/async-storage
+
+# Utilitários
+npm install react-native-gesture-handler
+npm install react-native-reanimated
+```
+
+---
+
+## 📁 PARTE 3: ESTRUTURA DO PROJETO
+
+Crie esta estrutura de pastas:
+
+```
+gas-driver-app/
+├── App.js
+├── app.json
+├── package.json
+├── babel.config.js
+├── assets/
+│   ├── icon.png          (1024x1024 - ícone do app)
+│   ├── splash.png        (1284x2778 - tela de abertura)
+│   └── adaptive-icon.png (1024x1024 - ícone adaptativo)
+└── src/
+    ├── screens/
+    │   ├── LoginScreen.js
+    │   ├── DashboardScreen.js
+    │   └── DeliveryDetailScreen.js
+    ├── components/
+    │   ├── DeliveryCard.js
+    │   ├── StatsCard.js
+    │   ├── Header.js
+    │   └── StatusToggle.js
+    ├── services/
+    │   └── api.js
+    ├── utils/
+    │   └── constants.js
+    └── styles/
+        └── theme.js
+```
+
+---
+
+## 💻 PARTE 4: CÓDIGO DO APP
+
+### 📄 app.json (Configuração do App)
+
+```json
+{
+  "expo": {
+    "name": "Gas Driver",
+    "slug": "gas-driver-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0F172A"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.gasautomation.driver"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0F172A"
+      },
+      "package": "com.gasautomation.driver",
+      "versionCode": 1,
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "CALL_PHONE",
+        "INTERNET"
+      ]
+    },
+    "plugins": [
+      "expo-router"
+    ]
+  }
+}
+```
+
+### 📄 src/services/api.js
+
+```javascript
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import axios from 'axios';
+
+// ⚠️ ALTERE AQUI PARA SEU IP/SERVIDOR
+const API_URL = 'http://192.168.10.156:8000';
+
+const api = axios.create({
+  baseURL: API_URL,
+  timeout: 10000,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+// Adicionar token automaticamente
+api.interceptors.request.use(async (config) => {
+  const token = await AsyncStorage.getItem('token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+// Tratar erros de autenticação
+api.interceptors.response.use(
+  response => response,
+  async error => {
+    if (error.response?.status === 401) {
+      await AsyncStorage.removeItem('token');
+      await AsyncStorage.removeItem('user');
+    }
+    return Promise.reject(error);
+  }
+);
+
+// Autenticação
+export const authAPI = {
+  login: async (phone, password) => {
+    const formData = new URLSearchParams();
+    formData.append('username', phone);
+    formData.append('password', password);
+    
+    const response = await api.post('/api/auth/login', formData, {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+    });
+    
+    return response.data;
+  }
+};
+
+// APIs do Motorista
+export const driverAPI = {
+  getMe: () => api.get('/api/drivers/me'),
+  
+  getActiveDeliveries: () => 
+    api.get('/api/drivers/me/deliveries/active'),
+  
+  getAvailableDeliveries: () => 
+    api.get('/api/drivers/deliveries/available'),
+  
+  acceptDelivery: (id) => 
+    api.post(`/api/drivers/deliveries/${id}/accept`),
+  
+  updateDeliveryStatus: (id, status) => 
+    api.put(`/api/drivers/deliveries/${id}/status`, { status }),
+  
+  updateStatus: (status) => 
+    api.put('/api/drivers/me/status', { status }),
+  
+  getStats: () => 
+    api.get('/api/drivers/me/stats/today'),
+  
+  getTimeWorked: () => 
+    api.get('/api/drivers/me/time-worked'),
+};
+
+export default api;
+```
+
+### 📄 src/utils/constants.js
+
+```javascript
+export const COLORS = {
+  primary: '#10B981',
+  secondary: '#0D9488',
+  background: '#0F172A',
+  card: '#1E293B',
+  text: '#F1F5F9',
+  textSecondary: '#94A3B8',
+  border: '#334155',
+  success: '#10B981',
+  warning: '#F59E0B',
+  error: '#EF4444',
+  info: '#3B82F6',
+};
+
+export const DELIVERY_STATUS = {
+  pending: { label: 'Pendente', color: '#6B7280' },
+  assigned: { label: 'Atribuída', color: '#3B82F6' },
+  picked_up: { label: 'Coletada', color: '#F59E0B' },
+  in_transit: { label: 'A Caminho', color: '#A855F7' },
+  arrived: { label: 'Chegou', color: '#6366F1' },
+  delivered: { label: 'Entregue', color: '#10B981' },
+};
+
+export const DRIVER_STATUS = {
+  offline: { label: 'Desconectado', color: '#6B7280' },
+  available: { label: 'Disponível', color: '#10B981' },
+  busy: { label: 'Ocupado', color: '#EF4444' },
+  break: { label: 'Pausa', color: '#F59E0B' },
+};
+```
+
+### 📄 src/screens/LoginScreen.js
+
+```javascript
+import React, { useState } from 'react';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  StatusBar,
+} from 'react-native';
+import { Phone, Lock } from 'lucide-react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { authAPI } from '../services/api';
+import { COLORS } from '../utils/constants';
+
+export default function LoginScreen({ navigation }) {
+  const [phone, setPhone] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const formatPhone = (value) => {
+    const numbers = value.replace(/\D/g, '');
+    if (numbers.length <= 2) return numbers;
+    if (numbers.length <= 7) return `(${numbers.slice(0, 2)}) ${numbers.slice(2)}`;
+    return `(${numbers.slice(0, 2)}) ${numbers.slice(2, 7)}-${numbers.slice(7, 11)}`;
+  };
+
+  const handleLogin = async () => {
+    if (!phone || !password) {
+      Alert.alert('Erro', 'Preencha todos os campos');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const data = await authAPI.login(phone, password);
+      
+      if (data.role !== 'driver') {
+        Alert.alert('Erro', 'Acesso negado: você não é um motorista');
+        setLoading(false);
+        return;
+      }
+
+      await AsyncStorage.setItem('token', data.access_token);
+      await AsyncStorage.setItem('user', JSON.stringify(data));
+      
+      navigation.replace('Dashboard');
+    } catch (error) {
+      Alert.alert('Erro', error.response?.data?.detail || 'Erro ao fazer login');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <KeyboardAvoidingView 
+      style={styles.container} 
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
+      <StatusBar barStyle="light-content" backgroundColor={COLORS.background} />
+      
+      <View style={styles.content}>
+        {/* Logo */}
+        <View style={styles.logoContainer}>
+          <View style={styles.logo}>
+            <Text style={styles.logoText}>⚡</Text>
+          </View>
+          <Text style={styles.title}>Gas Automation</Text>
+          <Text style={styles.subtitle}>Portal do Motorista</Text>
+        </View>
+
+        {/* Formulário */}
+        <View style={styles.form}>
+          {/* Telefone */}
+          <View style={styles.inputContainer}>
+            <Phone color={COLORS.textSecondary} size={20} style={styles.inputIcon} />
+            <TextInput
+              style={styles.input}
+              placeholder="(00) 00000-0000"
+              placeholderTextColor={COLORS.textSecondary}
+              value={phone}
+              onChangeText={(text) => setPhone(formatPhone(text))}
+              keyboardType="phone-pad"
+              maxLength={15}
+              editable={!loading}
+            />
+          </View>
+
+          {/* Senha */}
+          <View style={styles.inputContainer}>
+            <Lock color={COLORS.textSecondary} size={20} style={styles.inputIcon} />
+            <TextInput
+              style={styles.input}
+              placeholder="Senha"
+              placeholderTextColor={COLORS.textSecondary}
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+              editable={!loading}
+            />
+          </View>
+
+          {/* Botão Login */}
+          <TouchableOpacity
+            style={[styles.button, loading && styles.buttonDisabled]}
+            onPress={handleLogin}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator color="#FFF" />
+            ) : (
+              <Text style={styles.buttonText}>Entrar</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      </View>
+    </KeyboardAvoidingView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+  },
+  content: {
+    flex: 1,
+    justifyContent: 'center',
+    padding: 24,
+  },
+  logoContainer: {
+    alignItems: 'center',
+    marginBottom: 48,
+  },
+  logo: {
+    width: 80,
+    height: 80,
+    backgroundColor: COLORS.primary,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  logoText: {
+    fontSize: 40,
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: COLORS.text,
+    marginBottom: 8,
+  },
+  subtitle: {
+    fontSize: 16,
+    color: COLORS.textSecondary,
+  },
+  form: {
+    gap: 16,
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.card,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    paddingHorizontal: 16,
+  },
+  inputIcon: {
+    marginRight: 12,
+  },
+  input: {
+    flex: 1,
+    height: 56,
+    color: COLORS.text,
+    fontSize: 16,
+  },
+  button: {
+    backgroundColor: COLORS.primary,
+    height: 56,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+  },
+  buttonDisabled: {
+    opacity: 0.6,
+  },
+  buttonText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+});
+```
+
+### 📄 src/screens/DashboardScreen.js
+
+```javascript
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  StyleSheet,
+  RefreshControl,
+  StatusBar,
+  Alert,
+} from 'react-native';
+import { 
+  Package, 
+  Star, 
+  Clock, 
+  DollarSign,
+  Menu,
+  LogOut,
+} from 'lucide-react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { driverAPI } from '../services/api';
+import { COLORS, DRIVER_STATUS } from '../utils/constants';
+import DeliveryCard from '../components/DeliveryCard';
+import StatsCard from '../components/StatsCard';
+import StatusToggle from '../components/StatusToggle';
+
+export default function DashboardScreen({ navigation }) {
+  const [driver, setDriver] = useState(null);
+  const [activeDeliveries, setActiveDeliveries] = useState([]);
+  const [availableDeliveries, setAvailableDeliveries] = useState([]);
+  const [stats, setStats] = useState({ today: 0, rating: 5.0, avgTime: 0, earnings: 0 });
+  const [timeWorked, setTimeWorked] = useState({ today: '0h 0m', week: '0h 0m' });
+  const [refreshing, setRefreshing] = useState(false);
+
+  const loadData = useCallback(async () => {
+    try {
+      const [
+        driverRes,
+        activeRes,
+        availableRes,
+        statsRes,
+        timeRes
+      ] = await Promise.all([
+        driverAPI.getMe(),
+        driverAPI.getActiveDeliveries(),
+        driverAPI.getAvailableDeliveries(),
+        driverAPI.getStats(),
+        driverAPI.getTimeWorked(),
+      ]);
+
+      setDriver(driverRes.data);
+      setActiveDeliveries(activeRes.data);
+      setAvailableDeliveries(availableRes.data);
+      setStats(statsRes.data);
+      setTimeWorked(timeRes.data);
+    } catch (error) {
+      console.error('Erro ao carregar dados:', error);
+      if (error.response?.status === 401) {
+        handleLogout();
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    loadData();
+    const interval = setInterval(loadData, 30000);
+    return () => clearInterval(interval);
+  }, [loadData]);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadData();
+    setRefreshing(false);
+  };
+
+  const handleStatusChange = async (newStatus) => {
+    try {
+      await driverAPI.updateStatus(newStatus);
+      setDriver({ ...driver, status: newStatus });
+    } catch (error) {
+      Alert.alert('Erro', 'Não foi possível atualizar o status');
+    }
+  };
+
+  const handleAcceptDelivery = async (deliveryId) => {
+    try {
+      await driverAPI.acceptDelivery(deliveryId);
+      await loadData();
+      Alert.alert('Sucesso', 'Entrega aceita!');
+    } catch (error) {
+      Alert.alert('Erro', 'Não foi possível aceitar a entrega');
+    }
+  };
+
+  const handleLogout = async () => {
+    await AsyncStorage.clear();
+    navigation.replace('Login');
+  };
+
+  return (
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor={COLORS.background} />
+      
+      {/* Header */}
+      <View style={styles.header}>
+        <View style={styles.headerLeft}>
+          <View style={styles.avatar}>
+            <Text style={styles.avatarText}>
+              {driver?.name?.charAt(0) || 'D'}
+            </Text>
+          </View>
+          <View>
+            <Text style={styles.driverName}>{driver?.name || 'Motorista'}</Text>
+            <View style={styles.statusIndicator}>
+              <View style={[styles.statusDot, { 
+                backgroundColor: DRIVER_STATUS[driver?.status]?.color 
+              }]} />
+              <Text style={styles.statusText}>
+                {DRIVER_STATUS[driver?.status]?.label || 'Offline'}
+              </Text>
+            </View>
+          </View>
+        </View>
+        <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
+          <LogOut color={COLORS.textSecondary} size={24} />
+        </TouchableOpacity>
+      </View>
+
+      <ScrollView
+        style={styles.scrollView}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+      >
+        {/* Status Toggle */}
+        <StatusToggle 
+          currentStatus={driver?.status} 
+          onStatusChange={handleStatusChange}
+        />
+
+        {/* Stats Cards */}
+        <View style={styles.statsGrid}>
+          <StatsCard
+            icon={Package}
+            value={stats.today}
+            label="Entregas Hoje"
+            color="#10B981"
+          />
+          <StatsCard
+            icon={Star}
+            value={stats.rating.toFixed(1)}
+            label="Avaliação"
+            color="#F59E0B"
+          />
+          <StatsCard
+            icon={Clock}
+            value={`${stats.avgTime}m`}
+            label="Tempo Médio"
+            color="#3B82F6"
+          />
+          <StatsCard
+            icon={DollarSign}
+            value={`R$ ${stats.earnings}`}
+            label="Ganhos"
+            color="#A855F7"
+          />
+        </View>
+
+        {/* Tempo Trabalhado */}
+        <View style={styles.timeCard}>
+          <Text style={styles.sectionTitle}>⏱️ Tempo Trabalhado</Text>
+          <View style={styles.timeGrid}>
+            <View>
+              <Text style={styles.timeLabel}>Hoje</Text>
+              <Text style={styles.timeValue}>{timeWorked.today}</Text>
+            </View>
+            <View>
+              <Text style={styles.timeLabel}>Esta Semana</Text>
+              <Text style={styles.timeValue}>{timeWorked.week}</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Entregas Ativas */}
+        {activeDeliveries.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>
+              🚚 Entregas Ativas ({activeDeliveries.length})
+            </Text>
+            {activeDeliveries.map((delivery) => (
+              <DeliveryCard
+                key={delivery.id}
+                delivery={delivery}
+                onPress={() => navigation.navigate('DeliveryDetail', { delivery })}
+                active
+              />
+            ))}
+          </View>
+        )}
+
+        {/* Entregas Disponíveis */}
+        {availableDeliveries.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>
+              📦 Entregas Disponíveis ({availableDeliveries.length})
+            </Text>
+            {availableDeliveries.map((delivery) => (
+              <DeliveryCard
+                key={delivery.id}
+                delivery={delivery}
+                onAccept={() => handleAcceptDelivery(delivery.id)}
+                available
+              />
+            ))}
+          </View>
+        )}
+
+        {/* Mensagem quando vazio */}
+        {activeDeliveries.length === 0 && availableDeliveries.length === 0 && (
+          <View style={styles.emptyState}>
+            <Package color={COLORS.textSecondary} size={64} />
+            <Text style={styles.emptyTitle}>Nenhuma entrega no momento</Text>
+            <Text style={styles.emptyText}>
+              Fique conectado para receber novas entregas
+            </Text>
+          </View>
+        )}
+      </ScrollView>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    backgroundColor: COLORS.card,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  avatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: COLORS.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarText: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#FFF',
+  },
+  driverName: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: COLORS.text,
+  },
+  statusIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 4,
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  statusText: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+  },
+  logoutButton: {
+    padding: 8,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    padding: 16,
+    gap: 12,
+  },
+  timeCard: {
+    margin: 16,
+    marginTop: 0,
+    padding: 16,
+    backgroundColor: COLORS.card,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: COLORS.text,
+    marginBottom: 12,
+  },
+  timeGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+  },
+  timeLabel: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    marginBottom: 4,
+  },
+  timeValue: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: COLORS.text,
+  },
+  section: {
+    padding: 16,
+    gap: 12,
+  },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 48,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: COLORS.text,
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  emptyText: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+  },
+});
+```
+
+### 📄 src/components/StatsCard.js
+
+```javascript
+import React from 'react';
+import { View, Text, StyleSheet } from 'react-native';
+import { COLORS } from '../utils/constants';
+
+export default function StatsCard({ icon: Icon, value, label, color }) {
+  return (
+    <View style={[styles.card, { borderColor: color + '30' }]}>
+      <View style={[styles.iconContainer, { backgroundColor: color + '20' }]}>
+        <Icon color={color} size={24} />
+      </View>
+      <Text style={styles.value}>{value}</Text>
+      <Text style={styles.label}>{label}</Text>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  card: {
+    width: '48%',
+    backgroundColor: COLORS.card,
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+  },
+  iconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  value: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: COLORS.text,
+    marginBottom: 4,
+  },
+  label: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+  },
+});
+```
+
+### 📄 src/components/StatusToggle.js
+
+```javascript
+import React from 'react';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { COLORS, DRIVER_STATUS } from '../utils/constants';
+
+export default function StatusToggle({ currentStatus, onStatusChange }) {
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>Status da Operação</Text>
+      <View style={styles.grid}>
+        {Object.entries(DRIVER_STATUS).map(([key, config]) => (
+          <TouchableOpacity
+            key={key}
+            style={[
+              styles.button,
+              currentStatus === key && { backgroundColor: config.color },
+            ]}
+            onPress={() => onStatusChange(key)}
+          >
+            <Text style={[
+              styles.buttonText,
+              currentStatus === key && styles.buttonTextActive,
+            ]}>
+              {config.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    padding: 16,
+  },
+  title: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.text,
+    marginBottom: 12,
+  },
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  button: {
+    flex: 1,
+    minWidth: '48%',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    backgroundColor: COLORS.card,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    alignItems: 'center',
+  },
+  buttonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+  },
+  buttonTextActive: {
+    color: '#FFF',
+  },
+});
+```
+
+### 📄 src/components/DeliveryCard.js
+
+```javascript
+import React from 'react';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { MapPin, Phone, Clock } from 'lucide-react-native';
+import { COLORS, DELIVERY_STATUS } from '../utils/constants';
+
+export default function DeliveryCard({ delivery, onPress, onAccept, active, available }) {
+  const statusInfo = DELIVERY_STATUS[delivery.status] || DELIVERY_STATUS.pending;
+
+  return (
+    <TouchableOpacity
+      style={styles.card}
+      onPress={active ? onPress : undefined}
+      activeOpacity={active ? 0.7 : 1}
+    >
+      {/* Header */}
+      <View style={styles.header}>
+        <View style={[styles.badge, { backgroundColor: statusInfo.color + '20' }]}>
+          <Text style={[styles.badgeText, { color: statusInfo.color }]}>
+            {statusInfo.label}
+          </Text>
+        </View>
+        {delivery.estimated_minutes && (
+          <View style={styles.time}>
+            <Clock color={COLORS.textSecondary} size={14} />
+            <Text style={styles.timeText}>~{delivery.estimated_minutes}min</Text>
+          </View>
+        )}
+      </View>
+
+      {/* Info */}
+      <Text style={styles.orderNumber}>
+        Pedido #{delivery.order?.numero_pedido || delivery.id.slice(0, 8)}
+      </Text>
+      <Text style={styles.clientName}>
+        {delivery.order?.cliente_nome || 'Cliente'}
+      </Text>
+
+      {/* Endereço */}
+      <View style={styles.addressContainer}>
+        <MapPin color={COLORS.textSecondary} size={16} />
+        <View style={styles.addressText}>
+          <Text style={styles.address}>
+            {delivery.order?.endereco || 'Endereço não disponível'}
+          </Text>
+          {delivery.bairro && (
+            <Text style={styles.neighborhood}>{delivery.bairro}</Text>
+          )}
+        </View>
+      </View>
+
+      {/* Telefone */}
+      {delivery.order?.telefone && (
+        <View style={styles.phoneContainer}>
+          <Phone color={COLORS.textSecondary} size={16} />
+          <Text style={styles.phone}>{delivery.order.telefone}</Text>
+        </View>
+      )}
+
+      {/* Botão Aceitar */}
+      {available && (
+        <TouchableOpacity
+          style={styles.acceptButton}
+          onPress={onAccept}
+        >
+          <Text style={styles.acceptButtonText}>Aceitar Entrega</Text>
+        </TouchableOpacity>
+      )}
+    </TouchableOpacity>
+  );
+}
+
+const styles = StyleSheet.create({
+  card: {
+    backgroundColor: COLORS.card,
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    gap: 12,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  badge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  badgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  time: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  timeText: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+  },
+  orderNumber: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: COLORS.text,
+  },
+  clientName: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+  },
+  addressContainer: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  addressText: {
+    flex: 1,
+  },
+  address: {
+    fontSize: 14,
+    color: COLORS.text,
+  },
+  neighborhood: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginTop: 2,
+  },
+  phoneContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  phone: {
+    fontSize: 14,
+    color: COLORS.primary,
+  },
+  acceptButton: {
+    backgroundColor: COLORS.primary,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  acceptButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFF',
+  },
+});
+```
+
+### 📄 App.js (Navegação Principal)
+
+```javascript
+import React, { useEffect, useState } from 'react';
+import { NavigationContainer } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { ActivityIndicator, View } from 'react-native';
+
+import LoginScreen from './src/screens/LoginScreen';
+import DashboardScreen from './src/screens/DashboardScreen';
+import DeliveryDetailScreen from './src/screens/DeliveryDetailScreen';
+import { COLORS } from './src/utils/constants';
+
+const Stack = createNativeStackNavigator();
+
+export default function App() {
+  const [isLoading, setIsLoading] = useState(true);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  useEffect(() => {
+    checkAuth();
+  }, []);
+
+  const checkAuth = async () => {
+    try {
+      const token = await AsyncStorage.getItem('token');
+      setIsLoggedIn(!!token);
+    } catch (error) {
+      console.error('Erro ao verificar autenticação:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.background }}>
+        <ActivityIndicator size="large" color={COLORS.primary} />
+      </View>
+    );
+  }
+
+  return (
+    <NavigationContainer>
+      <Stack.Navigator
+        initialRouteName={isLoggedIn ? 'Dashboard' : 'Login'}
+        screenOptions={{
+          headerShown: false,
+          contentStyle: { backgroundColor: COLORS.background },
+        }}
+      >
+        <Stack.Screen name="Login" component={LoginScreen} />
+        <Stack.Screen name="Dashboard" component={DashboardScreen} />
+        <Stack.Screen 
+          name="DeliveryDetail" 
+          component={DeliveryDetailScreen}
+          options={{
+            headerShown: true,
+            title: 'Detalhes da Entrega',
+            headerStyle: { backgroundColor: COLORS.card },
+            headerTintColor: COLORS.text,
+          }}
+        />
+      </Stack.Navigator>
+    </NavigationContainer>
+  );
+}
+```
+
+---
+
+## 🎨 PARTE 5: CRIAR ÍCONES
+
+Você precisa criar 3 imagens na pasta `assets/`:
+
+### 1. icon.png (1024x1024)
+- Ícone principal do app
+- Use um editor online: https://www.canva.com/
+- Ou use esta ferramenta: https://www.appicon.co/
+
+### 2. splash.png (1284x2778)
+- Tela de abertura
+- Pode ser seu logo centralizado em fundo escuro
+
+### 3. adaptive-icon.png (1024x1024)
+- Ícone adaptativo para Android
+- Mesmo que icon.png, mas sem cantos arredondados
+
+---
+
+## 📦 PARTE 6: GERAR O APK
+
+### Método 1: EAS Build (Recomendado - Build na Nuvem)
+
+```bash
+# 1. Instalar EAS CLI
+npm install -g eas-cli
+
+# 2. Login no Expo
+eas login
+
+# 3. Configurar projeto
+eas build:configure
+
+# 4. Gerar APK
+eas build --platform android --profile preview
+
+# O APK será gerado na nuvem e você receberá um link para download!
+```
+
+### Método 2: Build Local
+
+```bash
+# 1. Instalar dependências
+npm install -g turtle-cli
+
+# 2. Gerar APK
+expo build:android -t apk
+
+# 3. Aguardar build (pode demorar 10-20 minutos)
+# 4. Download do link que aparecer
+```
+
+---
+
+## 📲 PARTE 7: TESTAR O APK
+
+### No Celular
+
+```bash
+# 1. Durante desenvolvimento, use Expo Go
+# Instale o app Expo Go na Play Store
+
+# 2. Rode o projeto
+npx expo start
+
+# 3. Escaneie o QR code com Expo Go
+```
+
+### APK Final
+
+1. Transfira o APK para seu celular
+2. Habilite "Instalar apps desconhecidos"
+3. Instale o APK
+4. Teste todas as funcionalidades!
+
+---
+
+## ⚙️ CONFIGURAÇÕES IMPORTANTES
+
+### Alterar IP do Servidor
+
+Em `src/services/api.js`:
+```javascript
+const API_URL = 'http://SEU_IP_AQUI:8000';
+```
+
+### Alterar Nome do App
+
+Em `app.json`:
+```json
+"name": "Seu Nome Aqui",
+"slug": "seu-slug-aqui"
+```
+
+### Alterar Pacote Android
+
+Em `app.json`:
+```json
+"android": {
+  "package": "com.suaempresa.seuapp"
+}
+```
+
+---
+
+## 🐛 TROUBLESHOOTING
+
+### Erro de rede / CORS
+
+```javascript
+// No seu backend FastAPI, adicione:
+from fastapi.middleware.cors import CORSMiddleware
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+```
+
+### APK não conecta ao servidor
+
+1. Certifique-se de que o celular está na mesma rede WiFi
+2. Use o IP local (192.168.x.x), não localhost
+3. Teste a URL no navegador do celular primeiro
+
+### Erro ao fazer build
+
+```bash
+# Limpar cache e reinstalar
+rm -rf node_modules
+npm install
+npx expo start --clear
+```
+
+---
+
+## 📚 RECURSOS ÚTEIS
+
+- Documentação Expo: https://docs.expo.dev/
+- React Navigation: https://reactnavigation.org/
+- Lucide Icons: https://lucide.dev/
+- Expo EAS Build: https://docs.expo.dev/build/setup/
+
+---
+
+## ✅ CHECKLIST FINAL
+
+- [ ] Node.js instalado
+- [ ] Projeto Expo criado
+- [ ] Todas as dependências instaladas
+- [ ] Código copiado e adaptado
+- [ ] IP do servidor configurado
+- [ ] Ícones criados (icon.png, splash.png)
+- [ ] Testado com Expo Go
+- [ ] APK gerado com EAS Build
+- [ ] APK instalado e testado no celular
+
+---
+
+**🎉 Pronto! Agora você tem um app Android profissional para seus motoristas!**
+
+Se tiver dúvidas em algum passo, me avise que eu ajudo!
