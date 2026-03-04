@@ -37,12 +37,8 @@ def validate_password_strength(password: str) -> None:
             "Senha não pode ter mais de 72 caracteres "
             "(limitação do algoritmo Argon2)"
         )
-    if not any(c.isupper() for c in password):
-        raise ValueError("Senha deve conter pelo menos uma letra maiúscula")
-    if not any(c.islower() for c in password):
-        raise ValueError("Senha deve conter pelo menos uma letra minúscula")
-    if not any(c.isdigit() for c in password):
-        raise ValueError("Senha deve conter pelo menos um número")
+    if not any(c.isalpha() for c in password):
+        raise ValueError("Senha deve conter pelo menos uma letra")
 
 
 def get_password_hash(password: str) -> str:
