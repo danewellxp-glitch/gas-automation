@@ -16,6 +16,7 @@ from sqlalchemy.orm import selectinload
 from app.database import get_db
 from app.config import settings
 from app.models.customer import Customer
+from app.models.delivery import Delivery, DeliveryStatus
 from app.models.order import Order, OrderItem, OrderStatus
 from app.models.product import Product
 from app.models.tipo_preco import TipoPreco, ProdutoPreco
@@ -127,6 +128,69 @@ async def _notify_operators_order_update(order: Order, old_status: str, new_stat
 
     except Exception as e:
         logger.error(f"Erro ao notificar operadores: {e}", exc_info=True)
+
+
+async def _notify_drivers_new_delivery(order: Order, delivery: Delivery) -> None:
+    """Notifica todos os drivers via WebSocket e FCM push sobre nova entrega disponível."""
+    delivery_data = {
+        "delivery_id": str(delivery.id),
+        "order_id": str(order.id),
+        "order_number": order.order_number,
+        "bairro": order.delivery_bairro,
+        "total_amount": float(order.total_amount),
+        "customer_name": order.customer.name if order.customer else None,
+        "estimated_minutes": delivery.estimated_minutes,
+    }
+
+    # WebSocket para drivers conectados
+    try:
+        from app.api.websocket import emit_new_delivery_available
+        await emit_new_delivery_available(delivery_data)
+    except Exception as e:
+        logger.error(f"Erro ao notificar drivers via WebSocket: {e}", exc_info=True)
+
+    # FCM push para drivers disponíveis (com push_token cadastrado)
+    try:
+        from app.integrations.fcm_client import notify_driver_new_delivery
+        from app.models.driver import Driver, DriverStatus
+        from app.database import AsyncSessionLocal
+
+        async with AsyncSessionLocal() as session:
+            result = await session.execute(
+                select(Driver).where(
+                    and_(
+                        Driver.status == DriverStatus.AVAILABLE.value,
+                        Driver.push_token.isnot(None),
+                        Driver.is_active == True,
+                    )
+                )
+            )
+            available_drivers = result.scalars().all()
+
+        # Filtrar por bairro se a entrega tiver bairro definido
+        bairro = order.delivery_bairro
+        if bairro:
+            targets = [
+                d for d in available_drivers
+                if not d.bairro or d.bairro.lower().strip() == bairro.lower().strip()
+            ]
+        else:
+            targets = list(available_drivers)
+
+        for driver in targets:
+            try:
+                await notify_driver_new_delivery(
+                    push_token=driver.push_token,
+                    delivery_id=str(delivery.id),
+                    bairro=bairro or "Sem bairro",
+                    order_number=str(order.order_number),
+                )
+            except Exception as e:
+                logger.warning(f"Erro ao enviar push para driver {driver.id}: {e}")
+    except ImportError:
+        logger.warning("fcm_client não disponível — push FCM desabilitado")
+    except Exception as e:
+        logger.error(f"Erro ao enviar FCM push para drivers: {e}", exc_info=True)
 
 
 async def _notify_new_order(order: Order) -> None:
@@ -776,7 +840,25 @@ async def approve_order(
     
     await db.commit()
     await db.refresh(order)
-    
+
+    # Criar Delivery pendente para que os drivers possam ver e aceitar
+    existing_delivery = await db.execute(
+        select(Delivery).where(Delivery.order_id == order.id)
+    )
+    if not existing_delivery.scalar_one_or_none():
+        delivery = Delivery(
+            order_id=order.id,
+            bairro=order.delivery_bairro,
+            status=DeliveryStatus.PENDING.value,
+            estimated_minutes=40,
+        )
+        db.add(delivery)
+        await db.commit()
+        await db.refresh(delivery)
+        # Notificar drivers via WebSocket
+        asyncio.create_task(_notify_drivers_new_delivery(order, delivery))
+        logger.info(f"Delivery {delivery.id} criada para pedido {order.order_number}")
+
     # Registrar aprovação no EventLog para tracking
     try:
         from app.services.operator_tracking_service import operator_tracking_service
@@ -793,7 +875,7 @@ async def approve_order(
         asyncio.create_task(_log_approval())
     except Exception as e:
         logger.warning(f"Erro ao registrar aprovação no tracking: {e}")
-    
+
     return order
 
 

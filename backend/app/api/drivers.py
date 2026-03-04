@@ -320,7 +320,7 @@ async def get_my_deliveries(
         # Entregas disponíveis (sem driver alocado ainda)
         conditions = [Delivery.status == DeliveryStatus.PENDING.value]
         if driver.bairro:
-            conditions.append(Delivery.bairro == driver.bairro)
+            conditions.append(func.lower(Delivery.bairro) == driver.bairro.lower().strip())
         query = select(Delivery).where(
             and_(*conditions)
         ).order_by(Delivery.created_at.desc())

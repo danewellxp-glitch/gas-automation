@@ -44,7 +44,6 @@ export default function AdminDashboard() {
   // Create/Edit modals
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [createForm, setCreateForm] = useState({
-    username: '',
     email: '',
     full_name: '',
     role: 'operator',
@@ -85,7 +84,6 @@ export default function AdminDashboard() {
   const openCreateModal = () => {
     setCreateTempPassword('')
     setCreateForm({
-      username: '',
       email: '',
       full_name: '',
       role: 'operator',
@@ -124,9 +122,10 @@ export default function AdminDashboard() {
       setError('')
       setCreateTempPassword('')
 
+      const username = createForm.email.split('@')[0].replace(/[^a-zA-Z0-9._-]/g, '')
       const res = await apiRequest(`admin/users`, {
         method: 'POST',
-        body: JSON.stringify(createForm),
+        body: JSON.stringify({ ...createForm, username }),
       })
 
       setCreateTempPassword(res?.temporary_password || '')
@@ -399,25 +398,14 @@ export default function AdminDashboard() {
             </div>
 
             <div className="space-y-4 p-6">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Usuário</label>
-                  <input
-                    value={createForm.username}
-                    onChange={(e) => setCreateForm((p) => ({ ...p, username: e.target.value }))}
-                    className="mt-1 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-primary-500 focus:ring-primary-500"
-                    placeholder="ex: joao.silva"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Email</label>
-                  <input
-                    value={createForm.email}
-                    onChange={(e) => setCreateForm((p) => ({ ...p, email: e.target.value }))}
-                    className="mt-1 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-primary-500 focus:ring-primary-500"
-                    placeholder="ex: joao@empresa.com"
-                  />
-                </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Email</label>
+                <input
+                  value={createForm.email}
+                  onChange={(e) => setCreateForm((p) => ({ ...p, email: e.target.value }))}
+                  className="mt-1 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-primary-500 focus:ring-primary-500"
+                  placeholder="ex: joao@empresa.com"
+                />
               </div>
 
               <div>
@@ -488,7 +476,7 @@ export default function AdminDashboard() {
               </button>
               <button
                 onClick={createUser}
-                disabled={updating || !createForm.username || !createForm.email}
+                disabled={updating || !createForm.email}
                 className="flex-1 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
               >
                 {updating ? 'Criando...' : 'Criar usuário'}
@@ -510,23 +498,13 @@ export default function AdminDashboard() {
             </div>
 
             <div className="space-y-4 p-6">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Usuário</label>
-                  <input
-                    value={editForm.username}
-                    onChange={(e) => setEditForm((p) => ({ ...p, username: e.target.value }))}
-                    className="mt-1 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-primary-500 focus:ring-primary-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Email</label>
-                  <input
-                    value={editForm.email}
-                    onChange={(e) => setEditForm((p) => ({ ...p, email: e.target.value }))}
-                    className="mt-1 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-primary-500 focus:ring-primary-500"
-                  />
-                </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Email</label>
+                <input
+                  value={editForm.email}
+                  onChange={(e) => setEditForm((p) => ({ ...p, email: e.target.value }))}
+                  className="mt-1 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-primary-500 focus:ring-primary-500"
+                />
               </div>
 
               <div>
