@@ -161,10 +161,10 @@ cors_origins: list[str] = [
     "http://localhost:3001",
     "http://localhost:3000",
     "http://localhost:3003",
-    "http://192.168.10.156:3001",
-    "http://192.168.10.156:3003",
-    "http://192.168.10.156:8000",
-    "http://192.168.10.156",
+    "http://192.168.10.167:3001",
+    "http://192.168.10.167:3003",
+    "http://192.168.10.167:8000",
+    "http://192.168.10.167",
     # Em produção, adicionar apenas o domínio real:
     # "https://seu-dominio.com.br"
 ]
@@ -198,7 +198,7 @@ def validate_cors_origins(cls, v: list[str]) -> list[str]:
 
 **Current Origins:**
 - ✅ Localhost (development)
-- ✅ 192.168.10.156 (internal network)
+- ✅ 192.168.10.167 (internal network)
 - ⚠️ **MISSING:** Production domain
 
 **Verdict:** ⚠️ **APPROVED WITH ACTION REQUIRED**

@@ -95,7 +95,7 @@
 
 ## 🧪 Teste
 
-**Acesse:** `http://192.168.10.156:3001/owner`
+**Acesse:** `http://192.168.10.167:3001/owner`
 
 **Verificar:**
 - ✅ Cards mostram dados reais (não zeros se houver dados)

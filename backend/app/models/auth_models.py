@@ -24,25 +24,42 @@ class User(SQLModel, table=True):
     created_at: datetime = Field(default_factory=lambda: datetime.utcnow())
     updated_at: datetime = Field(default_factory=lambda: datetime.utcnow())
 
+class Contact(SQLModel, table=True):
+    __tablename__ = "contacts"
+    id: Optional[int] = Field(default=None, primary_key=True)
+    phone_number: str = Field(unique=True, index=True)
+    name: Optional[str] = None
+    is_valid_whatsapp: bool = Field(default=True)
+    last_synced_at: datetime = Field(default_factory=brazilian_now)
+    created_at: datetime = Field(default_factory=brazilian_now)
+
 class Conversation(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
-    customer_number: str
+    customer_phone: str = Field(index=True)  # Renamed from customer_number for consistency
     name: Optional[str] = None
     assigned_to: Optional[int] = Field(default=None, foreign_key="users.id")
-    created_by: int = Field(foreign_key="users.id")
+    created_by: Optional[int] = Field(default=None, foreign_key="users.id") # Made optional because automated creation doesn't have a user
     created_at: datetime = Field(default_factory=lambda: datetime.utcnow())
-    status: str = "pending"
+    updated_at: datetime = Field(default_factory=lambda: datetime.utcnow())
+    last_message_at: datetime = Field(default_factory=lambda: datetime.utcnow())
+    status: str = Field(default="OPEN", index=True) # OPEN, ASSIGNED, RESOLVED, PENDING
+    unread_count: int = Field(default=0)
 
 class Message(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
-    conversation_id: int = Field(foreign_key="conversation.id")
+    conversation_id: int = Field(foreign_key="conversation.id", index=True)
+    direction: str = Field(default="INBOUND") # INBOUND, OUTBOUND
     sender: str  # "customer", "agent", "bot", "system"
     message_type: str = "customer"  # "customer", "agent", "bot", "system"
+    type: str = Field(default="TEXT") # TEXT, IMAGE, AUDIO, VIDEO, DOCUMENT
     content: str
+    media_url: Optional[str] = None
+    status: str = Field(default="DELIVERED") # PENDING, SENT, DELIVERED, READ, FAILED
+    whatsapp_message_id: Optional[str] = Field(default=None, unique=True, index=True)
     bot_service: Optional[str] = None  # "claude", "ollama", "rasa", "fallback", "n8n"
     n8n_workflow_id: Optional[str] = None  # n8n workflow identifier
     n8n_execution_id: Optional[str] = None  # n8n execution identifier
-    n8n_processed: bool = False  # whether message was processed by n8n
+    n8n_processed: bool = Field(default=False)  # whether message was processed by n8n
     timestamp: datetime = Field(default_factory=lambda: datetime.utcnow())
 
 class AuditLog(SQLModel, table=True):

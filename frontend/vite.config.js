@@ -15,18 +15,18 @@ export default defineConfig({
     host: true,
     proxy: {
       '/api': {
-        target: 'http://192.168.10.156:8000',
+        target: 'http://192.168.10.167:8000',
         changeOrigin: true,
       },
       '/ws': {
-        target: 'ws://192.168.10.156:8000',
+        target: 'ws://192.168.10.167:8000',
         ws: true,
       },
     },
   },
   define: {
     // Variáveis de ambiente para o frontend
-    __API_URL__: JSON.stringify('http://192.168.10.156:8000/api'),
-    __WS_URL__: JSON.stringify('ws://192.168.10.156:8000/ws'),
+    __API_URL__: JSON.stringify('http://192.168.10.167:8000/api'),
+    __WS_URL__: JSON.stringify('ws://192.168.10.167:8000/ws'),
   },
 })

@@ -97,7 +97,7 @@ ORDER BY I.REFERENCIA
 
 ## ✅ O que Já Está Pronto
 
-1. ✅ Conexão configurada (.env com host 192.168.10.156)
+1. ✅ Conexão configurada (.env com host 192.168.10.167)
 2. ✅ Produtos mapeados e implementados
 3. ✅ Clientes mapeados e implementados
 4. ✅ Pontos de venda mapeados e implementados

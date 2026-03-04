@@ -200,7 +200,78 @@ class IdentifyNamePFHandler(BaseHandler):
         order_context: Optional[OrderContext],
         name: str,
     ) -> HandlerResult:
-        """Vai para selecao de produtos."""
+        """Vai para selecao de produtos (ou fast-track se intenção foi detectada)."""
+        
+        # FAST-TRACK: Se intenção foi detectada na mensagem inicial
+        intent_product = conversation_context.collected_data.get("intent_product")
+        intent_operation = conversation_context.collected_data.get("intent_operation")
+        
+        if intent_product:
+            from app.core.product_catalog import get_product
+            from app.core.message_templates import PRODUCT_SELECTED, ASK_ADDRESS
+            product = get_product(intent_product)
+            if product:
+                # Salvar produto e quantidade
+                conversation_context.collected_data["product_code"] = intent_product
+                conversation_context.collected_data["quantity"] = conversation_context.collected_data.get("intent_quantity", 1)
+                
+                if intent_operation:
+                    # Tem produto + operação → pular direto para endereço
+                    conversation_context.collected_data["operation_type"] = intent_operation
+                    if not order_context:
+                        order_context = OrderContext()
+                    
+                    quantity = conversation_context.collected_data["quantity"]
+                    unit_price = product.price_sale if intent_operation == "sale" else product.price_exchange
+                    total = unit_price * quantity
+                    order_context.items.append({
+                        "product_code": intent_product,
+                        "quantity": quantity,
+                        "unit_price": float(unit_price),
+                        "subtotal": float(total),
+                        "operation_type": intent_operation,
+                    })
+                    order_context.subtotal = float(total)
+                    order_context.operation_type = intent_operation
+                    
+                    op_label = {"exchange": "Troca", "sale": "Compra", "pickup": "Retira"}.get(intent_operation, "Troca")
+                    return self._create_result(
+                        conversation_context=conversation_context,
+                        customer_context=customer_context,
+                        order_context=order_context,
+                        responses=[
+                            self._create_response(
+                                text=f"Prazer, *{name}*!\n\n"
+                                     f"✅ {quantity}x {intent_product} ({op_label}) - {self._format_currency(total)}\n\n"
+                                     + ASK_ADDRESS
+                            )
+                        ],
+                        next_state=ConversationState.ORDERING_ADDRESS
+                    )
+                else:
+                    # Tem produto mas sem operação → mostrar operações
+                    price_troca = self._format_currency(product.price_exchange)
+                    price_compra = self._format_currency(product.price_sale)
+                    return self._create_result(
+                        conversation_context=conversation_context,
+                        customer_context=customer_context,
+                        order_context=order_context,
+                        responses=[
+                            self._create_response(
+                                text=f"Prazer, *{name}*!\n\n"
+                                     f"✅ *{product.name}* selecionado!\n"
+                                     f"💰 Valor: {price_troca}\n\nComo deseja?",
+                                buttons=[
+                                    {"id": "exchange", "text": f"🔄 Troca - {price_troca}"},
+                                    {"id": "sale", "text": f"🆕 Comprar - {price_compra}"},
+                                    {"id": "pickup", "text": f"🏪 Retira - {price_troca}"},
+                                ]
+                            )
+                        ],
+                        next_state=ConversationState.ORDERING_OPERATION
+                    )
+        
+        # Fluxo normal: mostrar catálogo de produtos
         sections = self._build_product_list_sections()
         product_text = self._build_product_text()
 

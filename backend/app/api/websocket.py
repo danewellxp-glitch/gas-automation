@@ -685,6 +685,35 @@ async def emit_metrics_update(metrics: dict):
 # FASE 3.5 - Role de Entregador
 # =====================================
 
+async def emit_new_delivery_available(delivery_data: dict):
+    """
+    Notifica todos os drivers conectados sobre nova entrega disponível para aceitar.
+
+    Args:
+        delivery_data: dict com delivery_id, order_id, order_number, bairro, total_amount, etc.
+    """
+    bairro = delivery_data.get("bairro")
+
+    def driver_filter(m: ConnectionMetadata) -> bool:
+        if m.user_role != UserRole.DRIVER:
+            return False
+        # Se a entrega tem bairro, notificar só drivers daquele bairro (ou sem bairro definido)
+        if bairro and m.bairro and m.bairro != bairro:
+            return False
+        return True
+
+    await manager.broadcast(
+        message={
+            "type": "new_delivery_available",
+            "data": delivery_data,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        },
+        filter_fn=driver_filter,
+    )
+
+    logger.info(f"🚚 Nova entrega disponível #{delivery_data.get('order_number')} notificada aos drivers")
+
+
 async def emit_delivery_assigned(delivery_data: dict):
     """
     Notifica driver quando uma entrega é alocada para ele.

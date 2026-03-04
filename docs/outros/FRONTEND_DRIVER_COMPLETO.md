@@ -72,8 +72,8 @@ npm install
 Criar `frontend/.env`:
 
 ```env
-VITE_API_URL=http://192.168.10.156:8000/api
-VITE_WS_URL=ws://192.168.10.156:8000
+VITE_API_URL=http://192.168.10.167:8000/api
+VITE_WS_URL=ws://192.168.10.167:8000
 ```
 
 ### **3. Rodar Frontend**
@@ -510,20 +510,20 @@ Padrão do projeto: 100% ✅
 
 ```bash
 # Verificar se backend está rodando
-curl http://192.168.10.156:8000/api/drivers/me
+curl http://192.168.10.167:8000/api/drivers/me
 
 # Verificar variáveis de ambiente
 cat frontend/.env
 
 # Deve ter:
-VITE_API_URL=http://192.168.10.156:8000/api
+VITE_API_URL=http://192.168.10.167:8000/api
 ```
 
 ### **Erro: "WebSocket failed to connect"**
 
 ```bash
 # Verificar se WebSocket está ativo no backend
-# Backend deve ter endpoint: ws://192.168.10.156:8000/ws/dashboard
+# Backend deve ter endpoint: ws://192.168.10.167:8000/ws/dashboard
 ```
 
 ### **Erro: "Usuário não é um entregador"**
@@ -591,7 +591,7 @@ Mobile-first, funciona em qualquer tamanho de tela
 
 ```
 Documentação completa: BACKEND_DRIVER_API_COMPLETA.md
-API interativa: http://192.168.10.156:8000/docs
+API interativa: http://192.168.10.167:8000/docs
 ```
 
 ### **Integração:**

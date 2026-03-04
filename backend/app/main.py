@@ -481,6 +481,10 @@ app.include_router(owner_dashboard.router, prefix="/api", tags=["Owner Dashboard
 app.include_router(chatbot.router, prefix="/api/chatbot", tags=["Chatbot"])
 app.include_router(drivers.router, prefix="/api/drivers", tags=["Drivers"])
 app.include_router(cargas.router, prefix="/api/cargas", tags=["Cargas"])
+from app.api.conversations import router as conversations_router
+from app.api.contacts import router as contacts_router
+app.include_router(conversations_router)
+app.include_router(contacts_router)
 app.include_router(images.router, prefix="/api/images", tags=["Images"])
 app.include_router(tipos_preco.router, prefix="/api/tipos-preco", tags=["Tipos de Preço"])
 app.include_router(vasilhames.router, prefix="/api/vasilhames", tags=["Vasilhames"])

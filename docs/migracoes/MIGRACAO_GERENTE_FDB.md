@@ -113,7 +113,7 @@ point = firebird_client.get_sales_point_by_id(pessoa_id=123)
 
 **Arquivo `.env`:**
 ```bash
-FIREBIRD_HOST=192.168.10.156
+FIREBIRD_HOST=192.168.10.167
 FIREBIRD_DATABASE=/var/firebird/Gerente.fdb
 FIREBIRD_USER=SYSDBA
 FIREBIRD_PASSWORD=masterkey

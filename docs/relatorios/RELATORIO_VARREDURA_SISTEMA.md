@@ -1,7 +1,7 @@
 # 🔍 Relatório de Varredura do Sistema
 
 **Data:** $(date +"%Y-%m-%d %H:%M:%S")
-**IP do Servidor:** 192.168.10.156
+**IP do Servidor:** 192.168.10.167
 
 ---
 
@@ -27,14 +27,14 @@
 
 ### Frontend
 - ✅ **Status:** Acessível
-- ✅ **URL:** http://192.168.10.156:3001
+- ✅ **URL:** http://192.168.10.167:3001
 - ✅ **HTTP Code:** 200
 - ✅ **Logs:** Sem erros
 
 ### Backend API
 - ✅ **Status:** Funcionando
 - ✅ **Health Check:** 200 OK
-- ✅ **URL:** http://192.168.10.156:8000
+- ✅ **URL:** http://192.168.10.167:8000
 - ✅ **Logs:** Sem erros críticos
 - ✅ **Python:** 3.11.14
 - ✅ **Environment:** production
@@ -51,7 +51,7 @@
 
 ### Firebird
 - ⚠️ **Status:** Conectado (erro no teste de método)
-- ✅ **Host:** 192.168.10.156
+- ✅ **Host:** 192.168.10.167
 - ✅ **Database:** /var/firebird/Gerente.fdb
 - ⚠️ **Nota:** Método `get_products()` não aceita parâmetro `limit`
 

@@ -1,0 +1,874 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Relatório Executivo — Otimização Bot GasMaster</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+    :root {
+      --primary: #2563eb;
+      --primary-dark: #1e40af;
+      --primary-light: #dbeafe;
+      --accent: #f59e0b;
+      --success: #10b981;
+      --danger: #ef4444;
+      --gray-50: #f9fafb;
+      --gray-100: #f3f4f6;
+      --gray-200: #e5e7eb;
+      --gray-300: #d1d5db;
+      --gray-500: #6b7280;
+      --gray-700: #374151;
+      --gray-800: #1f2937;
+      --gray-900: #111827;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #fff;
+      color: var(--gray-800);
+      line-height: 1.6;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
+    @page {
+      size: A4;
+      margin: 15mm 20mm;
+    }
+
+    .page { max-width: 210mm; margin: 0 auto; padding: 0 10mm; }
+
+    /* === COVER === */
+    .cover {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 50%, #3b82f6 100%);
+      color: #fff;
+      padding: 60px 40px;
+      page-break-after: always;
+      position: relative;
+      overflow: hidden;
+    }
+    .cover::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: radial-gradient(circle at 30% 70%, rgba(255,255,255,0.05) 0%, transparent 50%),
+                  radial-gradient(circle at 70% 30%, rgba(255,255,255,0.08) 0%, transparent 40%);
+    }
+    .cover-logo {
+      font-size: 56px;
+      margin-bottom: 10px;
+      position: relative;
+    }
+    .cover h1 {
+      font-size: 36px;
+      font-weight: 800;
+      letter-spacing: -1px;
+      margin-bottom: 8px;
+      position: relative;
+    }
+    .cover h2 {
+      font-size: 20px;
+      font-weight: 400;
+      opacity: 0.9;
+      margin-bottom: 40px;
+      position: relative;
+    }
+    .cover-meta {
+      font-size: 14px;
+      opacity: 0.7;
+      position: relative;
+    }
+    .cover-badge {
+      display: inline-block;
+      background: rgba(255,255,255,0.15);
+      backdrop-filter: blur(4px);
+      border: 1px solid rgba(255,255,255,0.25);
+      border-radius: 50px;
+      padding: 10px 28px;
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      margin-bottom: 30px;
+      position: relative;
+    }
+
+    /* === SECTIONS === */
+    .section {
+      padding: 40px 0 30px;
+    }
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 24px;
+      padding-bottom: 14px;
+      border-bottom: 3px solid var(--primary);
+    }
+    .section-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      flex-shrink: 0;
+    }
+    .section-icon.blue { background: var(--primary-light); }
+    .section-icon.green { background: #d1fae5; }
+    .section-icon.amber { background: #fef3c7; }
+    .section-icon.purple { background: #ede9fe; }
+
+    .section-title {
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--gray-900);
+    }
+    .section-subtitle {
+      font-size: 13px;
+      color: var(--gray-500);
+      font-weight: 400;
+    }
+
+    /* === CARDS === */
+    .card {
+      background: var(--gray-50);
+      border: 1px solid var(--gray-200);
+      border-radius: 12px;
+      padding: 20px 24px;
+      margin-bottom: 16px;
+    }
+    .card-highlight {
+      border-left: 4px solid var(--primary);
+    }
+    .card-success {
+      border-left: 4px solid var(--success);
+      background: #f0fdf4;
+    }
+
+    /* === KPI ROW === */
+    .kpi-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin-bottom: 30px;
+    }
+    .kpi-card {
+      background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+      color: #fff;
+      border-radius: 14px;
+      padding: 24px;
+      text-align: center;
+    }
+    .kpi-card.green { background: linear-gradient(135deg, #059669, #047857); }
+    .kpi-card.amber { background: linear-gradient(135deg, #d97706, #b45309); }
+    .kpi-number {
+      font-size: 42px;
+      font-weight: 800;
+      line-height: 1;
+      margin-bottom: 4px;
+    }
+    .kpi-label {
+      font-size: 12px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      opacity: 0.85;
+    }
+
+    /* === TABLES === */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      margin: 10px 0;
+    }
+    thead th {
+      background: var(--gray-800);
+      color: #fff;
+      padding: 10px 14px;
+      text-align: left;
+      font-weight: 600;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    thead th:first-child { border-radius: 8px 0 0 0; }
+    thead th:last-child { border-radius: 0 8px 0 0; }
+    tbody td {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--gray-200);
+    }
+    tbody tr:nth-child(even) { background: var(--gray-50); }
+    tbody tr:last-child td:first-child { border-radius: 0 0 0 8px; }
+    tbody tr:last-child td:last-child { border-radius: 0 0 8px 0; }
+
+    /* === FLOW DIAGRAM === */
+    .flow-container {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin: 16px 0;
+      padding: 16px;
+      background: var(--gray-50);
+      border-radius: 12px;
+    }
+    .flow-step {
+      background: #fff;
+      border: 2px solid var(--primary);
+      border-radius: 10px;
+      padding: 10px 16px;
+      font-size: 12px;
+      font-weight: 600;
+      text-align: center;
+      min-width: 100px;
+      color: var(--primary-dark);
+    }
+    .flow-step.active {
+      background: var(--primary);
+      color: #fff;
+    }
+    .flow-step.skipped {
+      background: var(--gray-200);
+      border-color: var(--gray-300);
+      color: var(--gray-500);
+      text-decoration: line-through;
+    }
+    .flow-arrow {
+      font-size: 20px;
+      color: var(--primary);
+      font-weight: 700;
+    }
+
+    /* === BADGES === */
+    .badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 50px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .badge-success { background: #d1fae5; color: #065f46; }
+    .badge-info { background: var(--primary-light); color: var(--primary-dark); }
+    .badge-warning { background: #fef3c7; color: #92400e; }
+
+    /* === BEFORE/AFTER === */
+    .comparison {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 16px 0;
+    }
+    .comparison-panel {
+      border-radius: 12px;
+      padding: 20px;
+      font-size: 13px;
+    }
+    .comparison-panel.before {
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+    }
+    .comparison-panel.after {
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+    }
+    .comparison-label {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 10px;
+    }
+    .comparison-panel.before .comparison-label { color: var(--danger); }
+    .comparison-panel.after .comparison-label { color: var(--success); }
+
+    .msg-bubble {
+      background: #fff;
+      border-radius: 10px;
+      padding: 8px 12px;
+      margin: 6px 0;
+      font-size: 12px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+    }
+    .msg-bubble.bot { border-left: 3px solid var(--primary); }
+    .msg-bubble.user { border-left: 3px solid var(--success); text-align: right; }
+    .msg-bubble .sender { font-size: 10px; font-weight: 600; color: var(--gray-500); margin-bottom: 2px; }
+
+    /* === FILE LIST === */
+    .file-list {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin: 10px 0;
+    }
+    .file-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 8px;
+      background: var(--gray-50);
+      border: 1px solid var(--gray-200);
+      font-size: 12px;
+    }
+    .file-item .file-icon { font-size: 16px; }
+    .file-item .file-name { font-weight: 600; color: var(--gray-800); }
+    .file-item .file-desc { font-size: 11px; color: var(--gray-500); }
+
+    /* === PRINT BREAK === */
+    .page-break { page-break-before: always; }
+
+    /* === OS MOCKUP === */
+    .os-mockup {
+      background: var(--gray-900);
+      border-radius: 14px;
+      overflow: hidden;
+      margin: 16px 0;
+    }
+    .os-mockup-header {
+      background: var(--gray-800);
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .os-mockup-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+    .os-mockup-dot.red { background: #ef4444; }
+    .os-mockup-dot.yellow { background: #eab308; }
+    .os-mockup-dot.green { background: #22c55e; }
+    .os-mockup-body {
+      padding: 20px;
+      color: #e5e7eb;
+    }
+    .os-mockup-body table {
+      width: 100%;
+    }
+    .os-mockup-body thead th {
+      background: rgba(255,255,255,0.08);
+      color: #9ca3af;
+      font-size: 10px;
+      padding: 8px 10px;
+    }
+    .os-mockup-body tbody td {
+      padding: 8px 10px;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      font-size: 12px;
+      color: #d1d5db;
+    }
+    .os-mockup-body .os-num {
+      color: #60a5fa;
+      font-family: 'Courier New', monospace;
+      font-weight: 700;
+    }
+    .os-mockup-body .status-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 600;
+    }
+    .status-badge.pending { background: #78350f; color: #fbbf24; }
+    .status-badge.paid { background: #1e3a5f; color: #60a5fa; }
+    .status-badge.delivered { background: #064e3b; color: #34d399; }
+
+    /* === FOOTER === */
+    .footer {
+      margin-top: 40px;
+      padding: 20px 0;
+      border-top: 1px solid var(--gray-200);
+      text-align: center;
+      font-size: 11px;
+      color: var(--gray-500);
+    }
+    
+    p { margin-bottom: 8px; }
+    strong { font-weight: 600; }
+  </style>
+</head>
+<body>
+
+  <!-- ======================== CAPA ======================== -->
+  <div class="cover">
+    <div class="cover-logo">⛽</div>
+    <div class="cover-badge">Relatório Técnico Executivo</div>
+    <h1>Otimização do Bot GasMaster</h1>
+    <h2>NLU Inteligente · Sistema de OS · UX Otimizada</h2>
+    <div class="cover-meta">
+      <p>Versão 2.0 — Março 2026</p>
+      <p>Gas Automation Platform</p>
+    </div>
+  </div>
+
+  <!-- ======================== RESUMO EXECUTIVO ======================== -->
+  <div class="page">
+    <div class="section">
+      <div class="section-header">
+        <div class="section-icon blue">📊</div>
+        <div>
+          <div class="section-title">Resumo Executivo</div>
+          <div class="section-subtitle">Visão geral das otimizações implementadas</div>
+        </div>
+      </div>
+
+      <p>Este relatório documenta a implementação de <strong>3 melhorias críticas</strong> no sistema de atendimento automatizado GasMaster via WhatsApp, focadas em reduzir o número de interações do cliente e aumentar a taxa de conversão.</p>
+
+      <div class="kpi-row" style="margin-top: 24px;">
+        <div class="kpi-card">
+          <div class="kpi-number">-60%</div>
+          <div class="kpi-label">Menos cliques<br>para recompra</div>
+        </div>
+        <div class="kpi-card green">
+          <div class="kpi-number">3</div>
+          <div class="kpi-label">Features<br>implementadas</div>
+        </div>
+        <div class="kpi-card amber">
+          <div class="kpi-number">12</div>
+          <div class="kpi-label">Arquivos<br>modificados</div>
+        </div>
+      </div>
+
+      <div class="card card-highlight">
+        <strong>Objetivo:</strong> Transformar um fluxo de 8+ interações em um fluxo inteligente de 3-4 passos, onde o bot entende a intenção do cliente na primeira mensagem e pula etapas desnecessárias.
+      </div>
+    </div>
+
+    <!-- ======================== FEATURE 1 ======================== -->
+    <div class="section page-break">
+      <div class="section-header">
+        <div class="section-icon green">🔧</div>
+        <div>
+          <div class="section-title">1. Correção de Botões Duplicados</div>
+          <div class="section-subtitle">Bug fix — Interface limpa para o cliente</div>
+        </div>
+        <span class="badge badge-success" style="margin-left: auto;">CORRIGIDO ✅</span>
+      </div>
+
+      <p>O WhatsApp exibia as opções de operação (Troca/Comprar/Retira) duas vezes: no corpo do texto <em>e</em> nos botões interativos. Isso causava confusão visual para o cliente.</p>
+
+      <div class="comparison">
+        <div class="comparison-panel before">
+          <div class="comparison-label">❌ Antes (duplicado)</div>
+          <div class="msg-bubble bot">
+            <div class="sender">🤖 Bot</div>
+            ✅ Botijão P13 selecionado!<br>
+            💰 Valor: R$ 110,00<br><br>
+            Como deseja?<br><br>
+            1. 🔄 Troca (entrega vazio) - R$ 110,00<br>
+            2. 🆕 Comprar vasilhame - R$ 160,00<br>
+            3. 🏪 Retira na loja - R$ 110,00<br><br>
+            <em style="color:#999; font-size:10px;">[+ 3 botões iguais abaixo]</em>
+          </div>
+        </div>
+        <div class="comparison-panel after">
+          <div class="comparison-label">✅ Depois (limpo)</div>
+          <div class="msg-bubble bot">
+            <div class="sender">🤖 Bot</div>
+            ✅ Botijão P13 selecionado!<br>
+            💰 Valor: R$ 110,00<br><br>
+            Como deseja?
+          </div>
+          <div style="display:flex; gap:6px; margin-top:6px; flex-wrap: wrap;">
+            <span style="background:#2563eb; color:#fff; padding:5px 10px; border-radius:6px; font-size:11px; font-weight:600;">🔄 Troca - R$ 110,00</span>
+            <span style="background:#2563eb; color:#fff; padding:5px 10px; border-radius:6px; font-size:11px; font-weight:600;">🆕 Comprar - R$ 160,00</span>
+            <span style="background:#2563eb; color:#fff; padding:5px 10px; border-radius:6px; font-size:11px; font-weight:600;">🏪 Retira - R$ 110,00</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card card-success">
+        <strong>Impacto:</strong> Interface limpa e profissional. Botões agora incluem o preço de cada operação, facilitando a decisão rápida do cliente.
+      </div>
+    </div>
+
+    <!-- ======================== FEATURE 2 ======================== -->
+    <div class="section page-break">
+      <div class="section-header">
+        <div class="section-icon purple">🧠</div>
+        <div>
+          <div class="section-title">2. Detecção Inteligente de Intenção (NLU)</div>
+          <div class="section-subtitle">O bot agora entende linguagem natural na primeira mensagem</div>
+        </div>
+        <span class="badge badge-success" style="margin-left: auto;">IMPLEMENTADO ✅</span>
+      </div>
+
+      <p>O sistema <strong>_parse_intent()</strong> analisa a primeira mensagem do cliente usando expressões regulares e detecção de palavras-chave, extraindo automaticamente:</p>
+
+      <div style="display:grid; grid-template-columns: repeat(3,1fr); gap:12px; margin: 16px 0;">
+        <div class="card" style="text-align:center;">
+          <div style="font-size:28px; margin-bottom:6px;">📦</div>
+          <strong>Produto</strong>
+          <p style="font-size:12px; color:var(--gray-500);">P13, P20, P45<br>gás, botijão, 13kg</p>
+        </div>
+        <div class="card" style="text-align:center;">
+          <div style="font-size:28px; margin-bottom:6px;">🔄</div>
+          <strong>Operação</strong>
+          <p style="font-size:12px; color:var(--gray-500);">Troca, Comprar<br>Retira, Buscar</p>
+        </div>
+        <div class="card" style="text-align:center;">
+          <div style="font-size:28px; margin-bottom:6px;">🔢</div>
+          <strong>Quantidade</strong>
+          <p style="font-size:12px; color:var(--gray-500);">2x, 3 botijões<br>1 unidade</p>
+        </div>
+      </div>
+
+      <h3 style="font-size:16px; font-weight:600; margin: 20px 0 10px;">Exemplos de Frases Reconhecidas</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Frase do Cliente</th>
+            <th>Detecção</th>
+            <th>Ação do Bot</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>"quero trocar meu p13"</strong></td>
+            <td><span class="badge badge-info">P13</span> <span class="badge badge-warning">Troca</span></td>
+            <td>→ Pede endereço direto</td>
+          </tr>
+          <tr>
+            <td><strong>"preciso de gás"</strong></td>
+            <td><span class="badge badge-info">P13 (default)</span></td>
+            <td>→ Pede tipo de operação</td>
+          </tr>
+          <tr>
+            <td><strong>"quero comprar botijão de 45"</strong></td>
+            <td><span class="badge badge-info">P45</span> <span class="badge badge-warning">Compra</span></td>
+            <td>→ Pede endereço direto</td>
+          </tr>
+          <tr>
+            <td><strong>"manda um gas pra mim"</strong></td>
+            <td><span class="badge badge-info">P13</span> <span class="badge badge-warning">Troca</span></td>
+            <td>→ Pede endereço direto</td>
+          </tr>
+          <tr>
+            <td><strong>"oi" / "olá" / "bom dia"</strong></td>
+            <td><em style="color:var(--gray-500);">Nenhuma</em></td>
+            <td>→ Fluxo normal (PF/PJ)</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3 style="font-size:16px; font-weight:600; margin: 24px 0 10px;">Fluxo: Cliente Retornando com Intenção</h3>
+      <p style="font-size:13px; color: var(--gray-500); margin-bottom:10px;">Quando o cliente já é cadastrado e envia uma mensagem com intenção clara:</p>
+      <div class="flow-container">
+        <div class="flow-step active">💬 "quero trocar meu p13"</div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step skipped">Tipo PF/PJ</div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step skipped">Nome</div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step skipped">Produto</div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step skipped">Operação</div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step active">📍 Endereço</div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step active">💰 Pagamento</div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step active">✅ Confirmado</div>
+      </div>
+      <div class="card card-success">
+        <strong>Resultado:</strong> Um cliente recorrente que digita <em>"quero trocar meu p13"</em> agora precisa de apenas <strong>3 interações</strong> para concluir o pedido (endereço → pagamento → confirmação), contra 8+ no fluxo anterior.
+      </div>
+
+      <h3 style="font-size:16px; font-weight:600; margin: 24px 0 10px;">Fluxo: Cliente Novo com Intenção</h3>
+      <p style="font-size:13px; color: var(--gray-500); margin-bottom:10px;">Para clientes novos, o bot salva a intenção e a usa após a identificação:</p>
+      <div class="flow-container">
+        <div class="flow-step active">💬 "quero trocar meu p13"</div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step active">Tipo PF/PJ</div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step active">Nome</div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step skipped">Produto ⚡</div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step skipped">Operação ⚡</div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step active">📍 Endereço</div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step active">💰 Pagamento</div>
+      </div>
+    </div>
+
+    <!-- ======================== FEATURE 3 ======================== -->
+    <div class="section page-break">
+      <div class="section-header">
+        <div class="section-icon amber">📋</div>
+        <div>
+          <div class="section-title">3. Sistema de Ordem de Serviço (OS)</div>
+          <div class="section-subtitle">Numeração sequencial de 8 dígitos + painel de consulta</div>
+        </div>
+        <span class="badge badge-success" style="margin-left: auto;">IMPLEMENTADO ✅</span>
+      </div>
+
+      <div class="comparison" style="margin-bottom: 20px;">
+        <div class="comparison-panel before">
+          <div class="comparison-label">Antes</div>
+          <div class="msg-bubble bot">
+            <div class="sender">🤖 Bot</div>
+            🎉 <strong>PEDIDO #4 CONFIRMADO!</strong><br><br>
+            📦 1x P13<br>
+            📍 Rua ABC, 123<br>
+            💰 Total: R$ 110,00
+          </div>
+        </div>
+        <div class="comparison-panel after">
+          <div class="comparison-label">Depois</div>
+          <div class="msg-bubble bot">
+            <div class="sender">🤖 Bot</div>
+            🎉 <strong>OS #00000004 CONFIRMADA!</strong><br><br>
+            📦 1x P13<br>
+            📍 Rua ABC, 123<br>
+            💰 Total: R$ 110,00<br><br>
+            <em>Para consultar: OS 00000004</em>
+          </div>
+        </div>
+      </div>
+
+      <h3 style="font-size:16px; font-weight:600; margin: 20px 0 10px;">Painel de Consulta OS (Dashboard do Operador)</h3>
+      <p style="font-size:13px; margin-bottom:12px;">Nova aba <strong>"Consulta OS"</strong> adicionada ao menu lateral do painel do operador:</p>
+
+      <div class="os-mockup">
+        <div class="os-mockup-header">
+          <div class="os-mockup-dot red"></div>
+          <div class="os-mockup-dot yellow"></div>
+          <div class="os-mockup-dot green"></div>
+          <span style="color:#9ca3af; font-size:12px; margin-left:8px;">Consulta OS — Gas Automation</span>
+        </div>
+        <div class="os-mockup-body">
+          <div style="display:flex; gap:8px; margin-bottom:14px;">
+            <div style="flex:1; background:rgba(255,255,255,0.06); border-radius:6px; padding:8px 12px; font-size:12px; color:#6b7280;">🔍 Buscar por nº da OS...</div>
+            <div style="background:#2563eb; border-radius:6px; padding:8px 14px; font-size:12px; color:#fff; font-weight:600;">Buscar</div>
+            <div style="background:rgba(255,255,255,0.06); border-radius:6px; padding:8px 12px; font-size:12px; color:#9ca3af;">▾ Status</div>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>Nº OS</th>
+                <th>Cliente</th>
+                <th>Produto</th>
+                <th>Total</th>
+                <th>Status</th>
+                <th>Data</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="os-num">#00000007</td>
+                <td>Maria Silva</td>
+                <td>1x P13</td>
+                <td>R$ 110,00</td>
+                <td><span class="status-badge pending">Pendente</span></td>
+                <td>04/03/2026</td>
+              </tr>
+              <tr>
+                <td class="os-num">#00000006</td>
+                <td>João Santos</td>
+                <td>2x P20</td>
+                <td>R$ 420,00</td>
+                <td><span class="status-badge paid">Aprovado</span></td>
+                <td>04/03/2026</td>
+              </tr>
+              <tr>
+                <td class="os-num">#00000005</td>
+                <td>Ana Costa</td>
+                <td>1x P45</td>
+                <td>R$ 430,00</td>
+                <td><span class="status-badge delivered">Entregue</span></td>
+                <td>03/03/2026</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <h3 style="font-size:16px; font-weight:600; margin: 20px 0 10px;">Funcionalidades do Painel</h3>
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+        <div class="card" style="padding:14px 18px;">
+          <strong>🔍 Busca por OS</strong>
+          <p style="font-size:12px; color:var(--gray-500);">Digite o número de 8 dígitos para encontrar qualquer pedido</p>
+        </div>
+        <div class="card" style="padding:14px 18px;">
+          <strong>🏷️ Filtro por Status</strong>
+          <p style="font-size:12px; color:var(--gray-500);">Pendente, Aprovado, Em Rota, Concluído, Cancelado</p>
+        </div>
+        <div class="card" style="padding:14px 18px;">
+          <strong>📍 Edição de Endereço</strong>
+          <p style="font-size:12px; color:var(--gray-500);">Permite alterar endereço em OS pendentes</p>
+        </div>
+        <div class="card" style="padding:14px 18px;">
+          <strong>📊 Detalhes Completos</strong>
+          <p style="font-size:12px; color:var(--gray-500);">Clique na OS para ver itens, pagamento, datas</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ======================== ARQUIVOS ======================== -->
+    <div class="section page-break">
+      <div class="section-header">
+        <div class="section-icon blue">📁</div>
+        <div>
+          <div class="section-title">Arquivos Modificados</div>
+          <div class="section-subtitle">Mapa completo das alterações realizadas</div>
+        </div>
+      </div>
+
+      <h3 style="font-size:14px; font-weight:600; margin-bottom:10px; color:var(--gray-700);">Backend (Python)</h3>
+      <div class="file-list">
+        <div class="file-item">
+          <div class="file-icon">🐍</div>
+          <div>
+            <div class="file-name">greeting_handlers.py</div>
+            <div class="file-desc">NLU _parse_intent() + fast-track</div>
+          </div>
+        </div>
+        <div class="file-item">
+          <div class="file-icon">🐍</div>
+          <div>
+            <div class="file-name">ordering_handlers.py</div>
+            <div class="file-desc">Botões fix + _extract_product_code</div>
+          </div>
+        </div>
+        <div class="file-item">
+          <div class="file-icon">🐍</div>
+          <div>
+            <div class="file-name">identify_handlers.py</div>
+            <div class="file-desc">Fast-track após nome (intent salvo)</div>
+          </div>
+        </div>
+        <div class="file-item">
+          <div class="file-icon">🐍</div>
+          <div>
+            <div class="file-name">state_machine_v2.py</div>
+            <div class="file-desc">Novas transições fast-track</div>
+          </div>
+        </div>
+        <div class="file-item">
+          <div class="file-icon">🐍</div>
+          <div>
+            <div class="file-name">message_templates.py</div>
+            <div class="file-desc">Template OS #{os_number}</div>
+          </div>
+        </div>
+        <div class="file-item">
+          <div class="file-icon">🐍</div>
+          <div>
+            <div class="file-name">order.py</div>
+            <div class="file-desc">Property os_number (8 dígitos)</div>
+          </div>
+        </div>
+        <div class="file-item">
+          <div class="file-icon">🐍</div>
+          <div>
+            <div class="file-name">checkout_handlers.py</div>
+            <div class="file-desc">os_number no format()</div>
+          </div>
+        </div>
+        <div class="file-item">
+          <div class="file-icon">🐍</div>
+          <div>
+            <div class="file-name">complete_handlers.py</div>
+            <div class="file-desc">os_number no format()</div>
+          </div>
+        </div>
+        <div class="file-item">
+          <div class="file-icon">🐍</div>
+          <div>
+            <div class="file-name">base.py</div>
+            <div class="file-desc">os_number no format()</div>
+          </div>
+        </div>
+      </div>
+
+      <h3 style="font-size:14px; font-weight:600; margin: 16px 0 10px; color:var(--gray-700);">Frontend (React)</h3>
+      <div class="file-list">
+        <div class="file-item">
+          <div class="file-icon">⚛️</div>
+          <div>
+            <div class="file-name">OSPanel.jsx</div>
+            <div class="file-desc">🆕 Componente Consulta OS</div>
+          </div>
+        </div>
+        <div class="file-item">
+          <div class="file-icon">⚛️</div>
+          <div>
+            <div class="file-name">OperatorDashboard.jsx</div>
+            <div class="file-desc">Tab "Consulta OS" na sidebar</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ======================== VERIFICAÇÃO ======================== -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-icon green">✅</div>
+        <div>
+          <div class="section-title">Verificação e Status</div>
+          <div class="section-subtitle">Resultados dos testes de compilação e deploy</div>
+        </div>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Verificação</th>
+            <th>Status</th>
+            <th>Resultado</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Backend Python (FastAPI)</td>
+            <td><span class="badge badge-success">✅ OK</span></td>
+            <td><code>Application startup complete</code> — sem erros</td>
+          </tr>
+          <tr>
+            <td>Frontend React (Vite)</td>
+            <td><span class="badge badge-success">✅ OK</span></td>
+            <td><code>VITE ready in 577ms</code> — sem erros</td>
+          </tr>
+          <tr>
+            <td>Docker containers</td>
+            <td><span class="badge badge-success">✅ OK</span></td>
+            <td>Backend e Frontend reiniciados com health check OK</td>
+          </tr>
+          <tr>
+            <td>Teste E2E via WhatsApp</td>
+            <td><span class="badge badge-warning">⏳ Pendente</span></td>
+            <td>Enviar "quero trocar meu p13" para validar NLU</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="footer">
+      <p><strong>Gas Automation Platform</strong> — Relatório gerado em 04/03/2026</p>
+      <p>Documento confidencial — Uso interno</p>
+    </div>
+
+  </div>
+
+</body>
+</html>

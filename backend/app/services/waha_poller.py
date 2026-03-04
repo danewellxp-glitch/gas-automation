@@ -144,6 +144,10 @@ class WAHAPoller:
                             msg_id_str = key.get("_serialized", "") or key.get("id", "")
                 else:
                     msg_id_str = str(msg_id) if msg_id else ""
+                    
+                # Extrair apenas o hash final do ID para bater com o webhook
+                if msg_id_str:
+                    msg_id_str = msg_id_str.split("_")[-1]
 
                 if not msg_id_str:
                     logger.warning(f"[Poller] Mensagem sem ID válido: {msg}")
@@ -213,6 +217,10 @@ class WAHAPoller:
                         msg_id_str = key.get("_serialized", "") or key.get("id", "")
             else:
                 msg_id_str = str(msg_id) if msg_id else ""
+                
+            # Extrair apenas o hash final do ID para bater com o webhook
+            if msg_id_str:
+                msg_id_str = msg_id_str.split("_")[-1]
 
             # Extrair body (pode estar em _data.body ou body)
             body = msg.get("body", "") or msg.get("_data", {}).get("body", "")

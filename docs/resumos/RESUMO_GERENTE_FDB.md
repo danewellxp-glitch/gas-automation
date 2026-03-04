@@ -85,7 +85,7 @@ WHERE ITS.ESTLOCAL_ID = 1      -- GASMASTER - Fiscal
 
 ```bash
 # .env
-FIREBIRD_HOST=192.168.10.156
+FIREBIRD_HOST=192.168.10.167
 FIREBIRD_DATABASE=/var/firebird/Gerente.fdb  # Mudar para Gerente.fdb
 FIREBIRD_USER=SYSDBA
 FIREBIRD_PASSWORD=masterkey

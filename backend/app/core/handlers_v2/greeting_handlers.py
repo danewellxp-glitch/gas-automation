@@ -4,6 +4,7 @@ Responsáveis por boas-vindas e reconhecimento de clientes.
 """
 
 import logging
+import re
 from typing import Optional, Dict
 
 from app.core.state_machine_v2 import (
@@ -51,10 +52,21 @@ class GreetingInitialHandler(BaseHandler):
         # Buscar ou criar cliente
         customer = await self._get_customer_by_phone(conversation_context.phone)
         
+        # Detectar intenção da primeira mensagem (para fast-track)
+        detected_intent = self._parse_intent(message)
+        
         # Se não existe, criar contexto de cliente novo
         if not customer:
             customer_context = CustomerContext()
             conversation_context.is_returning = False
+            
+            # Salvar intenção detectada para uso após identificação
+            if detected_intent.get("product"):
+                conversation_context.collected_data["intent_product"] = detected_intent["product"]
+            if detected_intent.get("operation"):
+                conversation_context.collected_data["intent_operation"] = detected_intent["operation"]
+            if detected_intent.get("quantity"):
+                conversation_context.collected_data["intent_quantity"] = detected_intent["quantity"]
             
             # Cliente novo - perguntar tipo (PF/PJ)
             return self._create_result(
@@ -88,6 +100,100 @@ class GreetingInitialHandler(BaseHandler):
         )
         
         conversation_context.is_returning = True
+        
+        # FAST-TRACK: Se o cliente conhecido já expressou intenção clara na mensagem
+        # Ex: "quero trocar meu p13", "manda um gas", "preciso de botijão"
+        if detected_intent.get("product"):
+            from app.core.product_catalog import get_product
+            product = get_product(detected_intent["product"])
+            if product:
+                if not order_context:
+                    order_context = OrderContext()
+                
+                product_code = detected_intent["product"]
+                operation = detected_intent.get("operation", "exchange")  # default: troca
+                quantity = detected_intent.get("quantity", 1)
+                
+                # Calcular preço
+                if operation == "sale":
+                    unit_price = product.price_sale
+                else:
+                    unit_price = product.price_exchange
+                
+                total = unit_price * quantity
+                order_context.items.append({
+                    "product_code": product_code,
+                    "quantity": quantity,
+                    "unit_price": float(unit_price),
+                    "subtotal": float(total),
+                    "operation_type": operation,
+                })
+                order_context.subtotal = float(total)
+                order_context.operation_type = operation
+                conversation_context.collected_data["product_code"] = product_code
+                conversation_context.collected_data["quantity"] = quantity
+                conversation_context.collected_data["operation_type"] = operation
+                
+                # Se tem endereço e é retira → pagamento
+                if operation == "pickup":
+                    from app.core.product_catalog import STORE_ADDRESS
+                    customer_type_key = "payment_methods_pj" if customer_type == "PJ" else "payment_methods_pf"
+                    payment_buttons = get_quick_replies(customer_type_key)
+                    return self._create_result(
+                        conversation_context=conversation_context,
+                        customer_context=customer_context,
+                        order_context=order_context,
+                        responses=[
+                            self._create_response(
+                                text=f"👋 Olá, {customer_context.name}!\n\n"
+                                     f"✅ {quantity}x {product_code} - {self._format_currency(total)}\n\n"
+                                     f"🏪 Retirada na loja: {STORE_ADDRESS}\n\n"
+                                     f"💰 Como deseja pagar?",
+                                buttons=payment_buttons
+                            )
+                        ],
+                        next_state=ConversationState.CHECKOUT_PAYMENT
+                    )
+                
+                # Se tem endereço cadastrado → confirmar endereço
+                if customer_context.addresses:
+                    from app.core.message_templates import CONFIRM_ADDRESS
+                    address = customer_context.addresses[customer_context.default_address_idx]
+                    order_context.address = address
+                    return self._create_result(
+                        conversation_context=conversation_context,
+                        customer_context=customer_context,
+                        order_context=order_context,
+                        responses=[
+                            self._create_response(
+                                text=f"👋 Olá, {customer_context.name}!\n\n"
+                                     f"✅ {quantity}x {product_code} ({operation == 'exchange' and 'Troca' or 'Compra'}) - {self._format_currency(total)}\n\n"
+                                     f"📍 Entregar em: {self._format_address(address)}\n\n"
+                                     f"Confirma?",
+                                buttons=[
+                                    {"id": "confirm_addr", "text": "✅ Sim, entregar aí"},
+                                    {"id": "change_addr", "text": "✏️ Outro endereço"},
+                                ]
+                            )
+                        ],
+                        next_state=ConversationState.ORDERING_ADDRESS_CONFIRM
+                    )
+                
+                # Sem endereço → pedir endereço
+                from app.core.message_templates import ASK_ADDRESS
+                return self._create_result(
+                    conversation_context=conversation_context,
+                    customer_context=customer_context,
+                    order_context=order_context,
+                    responses=[
+                        self._create_response(
+                            text=f"👋 Olá, {customer_context.name}!\n\n"
+                                 f"✅ {quantity}x {product_code} - {self._format_currency(total)}\n\n"
+                                 + ASK_ADDRESS
+                        )
+                    ],
+                    next_state=ConversationState.ORDERING_ADDRESS
+                )
         
         # Verificar se tem pedido abandonado
         if conversation_context.resumed_from_snapshot:
@@ -206,6 +312,73 @@ class GreetingInitialHandler(BaseHandler):
             ],
             next_state=conversation_context.current_state  # Manter no estado recuperado
         )
+    
+    def _parse_intent(self, message: str) -> Dict:
+        """Analisa a mensagem do cliente para extrair intenção de compra.
+        
+        Retorna dict com chaves opcionais: product, operation, quantity.
+        
+        Exemplos:
+        - "quero trocar meu p13" → {product: "P13", operation: "exchange"}
+        - "preciso de 2 botijões de gás" → {product: "P13", quantity: 2}
+        - "manda um gas pra mim" → {product: "P13", operation: "exchange"}
+        - "quero comprar botijão de 45" → {product: "P45", operation: "sale"}
+        - "oi" / "olá" → {} (sem intenção detectada)
+        """
+        msg_lower = message.lower().strip()
+        intent = {}
+        
+        # Ignorar saudações simples (não tentar extrair intenção)
+        greetings = ["oi", "olá", "ola", "bom dia", "boa tarde", "boa noite",
+                      "hello", "hi", "menu", "inicio", "início"]
+        if msg_lower in greetings:
+            return intent
+        
+        # --- Detectar PRODUTO ---
+        # Códigos diretos (P13, P20, P45)
+        if re.search(r'\bp\s*13\b', msg_lower):
+            intent["product"] = "P13"
+        elif re.search(r'\bp\s*20\b', msg_lower):
+            intent["product"] = "P20"
+        elif re.search(r'\bp\s*45\b', msg_lower):
+            intent["product"] = "P45"
+        else:
+            # Por peso
+            weight_match = re.search(r'\b(13|20|45)\s*(?:kg|kilo|kilos|quilos)?\b', msg_lower)
+            if weight_match:
+                weight_map = {"13": "P13", "20": "P20", "45": "P45"}
+                intent["product"] = weight_map.get(weight_match.group(1))
+            else:
+                # Palavras-chave específicas
+                if any(kw in msg_lower for kw in ["grande", "industrial", "comercial"]):
+                    intent["product"] = "P45"
+                elif any(kw in msg_lower for kw in [
+                    "gas", "gás", "botijão", "botijao", "butijão", "butijao",
+                    "botija", "bujao", "bujão", "cozinha", "residencial",
+                ]):
+                    intent["product"] = "P13"  # Mais vendido
+        
+        # --- Detectar OPERAÇÃO ---
+        if any(kw in msg_lower for kw in ["troca", "trocar", "troco", "vazio"]):
+            intent["operation"] = "exchange"
+        elif any(kw in msg_lower for kw in ["compra", "comprar", "novo", "primeira vez"]):
+            intent["operation"] = "sale"
+        elif any(kw in msg_lower for kw in ["retira", "retirar", "buscar", "busca", "pegar"]):
+            intent["operation"] = "pickup"
+        elif intent.get("product"):
+            # Se mencionou produto mas não operação, default = troca
+            intent["operation"] = "exchange"
+        
+        # --- Detectar QUANTIDADE ---
+        qty_match = re.search(r'(\d+)\s*x\s', msg_lower)
+        if qty_match:
+            intent["quantity"] = min(int(qty_match.group(1)), 10)
+        else:
+            qty_match = re.search(r'(\d+)\s*(?:botij|butij|bujao|bujão|unidade)', msg_lower)
+            if qty_match:
+                intent["quantity"] = min(int(qty_match.group(1)), 10)
+        
+        return intent
 
 
 class GreetingReturningHandler(BaseHandler):

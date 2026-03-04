@@ -4,7 +4,7 @@
 
 **Erro no Console:**
 ```
-WebSocket connection to 'ws://192.168.10.156:8000/ws/dashboard?token=...' failed
+WebSocket connection to 'ws://192.168.10.167:8000/ws/dashboard?token=...' failed
 WebSocket fechado: 1006
 ```
 

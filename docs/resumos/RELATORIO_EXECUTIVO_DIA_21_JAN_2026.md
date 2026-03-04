@@ -3,7 +3,7 @@
 **Sistema:** Gas Automation  
 **Data:** 21/01/2026  
 **Status:** ✅ PRODUTIVO  
-**Servidor:** 192.168.10.156
+**Servidor:** 192.168.10.167
 
 ---
 
@@ -302,9 +302,9 @@ Duration: ~6 hours
 ```
 
 **Acessos:**
-- **Grafana:** http://192.168.10.156:3002
-- **Prometheus:** http://192.168.10.156:9090
-- **Backend Metrics:** http://192.168.10.156:8000/metrics
+- **Grafana:** http://192.168.10.167:3002
+- **Prometheus:** http://192.168.10.167:9090
+- **Backend Metrics:** http://192.168.10.167:8000/metrics
 
 ---
 
@@ -780,11 +780,11 @@ Memória: 50-100 MB ✅
 ## 📞 CONTATOS E RECURSOS
 
 **Sistema:**
-- Frontend: http://192.168.10.156:3003
-- Backend API: http://192.168.10.156:8000
-- Grafana: http://192.168.10.156:3002
-- Prometheus: http://192.168.10.156:9090
-- PgAdmin: http://192.168.10.156:5050
+- Frontend: http://192.168.10.167:3003
+- Backend API: http://192.168.10.167:8000
+- Grafana: http://192.168.10.167:3002
+- Prometheus: http://192.168.10.167:9090
+- PgAdmin: http://192.168.10.167:5050
 
 **Documentação Principal:**
 - `SPRINT_1_FINALIZADO.md` - Relatório Sprint 1
@@ -857,4 +857,4 @@ Dia extremamente produtivo! O sistema Gas Automation está agora em um nível pr
 
 *Relatório gerado automaticamente em 21/01/2026*  
 *Sistema: Gas Automation v1.0*  
-*Servidor: 192.168.10.156*
+*Servidor: 192.168.10.167*

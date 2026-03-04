@@ -34,7 +34,7 @@ DriverConfig.fb_client_library = (
 # ──────────────────────────────────────────────────────────────
 # CONFIGURAÇÕES DE CONEXÃO (SEM SYSDBA)
 # ──────────────────────────────────────────────────────────────
-HOST = "192.168.10.156"
+HOST = "192.168.10.167"
 PORT = 3050
 DB_PATH = "/var/firebird/Gas.fdb"
 

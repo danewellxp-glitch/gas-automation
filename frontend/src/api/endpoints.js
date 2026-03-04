@@ -2,7 +2,7 @@
  * URLs centralizadas para todos os endpoints da API
  */
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://192.168.10.156:8000';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://192.168.10.167:8000';
 
 export const ENDPOINTS = {
   // Autenticação
@@ -89,7 +89,7 @@ export const ENDPOINTS = {
 };
 
 // URLs para WebSocket
-export const WS_BASE_URL = import.meta.env.VITE_WS_BASE_URL || 'ws://192.168.10.156:8000';
+export const WS_BASE_URL = import.meta.env.VITE_WS_BASE_URL || 'ws://192.168.10.167:8000';
 
 export const WS_ENDPOINTS = {
   CHAT: `${WS_BASE_URL}/ws/chat`,

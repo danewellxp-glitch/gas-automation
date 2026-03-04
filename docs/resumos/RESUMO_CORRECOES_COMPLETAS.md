@@ -71,7 +71,7 @@ O erro 403 do WebSocket é **comportamento esperado** quando:
 - ✅ **WebSocket trata erros 403 corretamente**
 - ⚠️ **Token expirado requer novo login** (comportamento esperado)
 
-**Teste:** `http://192.168.10.156:3001/` deve carregar normalmente agora!
+**Teste:** `http://192.168.10.167:3001/` deve carregar normalmente agora!
 
 Se ainda houver problemas, verifique:
 1. Token no localStorage está válido?

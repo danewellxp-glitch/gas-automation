@@ -12,12 +12,12 @@
 
 **Grafana Home:**
 ```
-http://192.168.10.156:3002
+http://192.168.10.167:3002
 ```
 
 **Dashboard direto:**
 ```
-http://192.168.10.156:3002/d/gas-websocket-monitoring/gas-automation-websocket-monitoring-fase-3
+http://192.168.10.167:3002/d/gas-websocket-monitoring/gas-automation-websocket-monitoring-fase-3
 ```
 
 ---
@@ -86,7 +86,7 @@ Senha: admin123
 
 1. **Abrir Grafana:**
    ```
-   http://192.168.10.156:3002
+   http://192.168.10.167:3002
    ```
 
 2. **Login:**
@@ -98,7 +98,7 @@ Senha: admin123
    
    - **Opção B:** Usar o link direto:
      ```
-     http://192.168.10.156:3002/d/gas-websocket-monitoring/gas-automation-websocket-monitoring-fase-3
+     http://192.168.10.167:3002/d/gas-websocket-monitoring/gas-automation-websocket-monitoring-fase-3
      ```
 
 4. **Ajustar Período de Visualização:**
@@ -261,10 +261,10 @@ docker logs gas_grafana --tail 50
 1. **Verificar Prometheus:**
    ```bash
    # Verificar se Prometheus está coletando
-   curl http://192.168.10.156:9090/api/v1/targets
+   curl http://192.168.10.167:9090/api/v1/targets
    
    # Verificar se backend expõe métricas
-   curl http://192.168.10.156:8000/metrics | grep websocket_
+   curl http://192.168.10.167:8000/metrics | grep websocket_
    ```
 
 2. **Verificar Datasource no Grafana:**
@@ -287,7 +287,7 @@ Para monitorar o sistema em tempo real:
 
 1. **Abrir Dashboard:**
    ```
-   http://192.168.10.156:3002/d/gas-websocket-monitoring
+   http://192.168.10.167:3002/d/gas-websocket-monitoring
    ```
 
 2. **Configurar auto-refresh:** 5 segundos
@@ -298,7 +298,7 @@ Para monitorar o sistema em tempo real:
 
 5. **TV Mode:** Para exibir em monitor dedicado, adicione `?kiosk` na URL:
    ```
-   http://192.168.10.156:3002/d/gas-websocket-monitoring?kiosk
+   http://192.168.10.167:3002/d/gas-websocket-monitoring?kiosk
    ```
 
 ---
@@ -308,7 +308,7 @@ Para monitorar o sistema em tempo real:
 O Grafana é responsivo e funciona bem em mobile:
 
 ```
-http://192.168.10.156:3002
+http://192.168.10.167:3002
 ```
 
 **Dica:** Adicione aos favoritos do navegador mobile para acesso rápido.
@@ -356,7 +356,7 @@ http://192.168.10.156:3002
 
 ## ✅ **CHECKLIST DE VERIFICAÇÃO**
 
-- [ ] Grafana acessível em http://192.168.10.156:3002
+- [ ] Grafana acessível em http://192.168.10.167:3002
 - [ ] Login funciona com admin/admin123
 - [ ] Dashboard "Gas Automation - WebSocket Monitoring (Fase 3)" aparece
 - [ ] Todos os 8 painéis carregam dados
@@ -372,7 +372,7 @@ http://192.168.10.156:3002
 Para suporte, consulte:
 - `FASE_3_COMPLETA.md` - Documentação completa da Fase 3
 - Logs: `docker logs gas_grafana`
-- Métricas: `curl http://192.168.10.156:8000/metrics`
+- Métricas: `curl http://192.168.10.167:8000/metrics`
 
 ---
 

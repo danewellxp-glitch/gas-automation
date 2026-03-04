@@ -34,7 +34,7 @@ const DriverDashboard = () => {
   const [timeWorked, setTimeWorked] = useState({ today: '0h 0m', week: '0h 0m' });
 
   // API Base URL
-  const API_URL = 'http://192.168.10.156:8000';
+  const API_URL = 'http://192.168.10.167:8000';
 
   // Carregar dados do motorista
   const loadDriverData = useCallback(async () => {

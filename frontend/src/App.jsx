@@ -11,6 +11,7 @@ import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import Orders from './pages/Orders'
 import Chats from './pages/Chats'
+import VeloceChatDashboard from './pages/VeloceChatDashboard'
 import ChangePassword from './pages/ChangePassword'
 
 // Página de Teste - Notificações V2
@@ -37,7 +38,7 @@ function AppRoutes() {
     if (!user?.role) return '/login'
 
     if (user?.must_change_password) return '/change-password'
-    
+
     const roleRoutes = {
       'driver': '/driver/dashboard',
       'admin': '/admin',
@@ -45,28 +46,28 @@ function AppRoutes() {
       'operator': '/operador',
       'user': '/operador'
     }
-    
+
     return roleRoutes[user.role] || '/dashboard'
   }, [user])
 
   return (
     <Routes>
       {/* Home redireciona para login ou dashboard baseado em autenticação e role */}
-      <Route 
-        path="/" 
+      <Route
+        path="/"
         element={
           isAuthenticated ? (
             <Navigate to={getDashboardPath()} replace />
           ) : (
             <Navigate to="/login" replace />
           )
-        } 
+        }
       />
 
       {/* Login redireciona para o dashboard correto se já autenticado */}
-      <Route 
-        path="/login" 
-        element={isAuthenticated ? <Navigate to={getDashboardPath()} replace /> : <Login />} 
+      <Route
+        path="/login"
+        element={isAuthenticated ? <Navigate to={getDashboardPath()} replace /> : <Login />}
       />
 
       <Route
@@ -79,8 +80,8 @@ function AppRoutes() {
       />
 
       {/* Dashboard padrão (protegido) */}
-      <Route 
-        path="/dashboard" 
+      <Route
+        path="/dashboard"
         element={
           <ProtectedRoute>
             <Layout />
@@ -89,68 +90,68 @@ function AppRoutes() {
       >
         <Route index element={<Dashboard />} />
         <Route path="pedidos" element={<Orders />} />
-        <Route path="chats" element={<Chats />} />
+        <Route path="chats" element={<VeloceChatDashboard />} />
       </Route>
 
       {/* Página de Teste - Notificações V2 (sem autenticação para facilitar testes) */}
       <Route path="/test-notifications-v2" element={<TestNotificationsPage />} />
 
       {/* Paineis por Role (com layout próprio) */}
-      <Route 
-        path="/operador" 
+      <Route
+        path="/operador"
         element={
           <ProtectedRoute requiredRole="operator">
             <OperatorDashboard />
           </ProtectedRoute>
-        } 
+        }
       />
-      <Route 
-        path="/admin" 
+      <Route
+        path="/admin"
         element={
           <ProtectedRoute requiredRole="admin">
             <AdminDashboard />
           </ProtectedRoute>
-        } 
+        }
       />
-      <Route 
-        path="/owner" 
+      <Route
+        path="/owner"
         element={
           <ProtectedRoute requiredRole="owner">
             <OwnerDashboard />
           </ProtectedRoute>
-        } 
+        }
       />
 
       {/* Rotas do Driver */}
-      <Route 
-        path="/driver/login" 
+      <Route
+        path="/driver/login"
         element={
           isAuthenticated ? <Navigate to="/driver/dashboard" replace /> : <DriverLogin />
-        } 
+        }
       />
-      <Route 
-        path="/driver/dashboard" 
+      <Route
+        path="/driver/dashboard"
         element={
           <ProtectedRoute requiredRole="driver">
             <DriverDashboard />
           </ProtectedRoute>
-        } 
+        }
       />
-      <Route 
-        path="/driver/delivery/:id" 
+      <Route
+        path="/driver/delivery/:id"
         element={
           <ProtectedRoute requiredRole="driver">
             <DeliveryDetail />
           </ProtectedRoute>
-        } 
+        }
       />
-      <Route 
-        path="/driver/history" 
+      <Route
+        path="/driver/history"
         element={
           <ProtectedRoute requiredRole="driver">
             <DeliveryHistory />
           </ProtectedRoute>
-        } 
+        }
       />
       <Route
         path="/driver/profile"

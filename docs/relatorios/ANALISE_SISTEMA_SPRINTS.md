@@ -55,7 +55,7 @@ cors_origins: list[str] = [..., "*"]  # Permite TODAS as origens
 # Remover "*" e manter apenas origens específicas
 cors_origins: list[str] = [
     "http://localhost:3003",
-    "http://192.168.10.156:3003",
+    "http://192.168.10.167:3003",
 ]
 # Em produção: apenas domínio real
 ```
@@ -529,7 +529,7 @@ const fetchWithTimeout = (url, options = {}, timeout = 10000) => {
 }
 
 // Usar:
-await fetchWithTimeout('http://192.168.10.156:8000/api/orders', {
+await fetchWithTimeout('http://192.168.10.167:8000/api/orders', {
   method: 'POST',
   ...
 }, 15000)  // 15 segundos

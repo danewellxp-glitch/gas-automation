@@ -6,7 +6,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import logger from '../utils/logger'
 
-const WS_URL = import.meta.env.VITE_WS_URL || 'ws://192.168.10.156:8000'
+const WS_URL = import.meta.env.VITE_WS_URL || 'ws://192.168.10.167:8000'
 
 export function useWebSocketDriver(onDeliveryAssigned, onDeliveryUpdated, onOperatorMessage) {
   const [connected, setConnected] = useState(false)
@@ -37,6 +37,15 @@ export function useWebSocketDriver(onDeliveryAssigned, onDeliveryUpdated, onOper
 
         // Processar eventos específicos
         switch (data.type) {
+          case 'new_delivery_available':
+            logger.log('🚚 Nova entrega disponível para aceitar!')
+            showNotification('Nova Entrega Disponível!', `Pedido #${data.data?.order_number || ''} disponível para entrega`)
+            playSound()
+            if (onDeliveryAssigned) {
+              onDeliveryAssigned(data.data)
+            }
+            break
+
           case 'delivery_assigned':
             logger.log('🚚 Nova entrega alocada!')
             showNotification('Nova Entrega!', 'Uma nova entrega foi alocada para você')

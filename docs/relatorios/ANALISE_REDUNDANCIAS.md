@@ -43,8 +43,8 @@ ModuleNotFoundError: No module named 'slowapi'
 
 | Arquivo | URL Hardcoded | Problema |
 |---------|---------------|----------|
-| `AuditLogsPanel.jsx:19` | `http://192.168.10.156:8000/api/audit-logs` | IP fixo |
-| `utils/api.js:7` | `http://192.168.10.156:8000/api` | IP fixo (fallback) |
+| `AuditLogsPanel.jsx:19` | `http://192.168.10.167:8000/api/audit-logs` | IP fixo |
+| `utils/api.js:7` | `http://192.168.10.167:8000/api` | IP fixo (fallback) |
 
 **Recomendacao:** Usar apenas variaveis de ambiente (`VITE_API_URL`)
 

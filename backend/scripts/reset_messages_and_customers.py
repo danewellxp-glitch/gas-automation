@@ -78,6 +78,7 @@ async def main():
     from app.models.event_log import EventLog
     from app.models.order import Order
     from app.models.customer import Customer
+    from app.models.auth_models import Conversation, Message, Contact
     from sqlalchemy import delete
 
     logger.info("=== Reset: mensagens, testes e clientes ===\n")
@@ -110,6 +111,12 @@ async def main():
             r = await db.execute(delete(Customer))
             customer_count = r.rowcount
             logger.info("   Customer: %d removidos.", customer_count)
+
+            # 2.4 Veloce Chat Features
+            r1 = await db.execute(delete(Message))
+            r2 = await db.execute(delete(Conversation))
+            r3 = await db.execute(delete(Contact))
+            logger.info("   Veloce Chat (Conversations/Messages/Contacts): %d/%d/%d removidos.", r2.rowcount, r1.rowcount, r3.rowcount)
 
             await db.commit()
             logger.info("\n   PostgreSQL: commit ok.")

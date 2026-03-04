@@ -3,7 +3,7 @@
 **Data:** 21 de Janeiro de 2026  
 **Status:** ✅ **100% IMPLEMENTADO E TESTADO**  
 **Sistema:** Gas Automation v1.0.0  
-**Base URL:** http://192.168.10.156:8000
+**Base URL:** http://192.168.10.167:8000
 
 ---
 
@@ -405,7 +405,7 @@ Content-Type: application/json
 
 ```javascript
 const token = localStorage.getItem('token');
-const ws = new WebSocket(`ws://192.168.10.156:8000/ws/dashboard?token=${token}`);
+const ws = new WebSocket(`ws://192.168.10.167:8000/ws/dashboard?token=${token}`);
 
 ws.onopen = () => console.log('Conectado');
 ws.onmessage = (event) => {
@@ -827,7 +827,7 @@ export const updateDriverStatus = async (status) => {
 ```javascript
 const connectDriverWebSocket = () => {
   const token = localStorage.getItem('token');
-  const ws = new WebSocket(`ws://192.168.10.156:8000/ws/dashboard?token=${token}`);
+  const ws = new WebSocket(`ws://192.168.10.167:8000/ws/dashboard?token=${token}`);
   
   ws.onmessage = (event) => {
     const message = JSON.parse(event.data);
@@ -863,7 +863,7 @@ const connectDriverWebSocket = () => {
 ### **Swagger UI (API Docs Interativa):**
 
 ```
-http://192.168.10.156:8000/docs
+http://192.168.10.167:8000/docs
 ```
 
 Buscar por tag: **"Drivers"**

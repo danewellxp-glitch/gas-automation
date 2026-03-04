@@ -226,7 +226,7 @@ import PaginatedOrdersList from '../components/PaginatedOrdersList'
 
 ```bash
 # 1. Acessar o dashboard
-http://192.168.10.156:3001
+http://192.168.10.167:3001
 
 # 2. Abrir componente com lista de pedidos
 # 3. Verificar que carrega apenas 30 iniciais

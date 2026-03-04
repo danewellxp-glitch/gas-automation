@@ -1,8 +1,7 @@
 """
-"""
-Serviço de Geocoding com fallback estratégico.
-Converte CEPs em coordenadas geográficas usando múltiplas APIs brasileiras.
-BrasilAPI v2 (primário) + Nominatim/OpenStreetMap (fallback).
+Servico de Geocoding com fallback estrategico.
+Converte CEPs em coordenadas geograficas usando multiplas APIs brasileiras.
+BrasilAPI v2 (primario) + Nominatim/OpenStreetMap (fallback).
 """
 
 import json
@@ -28,9 +27,9 @@ class GeocodingService:
     Estratégia:
     1. Verificar cache Redis (rápido)
     2. Verificar cache DB (persistente)
-    3. Tentar CEPAberto (se token disponível) → coordenadas + endereço
-    4. Tentar ViaCEP → apenas endereço
-    5. Tentar Nominatim → coordenadas do endereço
+    3. Tentar CEPAberto (se token disponivel) -> coordenadas + endereco
+    4. Tentar ViaCEP -> apenas endereco
+    5. Tentar Nominatim -> coordenadas do endereco
     """
     
     # Tempo de cache: 30 dias
@@ -484,7 +483,7 @@ async def geocode_address(
 ) -> Optional[Tuple[float, float]]:
     """
     Geocodifica endereço e retorna (lat, lng) ou None.
-    Estratégia: BrasilAPI por CEP (primário) → Nominatim (fallback).
+    Estrategia: BrasilAPI por CEP (primario) -> Nominatim (fallback).
     
     Args:
         address: Dicionário com dados do endereço (street, cidade, estado, cep)

@@ -22,7 +22,7 @@ WHATSAPP_HOOK_URL: ${WHATSAPP_HOOK_URL:-http://backend:8000/webhooks/waha}
 
 - Se **backend e WAHA** rodam no mesmo Docker: não defina `WHATSAPP_HOOK_URL` (vale `http://backend:8000/webhooks/waha`).
 - Se o **backend roda na máquina** (fora do Docker) e o WAHA no Docker: no `.env` defina a URL acessível pelo container, por exemplo:  
-  `WHATSAPP_HOOK_URL=http://192.168.10.156:8000/webhooks/waha`  
+  `WHATSAPP_HOOK_URL=http://192.168.10.167:8000/webhooks/waha`  
   (troque pelo IP da máquina onde o backend está).
 
 ## Teste ponta a ponta (mensagem → chat do operador)
@@ -34,7 +34,7 @@ Script que simula uma mensagem no webhook e confere se ela aparece no chat do op
 python backend/scripts/test_waha_webhook_e2e.py
 
 # Backend em outra URL
-BACKEND_URL=http://192.168.10.156:8000 python backend/scripts/test_waha_webhook_e2e.py
+BACKEND_URL=http://192.168.10.167:8000 python backend/scripts/test_waha_webhook_e2e.py
 ```
 
 O script:
@@ -66,10 +66,10 @@ Se o backend roda na sua máquina (ex.: `uvicorn` na porta 8000) e o WAHA está 
 No **`.env`** (na raiz do projeto), adicione ou ajuste:
 
 ```env
-WHATSAPP_HOOK_URL=http://192.168.10.156:8000/webhooks/waha
+WHATSAPP_HOOK_URL=http://192.168.10.167:8000/webhooks/waha
 ```
 
-Use o IP da máquina onde o backend está (no mesmo PC use `host.docker.internal:8000` no Mac/Windows, ou o IP da interface; no Linux pode ser `172.17.0.1` ou o IP da sua rede, ex. `192.168.10.156`).
+Use o IP da máquina onde o backend está (no mesmo PC use `host.docker.internal:8000` no Mac/Windows, ou o IP da interface; no Linux pode ser `172.17.0.1` ou o IP da sua rede, ex. `192.168.10.167`).
 
 Depois **reinicie o container do WAHA** para carregar a variável:
 
@@ -93,7 +93,7 @@ WAHA Webhook recebido: event=message session=default payload_keys=[...]
 Confirme que o backend responde ao webhook:
 
 ```bash
-BACKEND_URL=http://192.168.10.156:8000 python3 backend/scripts/test_waha_webhook_e2e.py
+BACKEND_URL=http://192.168.10.167:8000 python3 backend/scripts/test_waha_webhook_e2e.py
 ```
 
 Se esse teste passar, o fluxo backend → EventLog → Operador está ok; o problema é só o WAHA não chamar a URL (passo 1).
@@ -108,18 +108,18 @@ Se esse teste passar, o fluxo backend → EventLog → Operador está ok; o prob
 
 ```bash
 # 1) Atualizar sessão com webhook (se ainda não tiver)
-curl -s -X PUT "http://192.168.10.156:3000/api/sessions/default" \
+curl -s -X PUT "http://192.168.10.167:3000/api/sessions/default" \
   -H "X-Api-Key: gasautomation123" \
   -H "Content-Type: application/json" \
   -d '{"name":"default","config":{"webhooks":[{"url":"http://backend:8000/webhooks/waha","events":["message","message.ack","session.status"]}]}}'
 
 # 2) Iniciar a sessão
-curl -s -X POST "http://192.168.10.156:3000/api/sessions/default/start" \
+curl -s -X POST "http://192.168.10.167:3000/api/sessions/default/start" \
   -H "X-Api-Key: gasautomation123" \
   -H "Content-Type: application/json"
 
 # 3) Verificar status (deve mostrar "status": "WORKING" após alguns segundos)
-curl -s "http://192.168.10.156:3000/api/sessions/default" -H "X-Api-Key: gasautomation123"
+curl -s "http://192.168.10.167:3000/api/sessions/default" -H "X-Api-Key: gasautomation123"
 ```
 
 Depois de **WORKING**, envie uma nova mensagem no WhatsApp; o robô deve responder. Se a sessão voltar a STOPPED após reiniciar o container WAHA, repita o passo 2 (start).

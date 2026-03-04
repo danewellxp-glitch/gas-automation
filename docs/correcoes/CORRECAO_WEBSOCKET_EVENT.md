@@ -46,4 +46,4 @@ Se o erro persistir, pode ser cache do navegador:
 - ✅ useWebSocket.js com export useWebSocketEvent (compatibilidade)
 - ✅ Cache do Vite limpo
 
-**Teste:** `http://192.168.10.156:3001/` deve carregar normalmente após hard refresh.
+**Teste:** `http://192.168.10.167:3001/` deve carregar normalmente após hard refresh.

@@ -3,7 +3,7 @@ import logger from '../utils/logger'
 
 // Pega a URL base da API das variáveis de ambiente
 // Em produção, VITE_API_URL deve ser configurado no .env
-const apiBaseURL = import.meta.env.VITE_API_URL || 'http://192.168.10.156:8000/api'
+const apiBaseURL = import.meta.env.VITE_API_URL || 'http://192.168.10.167:8000/api'
 
 const api = axios.create({
   baseURL: apiBaseURL,

@@ -1,4 +1,4 @@
-# 📋 PLANO DE ADAPTAÇÃO: eric_files → Servidor Ubuntu 192.168.10.156
+# 📋 PLANO DE ADAPTAÇÃO: eric_files → Servidor Ubuntu 192.168.10.167
 
 ## 📊 ANÁLISE ATUAL
 
@@ -356,7 +356,7 @@ Comando de backup:
   pg_dump -h localhost -U user -d database > backup.sql
 
 Comando de restore:
-  psql -h 192.168.10.156 -U user -d database < backup.sql
+  psql -h 192.168.10.167 -U user -d database < backup.sql
 ```
 
 ---

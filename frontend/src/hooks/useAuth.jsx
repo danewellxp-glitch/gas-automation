@@ -3,7 +3,7 @@ import { createContext, useContext, useState, useCallback, useEffect } from 'rea
 const AuthContext = createContext(null)
 
 function getApiUrl() {
-  return import.meta.env.VITE_API_URL || 'http://192.168.10.156:8000/api'
+  return import.meta.env.VITE_API_URL || 'http://192.168.10.167:8000/api'
 }
 
 function safeJsonParse(value) {

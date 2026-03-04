@@ -85,7 +85,7 @@ A integração Firebird está **parcialmente implementada** com:
 
 ```bash
 # Conexão Firebird
-FIREBIRD_HOST=192.168.10.156
+FIREBIRD_HOST=192.168.10.167
 FIREBIRD_DATABASE=/var/firebird/Gas.fdb
 FIREBIRD_USER=SYSDBA
 FIREBIRD_PASSWORD=masterkey

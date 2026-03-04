@@ -473,7 +473,7 @@ class BaseHandler(ABC):
                 delivery_time = "{}-{} min".format(area.delivery_time_min, area.delivery_time_max)
 
         return ORDER_CONFIRMED.format(
-            order_number=order.order_number,
+            os_number=order.os_number,
             items_summary=items_text,
             address=address_text,
             total=self._format_currency(order.total_amount),

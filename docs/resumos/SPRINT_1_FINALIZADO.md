@@ -301,7 +301,7 @@ scrape_configs:
    - METRICS_TOKEN: NOT SET (needs config) ⚠️
 
 ✅ Frontend
-   - http://192.168.10.156:3003/: 200 OK ✓
+   - http://192.168.10.167:3003/: 200 OK ✓
 ```
 
 ### ⏳ Pending Manual Tests

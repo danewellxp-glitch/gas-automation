@@ -81,7 +81,7 @@ SECRET_KEY=$(openssl rand -hex 32) python -m app.main
 ```python
 cors_origins: list[str] = [
     "http://localhost:3003",
-    "http://192.168.10.156:3003",
+    "http://192.168.10.167:3003",
     "*"  # ❌ REMOVE ISSO
 ]
 ```
@@ -90,7 +90,7 @@ cors_origins: list[str] = [
 ```python
 cors_origins: list[str] = [
     "http://localhost:3003",
-    "http://192.168.10.156:3003",
+    "http://192.168.10.167:3003",
     # Em produção, adicionar apenas domínio real
     # "https://seu-dominio.com.br"
 ]
@@ -575,7 +575,7 @@ const token = localStorage.getItem('token')
 ```javascript
 // Cookie é enviado automaticamente pelo navegador
 // Apenas fazer fetch normalmente com credentials
-fetch('http://192.168.10.156:8000/api/orders', {
+fetch('http://192.168.10.167:8000/api/orders', {
   credentials: 'include'  // Importante!
 })
 ```
@@ -880,7 +880,7 @@ Após merge deste Sprint:
 
 3. **CORS errors:** Verifique se frontend está na whitelist
    ```python
-   cors_origins = ["http://192.168.10.156:3003"]
+   cors_origins = ["http://192.168.10.167:3003"]
    ```
 
 4. **WebSocket não conecta:** Verifique se está passando token na URL

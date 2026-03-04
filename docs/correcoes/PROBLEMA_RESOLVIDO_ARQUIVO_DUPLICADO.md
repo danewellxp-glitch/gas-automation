@@ -41,4 +41,4 @@ Após remover o arquivo duplicado, o sistema deve carregar normalmente:
 - ✅ AuthProvider funcionando
 - ✅ Dashboard carregando corretamente
 
-**Teste:** `http://192.168.10.156:3001/` deve funcionar agora!
+**Teste:** `http://192.168.10.167:3001/` deve funcionar agora!

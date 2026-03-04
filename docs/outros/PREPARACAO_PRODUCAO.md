@@ -40,12 +40,12 @@
 
 #### 6. **Frontend - URLs Hardcoded**
 **Arquivo:** `frontend/src/components/operator/OperatorDashboardOverview.jsx`
-- **Linha 25-30:** URLs hardcoded `http://192.168.10.156:8000`
+- **Linha 25-30:** URLs hardcoded `http://192.168.10.167:8000`
 - **Ação:** Usar variável de ambiente ou api.js
 
 #### 7. **Frontend - URLs Hardcoded**
 **Arquivo:** `frontend/src/components/admin/DashboardOverview.jsx`
-- **Linha 25-33:** URLs hardcoded `http://192.168.10.156:8000`
+- **Linha 25-33:** URLs hardcoded `http://192.168.10.167:8000`
 - **Ação:** Usar variável de ambiente ou api.js
 
 ---

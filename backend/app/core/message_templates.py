@@ -72,9 +72,7 @@ ASK_PRODUCT = """🛒 Qual botijão você precisa?
 {product_list}"""
 
 PRODUCT_SELECTED = """✅ *{product_name}* selecionado!
-💰 Valor unitário: {unit_price}
-
-Quantos botijões você deseja?"""
+💰 Valor: {unit_price}"""
 
 ASK_QUANTITY = """Quantos botijões você deseja?"""
 
@@ -87,10 +85,11 @@ ASK_MORE_ITEMS = """Adicionar mais produtos?"""
 # TEMPLATES DE ENDEREÇO
 # ═══════════════════════════════════════════════════════════════════════
 
-ASK_ADDRESS = """📍 Informe o *endereço completo* para entrega e, se quiser, *complemento ou referência* (na mesma mensagem ou na linha de baixo).
+ASK_ADDRESS = """📍 Informe o *endereço completo* para entrega, incluindo o *CEP*.
+Se quiser, adicione complemento ou referência na linha de baixo.
 
 _Exemplo:_
-_Rua das Flores, 123 - Boqueirão_
+_Rua das Flores, 123 - Boqueirão - 81050-100_
 _Casa branca, portão verde_"""
 
 CONFIRM_ADDRESS = """📍 Confirma endereço?
@@ -145,7 +144,7 @@ ORDER_SUMMARY = """📋 *RESUMO DO PEDIDO*
 
 Confirma?"""
 
-ORDER_CONFIRMED = """🎉 *PEDIDO #{order_number} CONFIRMADO!*
+ORDER_CONFIRMED = """🎉 *OS #{os_number} CONFIRMADA!*
 
 📦 {items_summary}
 📍 {address}
@@ -155,6 +154,7 @@ Pagamento: {payment_method}
 ⏱️ Previsão: *{delivery_time}*
 
 Você receberá atualizações sobre sua entrega!
+Para consultar seu pedido, envie: *OS {os_number}*
 
 Obrigado pela preferência! 🔥"""
 

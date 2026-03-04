@@ -21,7 +21,7 @@ export default function OwnerReportsView() {
     try {
       setLoading(true)
       const token = localStorage.getItem('token')
-      const baseUrl = import.meta.env.VITE_API_URL || 'http://192.168.10.156:8000/api'
+      const baseUrl = import.meta.env.VITE_API_URL || 'http://192.168.10.167:8000/api'
       const url = `${baseUrl}/owner/reports/${type}?start_date=${startDate}&end_date=${endDate}&format=${format}`
       
       const response = await fetch(url, {

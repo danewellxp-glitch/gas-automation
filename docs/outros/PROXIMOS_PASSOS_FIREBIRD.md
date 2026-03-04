@@ -37,7 +37,7 @@ Adicione ao arquivo `.env` na raiz do projeto:
 
 ```bash
 # Firebird Gasmaster
-FIREBIRD_HOST=192.168.10.156
+FIREBIRD_HOST=192.168.10.167
 FIREBIRD_DATABASE=/var/firebird/Gas.fdb
 FIREBIRD_USER=SYSDBA
 FIREBIRD_PASSWORD=masterkey
@@ -156,7 +156,7 @@ for p in products[:3]:
    - Se houver problemas com acentos, verificar charset do banco
 
 3. **Conexão de rede**
-   - Container precisa acessar `192.168.10.156:3050`
+   - Container precisa acessar `192.168.10.167:3050`
    - Verificar se há firewall bloqueando
 
 4. **Formato de dados**

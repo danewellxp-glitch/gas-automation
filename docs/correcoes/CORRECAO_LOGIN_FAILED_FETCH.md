@@ -5,7 +5,7 @@
 O erro "Failed to fetch" na tela de login foi causado por:
 
 1. **Backend não estava funcionando** - Erro de importação do numpy com opencv
-2. **URL incorreta no api.js** - Estava usando `localhost:8000` em vez de `192.168.10.156:8000`
+2. **URL incorreta no api.js** - Estava usando `localhost:8000` em vez de `192.168.10.167:8000`
 
 ---
 
@@ -28,7 +28,7 @@ const apiBaseURL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
 
 **Depois:**
 ```javascript
-const apiBaseURL = import.meta.env.VITE_API_URL || 'http://192.168.10.156:8000/api'
+const apiBaseURL = import.meta.env.VITE_API_URL || 'http://192.168.10.167:8000/api'
 ```
 
 ### 3. **Backend reiniciado**
@@ -47,20 +47,20 @@ docker-compose restart frontend
 
 ### 1. **Backend funcionando**
 ```bash
-curl http://192.168.10.156:8000/health
+curl http://192.168.10.167:8000/health
 # ✅ Retorna: {"status":"healthy",...}
 ```
 
 ### 2. **CORS configurado**
 ```bash
-curl -X OPTIONS http://192.168.10.156:8000/api/auth/login \
-  -H "Origin: http://192.168.10.156:3001"
+curl -X OPTIONS http://192.168.10.167:8000/api/auth/login \
+  -H "Origin: http://192.168.10.167:3001"
 # ✅ Retorna: 200 OK com headers CORS corretos
 ```
 
 ### 3. **Login funcionando**
 ```bash
-curl -X POST http://192.168.10.156:8000/api/auth/login \
+curl -X POST http://192.168.10.167:8000/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email":"admin@gasautomation.local","password":"admin123"}'
 # ✅ Retorna: {"access_token":"...","role":"admin"}
@@ -71,20 +71,20 @@ curl -X POST http://192.168.10.156:8000/api/auth/login \
 ## 📋 Configuração Atual
 
 ### Backend
-- **URL:** `http://192.168.10.156:8000`
+- **URL:** `http://192.168.10.167:8000`
 - **Status:** ✅ Funcionando
-- **CORS:** ✅ Configurado para `http://192.168.10.156:3001`
+- **CORS:** ✅ Configurado para `http://192.168.10.167:3001`
 
 ### Frontend
-- **URL:** `http://192.168.10.156:3001`
-- **API URL:** `http://192.168.10.156:8000/api` (via `VITE_API_URL`)
+- **URL:** `http://192.168.10.167:3001`
+- **API URL:** `http://192.168.10.167:8000/api` (via `VITE_API_URL`)
 - **Status:** ✅ Funcionando
 
 ---
 
 ## 🧪 Teste Manual
 
-1. **Acesse:** `http://192.168.10.156:3001/login`
+1. **Acesse:** `http://192.168.10.167:3001/login`
 2. **Credenciais:**
    - Email: `admin@gasautomation.local`
    - Senha: `admin123`
@@ -110,4 +110,4 @@ curl -X POST http://192.168.10.156:8000/api/auth/login \
 
 - O problema do numpy foi temporário (corrigido no container)
 - Para tornar permanente, adicione `numpy==1.26.4` no `requirements.txt` se necessário
-- O `api.js` agora usa `192.168.10.156:8000` como padrão, mas ainda respeita `VITE_API_URL` se configurado
+- O `api.js` agora usa `192.168.10.167:8000` como padrão, mas ainda respeita `VITE_API_URL` se configurado

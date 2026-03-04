@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 
 function getApiUrl() {
-  return import.meta.env.VITE_API_URL || 'http://192.168.10.156:8000/api'
+  return import.meta.env.VITE_API_URL || 'http://192.168.10.167:8000/api'
 }
 
 export default function ChangePassword() {

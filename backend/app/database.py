@@ -334,14 +334,23 @@ class RedisManager:
         """
         if not body or not phone:
             return False
+            
         key = f"last_msg_content:{phone}"
         text = (body or "").strip()[:500]
-        current = await self._redis.get(key)
-        prev = current.decode() if isinstance(current, bytes) else current
-        if prev is not None and prev == text:
-            return True
-        await self._redis.set(key, text, ex=window_sec)
-        return False
+        
+        # Script Lua para atomicidade (GET e SET se diferente)
+        lua_script = """
+        local current = redis.call("get", KEYS[1])
+        if current == ARGV[1] then
+            return 1
+        else
+            redis.call("set", KEYS[1], ARGV[1], "ex", ARGV[2])
+            return 0
+        end
+        """
+        
+        result = await self._redis.eval(lua_script, 1, key, text, window_sec)
+        return bool(result)
 
     # ==================== Pub/Sub para WebSocket ====================
     

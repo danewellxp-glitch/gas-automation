@@ -1,7 +1,7 @@
 # 🔍 Varredura Completa do Sistema - Relatório Final
 
 **Data:** 2026-01-22  
-**IP do Servidor:** 192.168.10.156  
+**IP do Servidor:** 192.168.10.167  
 **Status Geral:** ✅ **SISTEMA FUNCIONANDO**
 
 ---
@@ -47,14 +47,14 @@
 ## 🌐 2. ACESSIBILIDADE
 
 ### Frontend
-- ✅ **URL:** http://192.168.10.156:3001
+- ✅ **URL:** http://192.168.10.167:3001
 - ✅ **Status:** 200 OK
 - ✅ **Logs:** Sem erros
 
 ### Backend
-- ✅ **URL:** http://192.168.10.156:8000
-- ✅ **Health:** http://192.168.10.156:8000/health → 200 OK
-- ✅ **API:** http://192.168.10.156:8000/api → Funcionando
+- ✅ **URL:** http://192.168.10.167:8000
+- ✅ **Health:** http://192.168.10.167:8000/health → 200 OK
+- ✅ **API:** http://192.168.10.167:8000/api → Funcionando
 - ✅ **Python:** 3.11.14
 - ✅ **Environment:** production
 
@@ -70,7 +70,7 @@
 
 ### Firebird
 - ✅ **Status:** Conectado e funcionando
-- ✅ **Host:** 192.168.10.156
+- ✅ **Host:** 192.168.10.167
 - ⚠️ **Database:** `/var/firebird/Gas.fdb` (verificar se deve ser Gerente.fdb)
 - ✅ **Produtos:** 42 produtos disponíveis
 - ✅ **Rotas:** 4 rotas

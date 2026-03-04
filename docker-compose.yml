@@ -143,7 +143,7 @@ services:
   # Botões e List Messages: use login/pull/logout antes do up (ver docs/configuracao/WAHA_PLUS_PULL.md)
   # ===========================================
   waha:
-    image: devlikeapro/waha-plus:latest
+    image: devlikeapro/waha:latest
     container_name: gas_waha
     restart: unless-stopped
     environment:
@@ -253,7 +253,7 @@ services:
       # CORS Headers (Whitelist específica - Segurança)
       - "traefik.http.middlewares.backend-cors.headers.accesscontrolallowmethods=GET,POST,PUT,DELETE,OPTIONS"
       - "traefik.http.middlewares.backend-cors.headers.accesscontrolallowheaders=*"
-      - "traefik.http.middlewares.backend-cors.headers.accesscontrolalloworiginlist=http://192.168.10.156:3001,http://localhost:3001"
+      - "traefik.http.middlewares.backend-cors.headers.accesscontrolalloworiginlist=http://192.168.10.167:3001,http://localhost:3001"
 
   # ===========================================
   # IA LOCAL - OLLAMA
@@ -287,9 +287,9 @@ services:
     container_name: gas_frontend
     restart: unless-stopped
     environment:
-      VITE_API_URL: http://192.168.10.156:8000/api
-      VITE_WS_URL: ws://192.168.10.156:8000
-      VITE_SERVER_URL: http://192.168.10.156:8000
+      VITE_API_URL: http://192.168.10.167:8000/api
+      VITE_WS_URL: ws://192.168.10.167:8000
+      VITE_SERVER_URL: http://192.168.10.167:8000
     ports:
       - "3001:3001"
     volumes:
@@ -311,7 +311,7 @@ services:
     command: npm run dev -- --host 0.0.0.0 --port 3001
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.frontend.rule=Host(`192.168.10.156`)"
+      - "traefik.http.routers.frontend.rule=Host(`192.168.10.167`)"
       - "traefik.http.routers.frontend.entrypoints=web"
       - "traefik.http.services.frontend.loadbalancer.server.port=3001"
 
@@ -593,6 +593,8 @@ volumes:
   minio_data:
   prometheus_data:
   grafana_data:
+  alertmanager_data:
+  loki_data:
 
 # ===========================================
 # NETWORKS

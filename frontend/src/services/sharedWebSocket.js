@@ -23,7 +23,7 @@ const getWSBaseUrl = () => {
     return `${envUrl}/ws`
   }
   // Padrão
-  return 'ws://192.168.10.156:8000/ws'
+  return 'ws://192.168.10.167:8000/ws'
 }
 
 const WS_URL = getWSBaseUrl()
@@ -194,7 +194,7 @@ class SharedWebSocketService {
     }
     
     // Construir URL corretamente: WS_URL já inclui /ws, então adicionar /dashboard
-    // Se WS_URL = 'ws://192.168.10.156:8000/ws', então url = 'ws://192.168.10.156:8000/ws/dashboard'
+    // Se WS_URL = 'ws://192.168.10.167:8000/ws', então url = 'ws://192.168.10.167:8000/ws/dashboard'
     // Garantir que não há duplicação de barras
     const baseUrl = WS_URL.endsWith('/') ? WS_URL.slice(0, -1) : WS_URL
     const url = `${baseUrl}/dashboard?token=${encodeURIComponent(token)}`

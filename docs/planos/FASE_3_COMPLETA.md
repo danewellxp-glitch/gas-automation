@@ -203,7 +203,7 @@ Backend → {"type": "replay_end", "last_seq_id": 1249}
   7. Taxa de erros WebSocket
   8. System uptime
 
-**Acesso:** http://192.168.10.156:3002/dashboards
+**Acesso:** http://192.168.10.167:3002/dashboards
 
 #### **Sistema de Alertas (20 regras):**
 
@@ -258,19 +258,19 @@ docker logs gas_backend --tail 50
 
 ```bash
 # Acessar métricas Prometheus
-curl http://192.168.10.156:8000/metrics
+curl http://192.168.10.167:8000/metrics
 
 # Filtrar métricas customizadas
-curl -s http://192.168.10.156:8000/metrics | grep "websocket_"
-curl -s http://192.168.10.156:8000/metrics | grep "event_batcher_"
-curl -s http://192.168.10.156:8000/metrics | grep "redis_pubsub_"
+curl -s http://192.168.10.167:8000/metrics | grep "websocket_"
+curl -s http://192.168.10.167:8000/metrics | grep "event_batcher_"
+curl -s http://192.168.10.167:8000/metrics | grep "redis_pubsub_"
 ```
 
 ---
 
 ### **3. Acessar Dashboard Grafana**
 
-1. Abrir: http://192.168.10.156:3002
+1. Abrir: http://192.168.10.167:3002
 2. Login: admin / (sua senha)
 3. Ir em Dashboards
 4. Selecionar: "Gas Automation - WebSocket Monitoring (Fase 3)"
@@ -428,7 +428,7 @@ async def stress_test(num_clients=100):
     """Simula 100 clientes conectados simultaneamente."""
     
     async def client(client_id):
-        uri = "ws://192.168.10.156:8000/ws/dashboard?token=YOUR_TOKEN"
+        uri = "ws://192.168.10.167:8000/ws/dashboard?token=YOUR_TOKEN"
         async with websockets.connect(uri) as ws:
             # Receber mensagens
             async for msg in ws:

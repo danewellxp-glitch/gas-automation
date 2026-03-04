@@ -92,27 +92,27 @@ for p in products[:5]:
 ### 3. **Testar Dashboards** ⚠️ IMPORTANTE
 
 #### Dashboard Operador
-1. Acessar: `http://192.168.10.156:3001/operador`
+1. Acessar: `http://192.168.10.167:3001/operador`
 2. Verificar:
    - ✅ Métricas aparecem (pedidos, conversas)
    - ✅ Pedidos pendentes aparecem
    - ✅ Criar pedido funciona
 
 #### Dashboard Admin
-1. Acessar: `http://192.168.10.156:3001/admin`
+1. Acessar: `http://192.168.10.167:3001/admin`
 2. Verificar:
    - ✅ Estatísticas de usuários
    - ✅ Estatísticas de conversas
    - ✅ Estatísticas de mensagens (agora reais)
 
 #### Dashboard Owner
-1. Acessar: `http://192.168.10.156:3001/owner`
+1. Acessar: `http://192.168.10.167:3001/owner`
 2. Verificar:
    - ✅ Métricas financeiras
    - ✅ Métricas de pedidos
 
 #### Dashboard Driver
-1. Acessar: `http://192.168.10.156:3001/driver`
+1. Acessar: `http://192.168.10.167:3001/driver`
 2. Verificar:
    - ✅ Entregas aparecem
    - ✅ Histórico funciona
@@ -169,7 +169,7 @@ for p in products[:5]:
 docker exec gas_backend python /app/../SCRIPT_SINCRONIZAR_PRODUTOS_FIREBIRD.py
 
 # Opção 2: Via API (se implementado)
-curl -X POST http://192.168.10.156:8000/api/products/sync-from-firebird \
+curl -X POST http://192.168.10.167:8000/api/products/sync-from-firebird \
   -H "Authorization: Bearer SEU_TOKEN"
 ```
 

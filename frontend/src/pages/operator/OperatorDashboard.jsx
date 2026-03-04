@@ -4,7 +4,7 @@
  */
 
 import { useState, lazy, Suspense } from 'react'
-import { LayoutDashboard, PlusCircle, Package, MessageSquare, History, Map as MapIcon } from 'lucide-react'
+import { LayoutDashboard, PlusCircle, Package, MessageSquare, History, Map as MapIcon, FileText } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import FlowbiteLayout from '../../components/flowbite/FlowbiteLayout'
 
@@ -14,6 +14,7 @@ import PendingOrdersPanel from '../../components/operator/PendingOrdersPanel'
 import CreateOrderPanel from '../../components/operator/CreateOrderPanel'
 import OrderHistoryPanel from '../../components/operator/OrderHistoryPanel'
 import ConversationsPanel from '../../components/operator/ConversationsPanel'
+import OSPanel from '../../components/operator/OSPanel'
 
 // Lazy load do mapa (componente pesado)
 const DeliveryMap = lazy(() => import('../../components/map/DeliveryMap'))
@@ -36,6 +37,7 @@ export default function OperatorDashboard() {
         { key: 'conversations', type: 'button', label: 'Conversas', icon: MessageSquare, onClick: () => setActiveView('conversations') },
         { key: 'history', type: 'button', label: 'Histórico', icon: History, onClick: () => setActiveView('history') },
         { key: 'map', type: 'button', label: 'Mapa', icon: MapIcon, onClick: () => setActiveView('map') },
+        { key: 'os-consult', type: 'button', label: 'Consulta OS', icon: FileText, onClick: () => setActiveView('os-consult') },
       ]}
     >
       {/* Renderizar view baseada no estado */}
@@ -50,6 +52,8 @@ export default function OperatorDashboard() {
       {activeView === 'history' && <OrderHistoryPanel />}
 
       {activeView === 'map' && <MapView />}
+
+      {activeView === 'os-consult' && <OSPanel />}
     </FlowbiteLayout>
   )
 }

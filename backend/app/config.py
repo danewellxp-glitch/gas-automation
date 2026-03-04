@@ -97,10 +97,10 @@ class Settings(BaseSettings):
         "http://localhost:3003",
         "https://localhost",
         "http://localhost",
-        "http://192.168.10.156:3001",
-        "http://192.168.10.156:3003",
-        "http://192.168.10.156:8000",
-        "http://192.168.10.156",
+        "http://192.168.10.167:3001",
+        "http://192.168.10.167:3003",
+        "http://192.168.10.167:8000",
+        "http://192.168.10.167",
         # Em produção, adicionar apenas o domínio real:
         # "https://seu-dominio.com.br"
     ]

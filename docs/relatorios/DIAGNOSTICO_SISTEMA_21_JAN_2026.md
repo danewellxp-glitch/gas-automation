@@ -2,7 +2,7 @@
 
 **Data:** 21/01/2026 - 08:11  
 **Status Final:** ✅ **SISTEMA FUNCIONANDO**  
-**Servidor:** 192.168.10.156
+**Servidor:** 192.168.10.167
 
 ---
 
@@ -31,13 +31,13 @@ Usuário: "analise o backend e frontend, sistema parece nao estar funcionando"
 
 #### **Frontend**
 ```bash
-curl http://192.168.10.156:3003/
+curl http://192.168.10.167:3003/
 Status: 200 OK ✅
 ```
 
 #### **Backend (Inicial)**
 ```bash
-curl http://192.168.10.156:8000/health
+curl http://192.168.10.167:8000/health
 Status: Connection Refused ❌
 ```
 
@@ -180,7 +180,7 @@ backend:
 
 ### **Backend Health Check**
 ```bash
-curl http://192.168.10.156:8000/health
+curl http://192.168.10.167:8000/health
 ```
 
 **Resposta:**
@@ -214,7 +214,7 @@ INFO: Application startup complete.
 
 ### **Frontend**
 ```bash
-curl http://192.168.10.156:3003/
+curl http://192.168.10.167:3003/
 HTTP Status: 200 OK
 ```
 ✅ **Frontend funcionando**
@@ -223,7 +223,7 @@ HTTP Status: 200 OK
 
 ### **Grafana**
 ```bash
-curl http://192.168.10.156:3002/
+curl http://192.168.10.167:3002/
 HTTP Status: 200 OK
 ```
 ✅ **Grafana acessível**
@@ -234,15 +234,15 @@ HTTP Status: 200 OK
 
 | Serviço | Status | URL | Porta |
 |---------|--------|-----|-------|
-| **Frontend** | ✅ UP | http://192.168.10.156:3003 | 3003 |
-| **Backend API** | ✅ UP | http://192.168.10.156:8000 | 8000 |
+| **Frontend** | ✅ UP | http://192.168.10.167:3003 | 3003 |
+| **Backend API** | ✅ UP | http://192.168.10.167:8000 | 8000 |
 | **Backend Health** | ✅ HEALTHY | /health | - |
-| **Grafana** | ✅ UP | http://192.168.10.156:3002 | 3002 |
-| **Prometheus** | ✅ UP | http://192.168.10.156:9090 | 9090 |
+| **Grafana** | ✅ UP | http://192.168.10.167:3002 | 3002 |
+| **Prometheus** | ✅ UP | http://192.168.10.167:9090 | 9090 |
 | **PostgreSQL** | ✅ HEALTHY | localhost:5433 | 5433 |
 | **Redis** | ✅ HEALTHY | localhost:6379 | 6379 |
-| **PgAdmin** | ✅ UP | http://192.168.10.156:5050 | 5050 |
-| **WhatsApp (WAHA)** | ✅ UP | http://192.168.10.156:3000 | 3000 |
+| **PgAdmin** | ✅ UP | http://192.168.10.167:5050 | 5050 |
+| **WhatsApp (WAHA)** | ✅ UP | http://192.168.10.167:3000 | 3000 |
 
 ---
 
@@ -304,7 +304,7 @@ O erro de sintaxe em `orders.py` sugere:
 ### **Verificar Backend**
 ```bash
 # Health check
-curl http://192.168.10.156:8000/health | jq
+curl http://192.168.10.167:8000/health | jq
 
 # Logs
 docker logs gas_backend --tail 50
@@ -394,4 +394,4 @@ Sistema foi **diagnosticado** e **corrigido** com sucesso em **~15 minutos**!
 
 *Diagnóstico realizado em 21/01/2026 - 08:11*  
 *Sistema: Gas Automation v1.0*  
-*Servidor: 192.168.10.156*
+*Servidor: 192.168.10.167*

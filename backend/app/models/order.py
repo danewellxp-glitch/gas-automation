@@ -256,6 +256,11 @@ class Order(BaseModel):
         return f"<Order(id={self.id}, number={self.order_number}, status={self.status})>"
 
     @property
+    def os_number(self) -> str:
+        """Número da OS formatado com 8 dígitos (ex: 00000004)."""
+        return str(self.order_number).zfill(8)
+
+    @property
     def is_payable(self) -> bool:
         """Verifica se o pedido ainda pode ser pago."""
         return self.status == OrderStatus.PENDING.value

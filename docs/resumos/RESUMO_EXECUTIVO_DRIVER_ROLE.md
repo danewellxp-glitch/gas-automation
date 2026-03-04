@@ -625,8 +625,8 @@ async def emit_delivery_assigned(delivery_data: dict):
 - Service: `/backend/app/services/driver_service.py`
 
 **Sistema em Produção:**
-- API: http://192.168.10.156:8000
-- Docs: http://192.168.10.156:8000/docs
+- API: http://192.168.10.167:8000
+- Docs: http://192.168.10.167:8000/docs
 
 ---
 

@@ -132,7 +132,7 @@ setCustomerData({
 
 ### **Teste 1: Cliente Existente**
 ```
-1. Acesse: http://192.168.10.156:3001/operador
+1. Acesse: http://192.168.10.167:3001/operador
 2. Clique em "Criar Pedido Manual"
 3. Digite telefone: 5541997986754
 4. Aguarde busca automática

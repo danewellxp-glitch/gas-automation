@@ -1,11 +1,11 @@
 /**
  * API específica para Drivers (Entregadores)
- * Conecta com backend em http://192.168.10.156:8000
+ * Conecta com backend em http://192.168.10.167:8000
  */
 
 import { buildApiEndpoint, getAuthHeaders } from './api'
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://192.168.10.156:8000/api'
+const API_BASE = import.meta.env.VITE_API_URL || 'http://192.168.10.167:8000/api'
 
 /**
  * Login específico para drivers

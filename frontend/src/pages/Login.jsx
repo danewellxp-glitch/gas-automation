@@ -65,7 +65,7 @@ export default function Login() {
   const [password, setPassword] = useState('admin123')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  
+
   const navigate = useNavigate()
   const location = useLocation()
   const { login } = useAuth()
@@ -79,10 +79,10 @@ export default function Login() {
 
     try {
       await login(email, password)
-      
+
       const savedUser = JSON.parse(localStorage.getItem('user'))
       const userRole = savedUser?.role || 'user'
-      
+
       const targetRoute = ROLE_ROUTES[userRole] || '/operador'
       navigate(targetRoute, { replace: true })
     } catch (err) {
@@ -93,19 +93,19 @@ export default function Login() {
   }
 
   return (
-    <div 
+    <div
       className="min-h-screen flex items-center justify-center p-4"
-      style={{ 
+      style={{
         background: 'linear-gradient(135deg, #1B3A57 0%, #0D1F2D 50%, #1B3A57 100%)'
       }}
     >
       {/* Decorative elements */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div 
+        <div
           className="absolute -top-20 -right-20 w-96 h-96 rounded-full opacity-10"
           style={{ background: '#E31E24' }}
         />
-        <div 
+        <div
           className="absolute -bottom-32 -left-32 w-[500px] h-[500px] rounded-full opacity-10"
           style={{ background: '#FFD100' }}
         />
@@ -115,10 +115,10 @@ export default function Login() {
         {/* Card principal */}
         <div className="bg-white rounded-2xl shadow-2xl overflow-hidden">
           {/* Header com logo */}
-          <div 
+          <div
             className="px-8 py-6 text-center bg-white"
           >
-            <img 
+            <img
               src="https://www.grupogasmaster.com.br/wp-content/uploads/2020/11/gasmaster-distribuidora-de-gas-em-curitiba.png"
               alt="Gasmaster - Distribuidora de Gás em Curitiba"
               className="h-20 mx-auto mb-3 object-contain drop-shadow-sm"
@@ -127,7 +127,7 @@ export default function Login() {
           </div>
 
           {/* Faixa amarela decorativa */}
-          <div 
+          <div
             className="h-1.5"
             style={{ background: 'linear-gradient(90deg, #E31E24 0%, #FFD100 50%, #E31E24 100%)' }}
           />
@@ -136,7 +136,7 @@ export default function Login() {
           <div className="p-8">
             {/* Error Message */}
             {error && (
-              <div 
+              <div
                 className="mb-6 p-4 rounded-lg flex items-center gap-3"
                 style={{ background: '#FEE2E2', border: '1px solid #E31E24' }}
               >
@@ -151,8 +151,8 @@ export default function Login() {
             <form onSubmit={handleSubmit} className="space-y-5">
               {/* Email Input */}
               <div>
-                <label 
-                  htmlFor="email" 
+                <label
+                  htmlFor="email"
                   className="block text-sm font-semibold mb-2"
                   style={{ color: '#1B3A57' }}
                 >
@@ -178,8 +178,8 @@ export default function Login() {
 
               {/* Password Input */}
               <div>
-                <label 
-                  htmlFor="password" 
+                <label
+                  htmlFor="password"
                   className="block text-sm font-semibold mb-2"
                   style={{ color: '#1B3A57' }}
                 >
@@ -199,7 +199,7 @@ export default function Login() {
                 type="submit"
                 disabled={loading}
                 className="w-full py-3.5 px-4 rounded-lg font-bold text-white transition-all duration-300 transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none shadow-lg"
-                style={{ 
+                style={{
                   background: loading ? '#9CA3AF' : 'linear-gradient(135deg, #E31E24 0%, #C41A1F 100%)',
                   boxShadow: loading ? 'none' : '0 4px 15px rgba(227, 30, 36, 0.4)'
                 }}
@@ -207,8 +207,8 @@ export default function Login() {
                 {loading ? (
                   <span className="flex items-center justify-center gap-2">
                     <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                     </svg>
                     Entrando...
                   </span>
@@ -241,17 +241,17 @@ export default function Login() {
             <div className="bg-white/10 rounded-lg p-2">
               <p className="font-semibold text-green-400">Operador</p>
               <p className="text-gray-300 font-mono">operador@gasautomation.local</p>
-              <p className="text-gray-400 font-mono">Teste@123456</p>
+              <p className="text-gray-400 font-mono">Teste@12345</p>
             </div>
             <div className="bg-white/10 rounded-lg p-2">
               <p className="font-semibold text-purple-400">Owner</p>
               <p className="text-gray-300 font-mono">dono@gasautomation.local</p>
-              <p className="text-gray-400 font-mono">Teste@123456</p>
+              <p className="text-gray-400 font-mono">Teste@12345</p>
             </div>
             <div className="bg-white/10 rounded-lg p-2">
               <p className="font-semibold text-orange-400">User</p>
               <p className="text-gray-300 font-mono">usuario@gasautomation.local</p>
-              <p className="text-gray-400 font-mono">Teste@123456</p>
+              <p className="text-gray-400 font-mono">Teste@12345</p>
             </div>
           </div>
         </div>

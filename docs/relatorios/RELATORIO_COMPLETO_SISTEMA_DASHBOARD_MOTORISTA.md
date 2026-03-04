@@ -266,8 +266,8 @@ class Order(BaseModel):
 
 ### Base URL
 ```
-Backend: http://192.168.10.156:8000/api
-Frontend: http://192.168.10.156:3000 (ou porta configurada)
+Backend: http://192.168.10.167:8000/api
+Frontend: http://192.168.10.167:3000 (ou porta configurada)
 ```
 
 ### Autenticação
@@ -1037,7 +1037,7 @@ Content-Type: application/json
 
 **URL WebSocket**:
 ```
-ws://192.168.10.156:8000/ws/driver
+ws://192.168.10.167:8000/ws/driver
 ```
 
 **Autenticação**:
@@ -1070,7 +1070,7 @@ ws://192.168.10.156:8000/ws/driver
 
 **Base URL**:
 ```javascript
-const API_BASE = import.meta.env.VITE_API_URL || 'http://192.168.10.156:8000/api'
+const API_BASE = import.meta.env.VITE_API_URL || 'http://192.168.10.167:8000/api'
 ```
 
 **Headers Padrão**:
@@ -1137,7 +1137,7 @@ const API_BASE = import.meta.env.VITE_API_URL || 'http://192.168.10.156:8000/api
 **Problema**: O componente `MyTimePanel.jsx` tem URL hardcoded:
 ```javascript
 const response = await fetch(
-  `http://192.168.10.156:8000/api/drivers/me/time-summary?period=${period}`,
+  `http://192.168.10.167:8000/api/drivers/me/time-summary?period=${period}`,
   ...
 )
 ```
@@ -1379,7 +1379,7 @@ O backend usa Python 3.8, então:
 
 ### WebSocket
 
-- URL: `ws://192.168.10.156:8000/ws/driver?token={jwt_token}`
+- URL: `ws://192.168.10.167:8000/ws/driver?token={jwt_token}`
 - Reconexão automática recomendada
 - Tratar desconexões graciosamente
 

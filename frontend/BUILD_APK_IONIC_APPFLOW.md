@@ -2,7 +2,7 @@
 
 O frontend já está configurado com **Capacitor** e pronto para build na nuvem via **Ionic AppFlow**.
 
-- **IP da API:** `192.168.10.156:8000` (em `.env.production` e no app)
+- **IP da API:** `192.168.10.167:8000` (em `.env.production` e no app)
 - **Ícones:** copiados de `mobile-app/AppIcons` para `android/app/src/main/res`
 - **App ID (package):** `com.gasautomation.driver` | **App Name:** Gas Driver  
 - **Ionic App ID:** coloque o ID do app que você criou no dashboard (ex.: `a1b2c3d4`) no comando `ionic link --app-id=SEU_APP_ID_AQUI`
@@ -11,10 +11,10 @@ O frontend já está configurado com **Capacitor** e pronto para build na nuvem 
 
 ## O que já foi feito
 
-1. **`.env.production`** – `VITE_API_URL`, `VITE_WS_URL` etc. apontando para `http://192.168.10.156:8000`
+1. **`.env.production`** – `VITE_API_URL`, `VITE_WS_URL` etc. apontando para `http://192.168.10.167:8000`
 2. **`package.json`** – `homepage: "."` e nome `gas-driver`; scripts `cap:sync` e `cap:android`
 3. **Capacitor** – `@capacitor/core`, `@capacitor/cli`, `@capacitor/android` instalados
-4. **`capacitor.config.json`** – appId `com.gasautomation.driver`, webDir `dist-build`, server (allowNavigation para 192.168.10.156), SplashScreen
+4. **`capacitor.config.json`** – appId `com.gasautomation.driver`, webDir `dist-build`, server (allowNavigation para 192.168.10.167), SplashScreen
 5. **Plataforma Android** – `npx cap add android` e `npx cap sync` já rodados
 6. **Ícones** – ícones de `mobile-app/AppIcons/android` copiados para `android/app/src/main/res` (mipmap-*)
 
@@ -97,7 +97,7 @@ ionic package build android --type=apk
 | `Not logged in` | `ionic login` |
 | `App not linked` | `ionic link --app-id=SEU_APP_ID` |
 | CORS no backend | Backend já deve ter CORS; se precisar, `allow_origins=["*"]` no FastAPI |
-| API não carrega no app | Celular na mesma rede do servidor; IP `192.168.10.156` acessível |
+| API não carrega no app | Celular na mesma rede do servidor; IP `192.168.10.167` acessível |
 
 ---
 

@@ -1,7 +1,7 @@
 # 🔍 Varredura Completa do Sistema
 
 **Data:** $(date +"%Y-%m-%d %H:%M:%S")
-**IP do Servidor:** 192.168.10.156
+**IP do Servidor:** 192.168.10.167
 
 ---
 

@@ -6,7 +6,7 @@
 
 Conexão configurada e testada:
 ```sql
-CONNECT '192.168.10.156:/var/firebird/Gas.fdb'
+CONNECT '192.168.10.167:/var/firebird/Gas.fdb'
 USER 'SYSDBA'
 PASSWORD 'masterkey';
 ```
@@ -60,7 +60,7 @@ O schema do Firebird Gasmaster foi completamente mapeado:
 
 ```bash
 # Firebird (Sistema Legado Gasmaster)
-FIREBIRD_HOST=192.168.10.156
+FIREBIRD_HOST=192.168.10.167
 FIREBIRD_DATABASE=/var/firebird/Gas.fdb
 FIREBIRD_USER=SYSDBA
 FIREBIRD_PASSWORD=masterkey

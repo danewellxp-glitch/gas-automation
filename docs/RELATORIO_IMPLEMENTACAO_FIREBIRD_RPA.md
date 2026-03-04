@@ -222,7 +222,7 @@ file_exported_at: Optional[datetime]
 
 ```env
 # Firebird (Sistema Legado)
-FIREBIRD_HOST=192.168.10.156
+FIREBIRD_HOST=192.168.10.167
 FIREBIRD_DATABASE=/var/firebird/Gas.fdb
 FIREBIRD_USER=SYSDBA
 FIREBIRD_PASSWORD=masterkey
@@ -247,7 +247,7 @@ pillow>=10.0.0
 
 | Parâmetro | Valor |
 |-----------|-------|
-| Host | 192.168.10.156 |
+| Host | 192.168.10.167 |
 | Porta | 3050 |
 | Database | /var/firebird/Gas.fdb |
 | Usuário | SYSDBA |
@@ -384,7 +384,7 @@ python scripts/test_all.py
                                     ┌─────────────────┐
                                     │    Firebird     │
                                     │   (Gasmaster)   │
-                                    │   192.168.10.156│
+                                    │   192.168.10.167│
                                     └────────┬────────┘
                                              │
                               ┌──────────────┼──────────────┐

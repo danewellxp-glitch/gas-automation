@@ -1161,12 +1161,12 @@ Documentação:
 ### **URLs de Acesso:**
 
 ```
-Backend API: http://192.168.10.156:8000
-API Docs: http://192.168.10.156:8000/docs
-Frontend: http://192.168.10.156:3001
-Grafana: http://192.168.10.156:3002
-Prometheus: http://192.168.10.156:9090
-pgAdmin: http://192.168.10.156:5050
+Backend API: http://192.168.10.167:8000
+API Docs: http://192.168.10.167:8000/docs
+Frontend: http://192.168.10.167:3001
+Grafana: http://192.168.10.167:3002
+Prometheus: http://192.168.10.167:9090
+pgAdmin: http://192.168.10.167:5050
 ```
 
 ---

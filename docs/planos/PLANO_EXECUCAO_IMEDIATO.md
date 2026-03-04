@@ -143,7 +143,7 @@ MINIO_SECRET_KEY=minioadmin123
 MINIO_SECURE=false
 
 # ==================== CORS ====================
-CORS_ORIGINS=["http://localhost:3001","http://localhost:3000","http://192.168.10.156:3001"]
+CORS_ORIGINS=["http://localhost:3001","http://localhost:3000","http://192.168.10.167:3001"]
 
 # ==================== RATE LIMITING ====================
 RATE_LIMIT_REQUESTS=100

@@ -3,7 +3,7 @@
 ## ✅ Conexão Testada
 
 ```
-Host: 192.168.10.156
+Host: 192.168.10.167
 Database: /var/firebird/Gas.fdb
 User: SYSDBA
 Port: 3050

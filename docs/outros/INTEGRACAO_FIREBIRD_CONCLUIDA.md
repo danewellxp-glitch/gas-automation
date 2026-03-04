@@ -7,7 +7,7 @@
 ### ✅ O que está Funcionando
 
 1. **✅ Conexão com Firebird**
-   - Configurada e testada (192.168.10.156)
+   - Configurada e testada (192.168.10.167)
    - Bibliotecas instaladas no Dockerfile
    - Charset: ISO8859_1
 
@@ -55,7 +55,7 @@
 
 **Arquivo `.env`:**
 ```bash
-FIREBIRD_HOST=192.168.10.156
+FIREBIRD_HOST=192.168.10.167
 FIREBIRD_DATABASE=/var/firebird/Gas.fdb
 FIREBIRD_USER=SYSDBA
 FIREBIRD_PASSWORD=masterkey

@@ -3,7 +3,7 @@ import logger from '../utils/logger'
 
 // Pega a URL base da API das variáveis de ambiente
 // Em produção, VITE_API_URL deve ser configurado no .env
-const apiBaseURL = import.meta.env.VITE_API_URL || 'http://192.168.10.156:8000/api'
+const apiBaseURL = import.meta.env.VITE_API_URL || 'http://192.168.10.167:8000/api'
 
 const api = axios.create({
   baseURL: apiBaseURL,
@@ -217,9 +217,33 @@ export const replyConversation = async (id, message) => {
   return response.data
 }
 
+export const replyVeloceConversation = async (id, message) => {
+  const response = await api.post(`/conversations/${id}/messages`, { content: message })
+  return response.data
+}
+
+export const updateConversationStatus = async (id, status) => {
+  const response = await api.patch(`/conversations/${id}/status`, { status })
+  return response.data
+}
+
+export const syncContacts = async () => {
+  const response = await api.post(`/contacts/sync`)
+  return response.data
+}
+
+export const getContacts = async () => {
+  const response = await api.get(`/contacts`)
+  return response.data
+}
+
 export const endConversation = async (id) => {
   const response = await api.post(`/conversations/${id}/end`)
   return response.data
+}
+
+export const endVeloceConversation = async (id) => {
+  return updateConversationStatus(id, 'RESOLVED')
 }
 
 export const transferToBot = async (id) => {

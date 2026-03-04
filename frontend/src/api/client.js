@@ -10,7 +10,7 @@ import axios from 'axios';
 import { setupInterceptors } from './interceptors';
 
 const apiClient = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://192.168.10.156:8000',
+  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://192.168.10.167:8000',
   timeout: 30000, // 30 segundos
   headers: {
     'Content-Type': 'application/json',

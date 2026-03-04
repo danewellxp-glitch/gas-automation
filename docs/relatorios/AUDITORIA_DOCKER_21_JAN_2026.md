@@ -20,7 +20,7 @@ traefik.http.middlewares.backend-cors.headers.accesscontrolalloworiginlist: '*'
 **Impacto:** Vulnerabilidade de segurança - qualquer site pode fazer requisições  
 **Recomendação:**
 ```yaml
-traefik.http.middlewares.backend-cors.headers.accesscontrolalloworiginlist: 'http://192.168.10.156:3001'
+traefik.http.middlewares.backend-cors.headers.accesscontrolalloworiginlist: 'http://192.168.10.167:3001'
 ```
 
 ---
@@ -59,7 +59,7 @@ ASAAS_API_KEY=sua_chave_asaas_aqui
 ```
 
 **Problema:** Dashboard do Traefik exposto sem autenticação na porta 8080  
-**Impacto:** Qualquer pessoa pode acessar `http://192.168.10.156:8080` e ver configurações  
+**Impacto:** Qualquer pessoa pode acessar `http://192.168.10.167:8080` e ver configurações  
 **Recomendação:** Mudar para `false` e configurar autenticação
 
 ---
@@ -168,8 +168,8 @@ Status Geral: ⚠️ NECESSITA ATENÇÃO
 **Arquivo:** `docker-compose.yml`  
 **Alteração:** VITE_WS_URL corrigida  
 ```diff
-- VITE_WS_URL: ws://192.168.10.156:8000/ws
-+ VITE_WS_URL: ws://192.168.10.156:8000
+- VITE_WS_URL: ws://192.168.10.167:8000/ws
++ VITE_WS_URL: ws://192.168.10.167:8000
 ```
 **Status:** ✅ Correção válida (corrige duplicação /ws/ws/)
 

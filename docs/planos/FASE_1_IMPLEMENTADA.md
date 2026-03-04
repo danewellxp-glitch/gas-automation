@@ -261,7 +261,7 @@ curl http://localhost:8000/docs
 **Conectar com token:**
 ```javascript
 const token = localStorage.getItem('access_token');
-const ws = new WebSocket(`ws://192.168.10.156:8000/ws/dashboard?token=${token}`);
+const ws = new WebSocket(`ws://192.168.10.167:8000/ws/dashboard?token=${token}`);
 
 ws.onmessage = (event) => {
     const data = JSON.parse(event.data);

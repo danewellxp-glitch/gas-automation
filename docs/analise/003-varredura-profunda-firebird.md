@@ -28,7 +28,7 @@
 **Status:** ✅ **TODAS CONFIGURADAS CORRETAMENTE**
 
 ```bash
-firebird_host: 192.168.10.156              ✅ OK
+firebird_host: 192.168.10.167              ✅ OK
 firebird_database: /var/firebird/Gerente.fdb ✅ OK
 firebird_user: SYSDBA                       ✅ OK
 firebird_password: *********                ✅ OK (configurado)

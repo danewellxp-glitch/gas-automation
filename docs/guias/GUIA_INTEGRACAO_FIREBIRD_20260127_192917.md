@@ -4,7 +4,7 @@
 
 Você já conseguiu conectar ao banco Firebird:
 ```sql
-CONNECT '192.168.10.156:/var/firebird/Gas.fdb'
+CONNECT '192.168.10.167:/var/firebird/Gas.fdb'
 USER 'SYSDBA'
 PASSWORD 'masterkey';
 ```
@@ -35,7 +35,7 @@ Adicione as configurações do Firebird no arquivo `.env`:
 
 ```bash
 # Firebird (Sistema Legado Gasmaster)
-FIREBIRD_HOST=192.168.10.156
+FIREBIRD_HOST=192.168.10.167
 FIREBIRD_DATABASE=/var/firebird/Gas.fdb
 FIREBIRD_USER=SYSDBA
 FIREBIRD_PASSWORD=masterkey
@@ -43,7 +43,7 @@ FIREBIRD_CHARSET=UTF8
 ```
 
 **Nota:** O formato da conexão no código usa `host/port:database`, então será:
-- Host: `192.168.10.156`
+- Host: `192.168.10.167`
 - Port: `3050` (padrão Firebird)
 - Database: `/var/firebird/Gas.fdb`
 
@@ -202,7 +202,7 @@ O sistema espera clientes com:
 docker exec gas_backend python -c "
 import fdb
 conn = fdb.connect(
-    dsn='192.168.10.156/3050:/var/firebird/Gas.fdb',
+    dsn='192.168.10.167/3050:/var/firebird/Gas.fdb',
     user='SYSDBA',
     password='masterkey',
     charset='UTF8'

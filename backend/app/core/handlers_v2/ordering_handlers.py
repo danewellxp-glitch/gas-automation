@@ -14,6 +14,8 @@ from app.core.state_machine_v2 import (
     CustomerContext,
     OrderContext,
 )
+import urllib.parse
+import httpx
 from app.core.handlers_v2.base import BaseHandler, HandlerResult, MessageResponse
 from app.core.product_catalog import (
     get_active_products,
@@ -108,11 +110,15 @@ class OrderingProductHandler(BaseHandler):
         if not order_context:
             order_context = OrderContext()
         
-        # Salvar produto selecionado
+        # Salvar produto selecionado (quantidade padrão = 1)
         conversation_context.collected_data["product_code"] = product_code
+        conversation_context.collected_data["quantity"] = 1
         self._reset_retry(conversation_context)
         
-        # Ir para quantidade
+        # Menu compacto: Troca / Comprar Vasilhame / Retira (qty=1 implícito)
+        price_troca = self._format_currency(product.price_exchange)
+        price_compra = self._format_currency(product.price_sale)
+        
         return self._create_result(
             conversation_context=conversation_context,
             customer_context=customer_context,
@@ -121,36 +127,76 @@ class OrderingProductHandler(BaseHandler):
                 self._create_response(
                     text=PRODUCT_SELECTED.format(
                         product_name=product.name,
-                        unit_price=self._format_currency(product.price_exchange)
-                    ),
+                        unit_price=price_troca
+                    ) + "\n\nComo deseja?",
                     buttons=[
-                        {"id": "qty_1", "text": "1 botijão"},
-                        {"id": "qty_2", "text": "2 botijões"},
-                        {"id": "qty_3", "text": "3 botijões"},
+                        {"id": "exchange", "text": f"🔄 Troca - {price_troca}"},
+                        {"id": "sale", "text": f"🆕 Comprar - {price_compra}"},
+                        {"id": "pickup", "text": f"🏪 Retira - {price_troca}"},
                     ]
                 )
             ],
-            next_state=ConversationState.ORDERING_QUANTITY
+            next_state=ConversationState.ORDERING_OPERATION
         )
     
     def _extract_product_code(self, message: str, entities: Optional[Dict]) -> Optional[str]:
-        """Extrai código do produto da mensagem ou entidades."""
+        """Extrai código do produto da mensagem ou entidades.
+        
+        Entende variações naturais como:
+        - p13, P13, p 13
+        - botijão de 13, butijão 13kg, botijao 13
+        - gas de cozinha, gás residencial → P13
+        - 45 kilos, 45kg, botijão grande → P45
+        - 20kg, industrial → P20
+        """
         
         # Tentar das entidades primeiro
         if entities and entities.get("product"):
             return entities["product"].upper()
         
+        msg_lower = message.lower().strip()
         msg_upper = message.upper().strip()
         
-        # Códigos diretos
-        if "P13" in msg_upper:
+        # Códigos diretos (P13, P20, P45 com ou sem espaço)
+        if re.search(r'\bp\s*13\b', msg_lower):
             return "P13"
-        if "P20" in msg_upper:
+        if re.search(r'\bp\s*20\b', msg_lower):
             return "P20"
-        if "P45" in msg_upper:
+        if re.search(r'\bp\s*45\b', msg_lower):
             return "P45"
         
-        # Por número de opção
+        # Por peso mencionado (13kg, 13 kilos, de 13, etc)
+        weight_match = re.search(r'\b(13|20|45)\s*(?:kg|kilo|kilos|quilos)?\b', msg_lower)
+        if weight_match:
+            weight_map = {"13": "P13", "20": "P20", "45": "P45"}
+            return weight_map.get(weight_match.group(1))
+        
+        # Palavras-chave para P13 (mais comum - gás de cozinha)
+        p13_keywords = [
+            "gas de cozinha", "gás de cozinha", "cozinha",
+            "residencial", "pequeno", "domestico", "doméstico",
+            "normal", "comum", "padrão", "padrao",
+        ]
+        for kw in p13_keywords:
+            if kw in msg_lower:
+                return "P13"
+        
+        # Palavras-chave para P45
+        p45_keywords = ["grande", "industrial", "comercial", "45"]
+        for kw in p45_keywords:
+            if kw in msg_lower:
+                return "P45"
+        
+        # Menção genérica de "gás" ou "botijão" sem especificar → P13 (mais vendido)
+        generic_keywords = [
+            "gas", "gás", "botijão", "botijao", "butijão", "butijao",
+            "botija", "bujao", "bujão",
+        ]
+        for kw in generic_keywords:
+            if kw in msg_lower:
+                return "P13"
+        
+        # Por número de opção (menu)
         option_map = {"1": "P13", "2": "P20", "3": "P45"}
         if message.strip() in option_map:
             return option_map[message.strip()]
@@ -323,22 +369,59 @@ class OrderingOperationHandler(BaseHandler):
                     })
                 order_context.subtotal = sum(it.get("subtotal", 0) for it in order_context.items)
         
-        # Perguntar se quer adicionar mais
+        # Ir direto para endereço (ou pagamento se for retira)
+        if operation_type == "pickup":
+            # Retira na loja - pular endereço, ir direto para pagamento
+            from app.core.product_catalog import STORE_ADDRESS
+            customer_type = customer_context.customer_type if customer_context else "PF"
+            buttons_key = "payment_methods_pj" if customer_type == "PJ" else "payment_methods_pf"
+            payment_buttons = get_quick_replies(buttons_key)
+            return self._create_result(
+                conversation_context=conversation_context,
+                customer_context=customer_context,
+                order_context=order_context,
+                responses=[
+                    self._create_response(
+                        text=f"🏪 Retirada na loja!\n\nEndereço: {STORE_ADDRESS}\n\n💰 Como deseja pagar?",
+                        buttons=payment_buttons
+                    )
+                ],
+                next_state=ConversationState.CHECKOUT_PAYMENT
+            )
+        
+        # Entrega - verificar se cliente tem endereço cadastrado
+        if customer_context and customer_context.addresses:
+            address = customer_context.addresses[customer_context.default_address_idx]
+            order_context.address = address
+            
+            return self._create_result(
+                conversation_context=conversation_context,
+                customer_context=customer_context,
+                order_context=order_context,
+                responses=[
+                    self._create_response(
+                        text=CONFIRM_ADDRESS.format(
+                            formatted_address=self._format_address(address)
+                        ),
+                        buttons=[
+                            {"id": "confirm_addr", "text": "✅ Sim"},
+                            {"id": "change_addr", "text": "✏️ Alterar"},
+                        ]
+                    )
+                ],
+                next_state=ConversationState.ORDERING_ADDRESS_CONFIRM
+            )
+        
+        # Não tem endereço - pedir
         return self._create_result(
             conversation_context=conversation_context,
             customer_context=customer_context,
             order_context=order_context,
-                responses=[
-                    self._create_response(
-                        text=ASK_MORE_ITEMS,
-                        buttons=[
-                            {"id": "add_more", "text": "1. ➕ Sim, adicionar"},
-                            {"id": "finalize", "text": "2. ✅ Finalizar"},
-                        ]
-                    )
-                ],
-                next_state=ConversationState.ORDERING_MORE_ITEMS
-            )
+            responses=[
+                self._create_response(text=ASK_ADDRESS)
+            ],
+            next_state=ConversationState.ORDERING_ADDRESS
+        )
 
 
 class OrderingMoreItemsHandler(BaseHandler):
@@ -492,15 +575,44 @@ class OrderingAddressHandler(BaseHandler):
                 next_state=ConversationState.ORDERING_ADDRESS
             )
         
-        # Extrair bairro
+        # Extrair CEP do texto original, se fornecido
+        cep = None
+        cep_match = re.search(r'\b(\d{5}-?\d{3})\b', address_line)
+        if cep_match:
+            cep = cep_match.group(1)
+
+        # Tentar enriquecer o endereço com a API Nominatim
+        enriched_address_line = address_line
+        try:
+            enriched_data = await self._search_address_nominatim(address_line)
+            if enriched_data:
+                enriched_address_line = enriched_data.get("formatted", address_line)
+                nom_cep = enriched_data.get("cep")
+                if cep and nom_cep and nom_cep != cep:
+                    enriched_address_line = enriched_address_line.replace(nom_cep, cep)
+                elif not cep:
+                    cep = nom_cep
+        except Exception as e:
+            logger.warning(f"Erro ao consultar Nominatim: {e}")
+            
+        # Extrair bairro do enriquecimento ou procurar na mão
         bairro = None
-        if entities and entities.get("bairro"):
-            bairro = entities["bairro"]
-        else:
-            # Tentar extrair do texto (usar address_line)
+        if enriched_data and enriched_data.get("bairro"):
+            bairro_lower = enriched_data["bairro"].lower()
             from app.core.product_catalog import COVERAGE_AREAS
             for b in COVERAGE_AREAS.keys():
-                if b.lower() in address_line.lower():
+                if b.lower() in bairro_lower:
+                    bairro = b
+                    break
+                    
+        if not bairro and entities and entities.get("bairro"):
+            bairro = entities["bairro"]
+            
+        if not bairro:
+            # Tentar extrair do texto (usar address_line original)
+            from app.core.product_catalog import COVERAGE_AREAS
+            for b in COVERAGE_AREAS.keys():
+                if b.lower() in address_line.lower() or (enriched_address_line and b.lower() in enriched_address_line.lower()):
                     bairro = b
                     break
         
@@ -535,9 +647,12 @@ class OrderingAddressHandler(BaseHandler):
             order_context = OrderContext()
         
         address = {
-            "full_address": address_line,
+            "full_address": enriched_address_line,
             "bairro": bairro,
+            "original_input": address_line,
         }
+        if cep:
+            address["cep"] = cep
         
         order_context.address = address
         conversation_context.collected_data["address"] = address
@@ -545,6 +660,9 @@ class OrderingAddressHandler(BaseHandler):
         if complement_line and len(complement_line) > 0:
             order_context.complement = complement_line[:200]
             conversation_context.collected_data["complement"] = complement_line[:200]
+            # Adicionar ao full_address para exibição
+            address["full_address"] = f"{enriched_address_line} ({complement_line})"
+
         
         # Calcular taxa de entrega
         if bairro:
@@ -552,24 +670,107 @@ class OrderingAddressHandler(BaseHandler):
             if area:
                 order_context.delivery_fee = float(area.delivery_fee)
         
-        # Confirmar endereço
+        # Salvar endereço no cliente (para uso futuro)
+        if customer_context:
+            if not customer_context.addresses:
+                customer_context.addresses = []
+            if address not in customer_context.addresses:
+                customer_context.addresses.append(address)
+            
+            # Salvar no banco
+            customer = await self._get_customer_by_phone(conversation_context.phone)
+            if customer:
+                from app.database import AsyncSessionLocal
+                async with AsyncSessionLocal() as db:
+                    customer.address = address
+                    await db.commit()
+        
+        # Ir direto para pagamento (pular confirmação de endereço)
+        customer_type = customer_context.customer_type if customer_context else "PF"
+        buttons_key = "payment_methods_pj" if customer_type == "PJ" else "payment_methods_pf"
+        payment_buttons = get_quick_replies(buttons_key)
+        
+        formatted_addr = self._format_address(address)
         return self._create_result(
             conversation_context=conversation_context,
             customer_context=customer_context,
             order_context=order_context,
             responses=[
                 self._create_response(
-                    text=CONFIRM_ADDRESS.format(
-                        formatted_address=self._format_address(address)
-                    ),
-                    buttons=[
-                        {"id": "confirm_addr", "text": "✅ Sim, correto"},
-                        {"id": "change_addr", "text": "✏️ Alterar"},
-                    ]
+                    text=f"✅ Endereço registrado!\n📍 {formatted_addr}\n\n💰 Como deseja pagar? (pode digitar 1, 2 ou 3)",
+                    buttons=payment_buttons
                 )
             ],
-            next_state=ConversationState.ORDERING_ADDRESS_CONFIRM
+            next_state=ConversationState.CHECKOUT_PAYMENT
         )
+        
+    async def _search_address_nominatim(self, query: str) -> Optional[Dict]:
+        """Busca o endereço no OpenStreetMap (Nominatim) e retorna dados formatados."""
+        if "curitiba" not in query.lower() and "parana" not in query.lower() and "pr" not in query.lower():
+            query_str = f"{query} Curitiba"
+        else:
+            query_str = query
+            
+        url = f"https://nominatim.openstreetmap.org/search?q={urllib.parse.quote(query_str)}&format=json&addressdetails=1"
+        headers = {"User-Agent": "GasAutomationPlugin/1.0"}
+        
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                res = await client.get(url, headers=headers)
+                if res.status_code == 200:
+                    data = res.json()
+                    if data and len(data) > 0:
+                        top = data[0]
+                        address_obj = top.get("address", {})
+                        # Extrair CEP do input original, se fornecido
+                        original_cep = None
+                        import re
+                        cep_match = re.search(r'\b(\d{5}-?\d{3})\b', query_str)
+                        if cep_match:
+                            original_cep = cep_match.group(1)
+                            
+                        road = address_obj.get("road", "")
+                        house_number = address_obj.get("house_number", "")
+                        suburb = address_obj.get("suburb", "")
+                        city = address_obj.get("city", address_obj.get("town", address_obj.get("municipality", "")))
+                        state = address_obj.get("state", address_obj.get("ISO3166-2-lvl4", "").split("-")[-1])
+                        postcode = original_cep or address_obj.get("postcode", "")
+                        
+                        parts = []
+                        if road:
+                            parts.append(road)
+                        if house_number:
+                            parts.append(house_number)
+                        
+                        base_street = ", ".join(parts)
+                        
+                        complement_parts = []
+                        if suburb:
+                            complement_parts.append(suburb)
+                        if city:
+                            if state:
+                                complement_parts.append(f"{city} - {state}")
+                            else:
+                                complement_parts.append(city)
+                        if postcode:
+                            complement_parts.append(postcode)
+                            
+                        complement_str = ", ".join(complement_parts)
+                        formatted = f"{base_street} - {complement_str}" if complement_str else base_street
+                        if not formatted:
+                            formatted = top.get("display_name", "")
+                            
+                        return {
+                            "formatted": formatted,
+                            "bairro": suburb,
+                            "cep": postcode,
+                            "lat": top.get("lat"),
+                            "lon": top.get("lon")
+                        }
+        except Exception as e:
+            logger.warning(f"Nominatim timeout or error: {e}")
+            
+        return None
 
 
 class OrderingAddressConfirmHandler(BaseHandler):

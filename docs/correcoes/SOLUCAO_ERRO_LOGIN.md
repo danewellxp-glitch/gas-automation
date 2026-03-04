@@ -2,7 +2,7 @@
 
 ## 🔍 Problema Identificado
 
-O erro "Failed to fetch" ocorre quando o frontend não consegue conectar ao backend na URL `http://192.168.10.156:8000/api/auth/login`.
+O erro "Failed to fetch" ocorre quando o frontend não consegue conectar ao backend na URL `http://192.168.10.167:8000/api/auth/login`.
 
 **DIAGNÓSTICO:** 
 - ✅ Container Docker `gas_backend` está rodando
@@ -24,7 +24,7 @@ O erro "Failed to fetch" ocorre quando o frontend não consegue conectar ao back
 ### 2. Verificações Realizadas
 - ✅ Backend está rodando na porta 8000 (processo PID 1183076)
 - ✅ Porta 8000 está escutando em 0.0.0.0
-- ⚠️ **Problema:** Backend não está acessível externamente via IP 192.168.10.156
+- ⚠️ **Problema:** Backend não está acessível externamente via IP 192.168.10.167
 
 ## 🛠️ Soluções Possíveis
 
@@ -48,7 +48,7 @@ docker ps | grep backend
 
 # 5. Verificar se está respondendo
 curl http://localhost:8000/health
-curl http://192.168.10.156:8000/health
+curl http://192.168.10.167:8000/health
 
 # 6. Se ainda estiver unhealthy, verificar healthcheck
 docker inspect gas_backend | grep -A 10 Healthcheck
@@ -73,7 +73,7 @@ docker logs gas_backend -f
 # 4. Aguardar alguns segundos e testar
 sleep 10
 curl http://localhost:8000/health
-curl http://192.168.10.156:8000/health
+curl http://192.168.10.167:8000/health
 ```
 
 **Nota:** As dependências numpy e opencv-python-headless foram atualizadas no `requirements.txt` para corrigir a incompatibilidade.
@@ -85,7 +85,7 @@ curl http://192.168.10.156:8000/health
 curl http://localhost:8000/health
 
 # Testar conexão externa
-curl http://192.168.10.156:8000/health
+curl http://192.168.10.167:8000/health
 ```
 
 ### Opção 3: Usar Docker Compose (Recomendado)
@@ -146,7 +146,7 @@ ss -tlnp | grep 8000
 curl http://localhost:8000/health
 
 # 4. Testar conexão externa
-curl http://192.168.10.156:8000/health
+curl http://192.168.10.167:8000/health
 
 # 5. Verificar logs do backend
 # Se estiver em Docker:
@@ -182,7 +182,7 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 # Aguardar alguns segundos e testar
 sleep 5
 curl http://localhost:8000/health
-curl http://192.168.10.156:8000/health
+curl http://192.168.10.167:8000/health
 ```
 
 ### 3. Testar login novamente
@@ -201,8 +201,8 @@ docker logs gas_backend --tail 100
 
 ## 📞 Informações de Debug
 
-- **URL do Backend:** http://192.168.10.156:8000
-- **URL da API:** http://192.168.10.156:8000/api
+- **URL do Backend:** http://192.168.10.167:8000
+- **URL da API:** http://192.168.10.167:8000/api
 - **Endpoint de Login:** POST /api/auth/login
 - **Frontend Port:** 3001
 - **Backend Port:** 8000

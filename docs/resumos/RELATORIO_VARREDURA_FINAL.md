@@ -1,7 +1,7 @@
 # 🔍 Relatório Final de Varredura do Sistema
 
 **Data:** 2026-01-22  
-**IP do Servidor:** 192.168.10.156  
+**IP do Servidor:** 192.168.10.167  
 **Status:** ✅ **SISTEMA FUNCIONANDO**
 
 ---
@@ -13,8 +13,8 @@
 | Componente | Status | Detalhes |
 |------------|--------|----------|
 | **Containers** | ✅ | 11/11 rodando, 5 saudáveis |
-| **Frontend** | ✅ | http://192.168.10.156:3001 (200 OK) |
-| **Backend** | ✅ | http://192.168.10.156:8000 (200 OK) |
+| **Frontend** | ✅ | http://192.168.10.167:3001 (200 OK) |
+| **Backend** | ✅ | http://192.168.10.167:8000 (200 OK) |
 | **PostgreSQL** | ✅ | Conectado (porta 5433) |
 | **Firebird** | ✅ | Conectado a Gerente.fdb (46 produtos, 27 rotas, 68 veículos) |
 | **Redis** | ✅ | Respondendo (PONG) |

@@ -707,12 +707,12 @@ async def end_conversation(conversation_id: str, db: AsyncSession = Depends(get_
         await db.commit()
 
         # 4. Emitir via WebSocket
-        await emit_new_message({
-            "phone": phone,
-            "message": "[Sistema] Conversa encerrada e devolvida ao bot",
-            "from_me": True,
-            "system": True
-        })
+        await emit_new_message(
+            phone=phone,
+            message="[Sistema] Conversa encerrada e devolvida ao bot",
+            direction="outgoing",
+            customer_data={"system": True}
+        )
 
         return SuccessResponse(message=f"Conversa {conversation_id} encerrada e devolvida ao bot")
 

@@ -109,7 +109,7 @@ EOF
 ### Via cURL
 
 ```bash
-curl -X POST http://192.168.10.156:8000/api/auth/login \
+curl -X POST http://192.168.10.167:8000/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{
     "email": "admin@gasautomation.local",

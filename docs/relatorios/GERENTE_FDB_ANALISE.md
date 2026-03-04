@@ -161,7 +161,7 @@ GROUP BY R.ID, R.NOME
 **Configuração:**
 ```bash
 # .env
-FIREBIRD_HOST=192.168.10.156
+FIREBIRD_HOST=192.168.10.167
 FIREBIRD_DATABASE=/var/firebird/Gerente.fdb  # Mudar de Gas.fdb para Gerente.fdb
 FIREBIRD_USER=SYSDBA
 FIREBIRD_PASSWORD=masterkey

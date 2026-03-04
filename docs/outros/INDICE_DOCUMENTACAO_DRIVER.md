@@ -350,7 +350,7 @@ Tempo de criação: ~2 horas
 ```
 Documentação: ANALISE_COMPLETA_SISTEMA_PARA_IA_GESTORA.md
 Arquitetura: Seção "Arquitetura do Sistema"
-APIs: http://192.168.10.156:8000/docs
+APIs: http://192.168.10.167:8000/docs
 Logs: docker logs gas_backend
 ```
 

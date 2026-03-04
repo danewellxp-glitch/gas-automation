@@ -220,6 +220,10 @@ class StateTransition:
             ConversationState.GREETING_RETURNING,
             ConversationState.IDENTIFY_TYPE,
             ConversationState.ORDERING_PRODUCT,
+            ConversationState.ORDERING_OPERATION,  # Fast-track with product
+            ConversationState.ORDERING_ADDRESS,  # Fast-track with product+operation
+            ConversationState.ORDERING_ADDRESS_CONFIRM,  # Fast-track returning + address
+            ConversationState.CHECKOUT_PAYMENT,  # Fast-track pickup
             ConversationState.CHECKOUT_SUMMARY,  # Fast-track
             ConversationState.SUPPORT_HUMAN,
             ConversationState.TRACKING_STATUS,
@@ -238,10 +242,14 @@ class StateTransition:
         ConversationState.IDENTIFY_NAME_PF: [
             ConversationState.IDENTIFY_DOCUMENT_CPF,
             ConversationState.ORDERING_PRODUCT,  # Pode pular documento
+            ConversationState.ORDERING_OPERATION,  # Fast-track with intent
+            ConversationState.ORDERING_ADDRESS,  # Fast-track with intent+operation
         ],
         ConversationState.IDENTIFY_NAME_PJ: [
             ConversationState.IDENTIFY_DOCUMENT_CNPJ,
             ConversationState.ORDERING_PRODUCT,  # Pode pular documento
+            ConversationState.ORDERING_OPERATION,  # Fast-track with intent
+            ConversationState.ORDERING_ADDRESS,  # Fast-track with intent+operation
         ],
         ConversationState.IDENTIFY_DOCUMENT_CPF: [
             ConversationState.ORDERING_PRODUCT,
@@ -253,7 +261,7 @@ class StateTransition:
         # ORDERING
         ConversationState.ORDERING_PRODUCT: [
             ConversationState.ORDERING_QUANTITY,
-            ConversationState.ORDERING_OPERATION,
+            ConversationState.ORDERING_OPERATION,  # Merged: product -> operation
             ConversationState.SUPPORT_HUMAN,
             ConversationState.SUPPORT_FAQ,
         ],
@@ -263,6 +271,9 @@ class StateTransition:
         ],
         ConversationState.ORDERING_OPERATION: [
             ConversationState.ORDERING_MORE_ITEMS,
+            ConversationState.ORDERING_ADDRESS,  # Skip more-items
+            ConversationState.ORDERING_ADDRESS_CONFIRM,  # Known address
+            ConversationState.CHECKOUT_PAYMENT,  # Pickup
         ],
         ConversationState.ORDERING_MORE_ITEMS: [
             ConversationState.ORDERING_PRODUCT,  # Adicionar mais
@@ -272,6 +283,7 @@ class StateTransition:
         ConversationState.ORDERING_ADDRESS: [
             ConversationState.ORDERING_ADDRESS_CONFIRM,
             ConversationState.ORDERING_ADDRESS,  # Retry
+            ConversationState.CHECKOUT_PAYMENT,  # Skip confirm
         ],
         ConversationState.ORDERING_ADDRESS_CONFIRM: [
             ConversationState.ORDERING_COMPLEMENT,
