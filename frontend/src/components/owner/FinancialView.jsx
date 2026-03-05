@@ -115,7 +115,9 @@ export default function FinancialView() {
       {revenueChart && (
         <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
           <h2 className="mb-4 text-lg font-semibold text-gray-900">Receita ao Longo do Tempo</h2>
-          <RevenueChart data={revenueChart} />
+          <div className="h-72">
+            <RevenueChart data={revenueChart} />
+          </div>
         </div>
       )}
 

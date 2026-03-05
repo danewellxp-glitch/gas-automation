@@ -588,7 +588,8 @@ async def geocode_address(
     Retorna coordenadas geográficas + endereço enriquecido.
     """
     from app.services.geocoding_service import GeocodingService
-    
+    from app.database import redis_manager
+
     try:
         service = GeocodingService(db, redis_manager)
         
