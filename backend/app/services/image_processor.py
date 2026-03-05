@@ -62,10 +62,11 @@ class ImageProcessor:
 
         # Salvar no MinIO
         minio_path = f"images/{unique_filename}"
-        await self.minio_client.upload_file(
-            file_content=file_content,
-            file_path=minio_path,
-            content_type=file.content_type
+        self.minio_client.upload_file(
+            bucket="gas-automation",
+            object_name=minio_path,
+            file_data=file_content,
+            content_type=file.content_type or "application/octet-stream"
         )
 
         # Processar imagem
