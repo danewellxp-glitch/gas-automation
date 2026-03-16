@@ -28,7 +28,7 @@ export default function DriversMetricsPanel() {
 
   if (loading) {
     return (
-      <div className="bg-white rounded-lg shadow p-6">
+      <div className="bg-white rounded-lg shadow p-6 dark:bg-gray-800">
         <p className="text-gray-500 text-center">Carregando métricas...</p>
       </div>
     )
@@ -47,9 +47,9 @@ export default function DriversMetricsPanel() {
   const { summary, ranking, drivers_time } = metricsData
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 dark:text-gray-100">
       {/* Header com Filtros */}
-      <div className="bg-white rounded-lg shadow p-6">
+      <div className="bg-white rounded-lg shadow p-6 dark:bg-gray-800">
         <div className="flex items-center justify-between">
           <h2 className="text-2xl font-bold text-gray-800">🚚 Métricas dos Entregadores</h2>
           
@@ -96,7 +96,7 @@ export default function DriversMetricsPanel() {
       </div>
 
       {/* Ranking de Entregas */}
-      <div className="bg-white rounded-lg shadow p-6">
+      <div className="bg-white rounded-lg shadow p-6 dark:bg-gray-800">
         <h3 className="text-xl font-bold text-gray-800 mb-4">🏆 Ranking de Entregas (Hoje)</h3>
         
         {ranking && ranking.length > 0 ? (
@@ -125,7 +125,7 @@ export default function DriversMetricsPanel() {
                           </span>
                         )}
                       </p>
-                      <p className="text-sm text-gray-500">
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
                         {driver.vehicle_type || '-'} • ⭐ {(driver.rating ?? 0).toFixed(1)}
                       </p>
                     </div>
@@ -133,7 +133,7 @@ export default function DriversMetricsPanel() {
                   
                   <div className="text-right">
                     <p className="text-2xl font-bold text-green-600">{driver.deliveries_count}</p>
-                    <p className="text-sm text-gray-500">entregas</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">entregas</p>
                   </div>
                 </div>
               )
@@ -147,7 +147,7 @@ export default function DriversMetricsPanel() {
       </div>
 
       {/* Tabela de Tempo Trabalhado */}
-      <div className="bg-white rounded-lg shadow p-6">
+      <div className="bg-white rounded-lg shadow p-6 dark:bg-gray-800">
         <h3 className="text-xl font-bold text-gray-800 mb-4">
           ⏱️ Tempo Trabalhado ({periodLabels[period]})
         </h3>
@@ -177,7 +177,7 @@ export default function DriversMetricsPanel() {
                   </th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
+              <tbody className="bg-white divide-y divide-gray-200 dark:bg-gray-800 dark:divide-gray-700">
                 {drivers_time.map((driver) => {
                   const statusColors = {
                     'available': 'text-green-600',
@@ -198,7 +198,7 @@ export default function DriversMetricsPanel() {
                               </span>
                             )}
                           </div>
-                          <div className="text-sm text-gray-500">⭐ {(driver.rating ?? 0).toFixed(1)}</div>
+                          <div className="text-sm text-gray-500 dark:text-gray-400">⭐ {(driver.rating ?? 0).toFixed(1)}</div>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">

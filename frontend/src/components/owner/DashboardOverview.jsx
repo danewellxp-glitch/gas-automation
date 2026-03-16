@@ -256,11 +256,11 @@ export default function DashboardOverview() {
   const alerts = dashboardData?.alerts || []
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 dark:text-gray-100">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Visão Geral</h1>
-          <p className="mt-1 text-sm text-gray-600">
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Visão Geral</h1>
+          <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
             Resumo executivo do negócio
             {lastUpdate && (
               <span className="ml-2">
@@ -270,7 +270,7 @@ export default function DashboardOverview() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <div className="flex rounded-lg border border-gray-300 bg-white p-1">
+          <div className="flex rounded-lg border border-gray-300 bg-white p-1 dark:bg-gray-800 dark:border-gray-600">
             {['day', 'week', 'month'].map((p) => (
               <button
                 key={p}
@@ -278,7 +278,7 @@ export default function DashboardOverview() {
                 className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
                   period === p
                     ? 'bg-primary-600 text-white'
-                    : 'text-gray-700 hover:bg-gray-100'
+                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
                 }`}
               >
                 {p === 'day' ? 'Dia' : p === 'week' ? 'Semana' : 'Mês'}
@@ -288,7 +288,7 @@ export default function DashboardOverview() {
           <button
             onClick={fetchDashboard}
             disabled={loading}
-            className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:border-gray-600 disabled:opacity-50"
           >
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
             Atualizar
@@ -303,8 +303,8 @@ export default function DashboardOverview() {
               key={idx}
               className={`flex items-start gap-3 rounded-lg border p-4 ${
                 alert.type === 'critical'
-                  ? 'border-red-200 bg-red-50'
-                  : 'border-amber-200 bg-amber-50'
+                  ? 'border-red-200 bg-red-50 dark:bg-red-950 dark:border-red-800'
+                  : 'border-amber-200 bg-amber-50 dark:bg-amber-950 dark:border-amber-800'
               }`}
             >
               <AlertCircle
@@ -313,10 +313,10 @@ export default function DashboardOverview() {
                 }`}
               />
               <div className="flex-1">
-                <div className="font-semibold text-gray-900">{alert.title}</div>
-                <div className="mt-1 text-sm text-gray-700">{alert.message}</div>
+                <div className="font-semibold text-gray-900 dark:text-white">{alert.title}</div>
+                <div className="mt-1 text-sm text-gray-700 dark:text-gray-300">{alert.message}</div>
                 {alert.count !== undefined && (
-                  <div className="mt-1 text-xs text-gray-600">Quantidade: {alert.count}</div>
+                  <div className="mt-1 text-xs text-gray-600 dark:text-gray-400">Quantidade: {alert.count}</div>
                 )}
               </div>
             </div>
@@ -325,13 +325,13 @@ export default function DashboardOverview() {
       )}
 
       <div>
-        <h2 className="mb-4 text-lg font-semibold text-gray-900">Financeiro</h2>
+        <h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">Financeiro</h2>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:bg-gray-800 dark:border-gray-700">
             <div className="flex items-center justify-between">
               <div className="flex-1">
-                <p className="text-sm font-medium text-gray-600">Faturamento Hoje</p>
-                <p className="mt-2 text-2xl font-bold text-gray-900">
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Faturamento Hoje</p>
+                <p className="mt-2 text-2xl font-bold text-gray-900 dark:text-white">
                   {formatCurrency(cards?.financial?.revenue_today || 0)}
                 </p>
                 {cards?.financial?.growth_vs_yesterday !== undefined && cards?.financial?.growth_vs_yesterday !== null && (
@@ -341,7 +341,7 @@ export default function DashboardOverview() {
                   </div>
                 )}
               </div>
-              <div className="rounded-lg bg-green-50 p-3">
+              <div className="rounded-lg bg-green-50 p-3 dark:bg-gray-700">
                 <DollarSign className="h-6 w-6 text-green-600" />
               </div>
             </div>
@@ -349,12 +349,12 @@ export default function DashboardOverview() {
 
           <button
             onClick={() => handleCardClick('revenue_month', 'Faturamento Mês')}
-            className="rounded-lg border border-gray-200 bg-white p-6 text-left shadow-sm transition-all hover:border-primary-300 hover:shadow-md cursor-pointer"
+            className="rounded-lg border border-gray-200 bg-white p-6 text-left shadow-sm transition-all hover:border-primary-300 hover:shadow-md cursor-pointer dark:bg-gray-800 dark:border-gray-700"
           >
             <div className="flex items-center justify-between">
               <div className="flex-1">
-                <p className="text-sm font-medium text-gray-600">Faturamento Mês</p>
-                <p className="mt-2 text-2xl font-bold text-gray-900">
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Faturamento Mês</p>
+                <p className="mt-2 text-2xl font-bold text-gray-900 dark:text-white">
                   {formatCurrency(cards?.financial?.revenue_month || 0)}
                 </p>
                 {cards?.financial?.growth_vs_last_month !== undefined && cards?.financial?.growth_vs_last_month !== null && (
@@ -365,7 +365,7 @@ export default function DashboardOverview() {
                 )}
               </div>
               <div className="flex items-center gap-2">
-                <div className="rounded-lg bg-blue-50 p-3">
+                <div className="rounded-lg bg-blue-50 p-3 dark:bg-gray-700">
                   <TrendingUp className="h-6 w-6 text-blue-600" />
                 </div>
                 <ChevronRight className="h-5 w-5 text-gray-400" />
@@ -375,18 +375,18 @@ export default function DashboardOverview() {
 
           <button
             onClick={() => handleCardClick('average_ticket', 'Ticket Médio')}
-            className="rounded-lg border border-gray-200 bg-white p-6 text-left shadow-sm transition-all hover:border-primary-300 hover:shadow-md cursor-pointer"
+            className="rounded-lg border border-gray-200 bg-white p-6 text-left shadow-sm transition-all hover:border-primary-300 hover:shadow-md cursor-pointer dark:bg-gray-800 dark:border-gray-700"
           >
             <div className="flex items-center justify-between">
               <div className="flex-1">
-                <p className="text-sm font-medium text-gray-600">Ticket Médio</p>
-                <p className="mt-2 text-2xl font-bold text-gray-900">
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Ticket Médio</p>
+                <p className="mt-2 text-2xl font-bold text-gray-900 dark:text-white">
                   {formatCurrency(cards?.financial?.average_ticket || 0)}
                 </p>
-                <p className="mt-2 text-xs text-gray-500">Por pedido</p>
+                <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">Por pedido</p>
               </div>
               <div className="flex items-center gap-2">
-                <div className="rounded-lg bg-purple-50 p-3">
+                <div className="rounded-lg bg-purple-50 p-3 dark:bg-gray-700">
                   <Activity className="h-6 w-6 text-purple-600" />
                 </div>
                 <ChevronRight className="h-5 w-5 text-gray-400" />
@@ -396,18 +396,18 @@ export default function DashboardOverview() {
 
           <button
             onClick={() => handleCardClick('growth_week', 'Crescimento Semanal')}
-            className="rounded-lg border border-gray-200 bg-white p-6 text-left shadow-sm transition-all hover:border-primary-300 hover:shadow-md cursor-pointer"
+            className="rounded-lg border border-gray-200 bg-white p-6 text-left shadow-sm transition-all hover:border-primary-300 hover:shadow-md cursor-pointer dark:bg-gray-800 dark:border-gray-700"
           >
             <div className="flex items-center justify-between">
               <div className="flex-1">
-                <p className="text-sm font-medium text-gray-600">Crescimento Semanal</p>
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Crescimento Semanal</p>
                 <p className={`mt-2 text-2xl font-bold ${getTrendColor(cards?.financial?.growth_vs_last_week || 0)}`}>
                   {formatPercent(cards?.financial?.growth_vs_last_week || 0)}
                 </p>
-                <p className="mt-2 text-xs text-gray-500">vs semana passada</p>
+                <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">vs semana passada</p>
               </div>
               <div className="flex items-center gap-2">
-                <div className="rounded-lg bg-indigo-50 p-3">
+                <div className="rounded-lg bg-indigo-50 p-3 dark:bg-gray-700">
                   <Activity className="h-6 w-6 text-indigo-600" />
                 </div>
                 <ChevronRight className="h-5 w-5 text-gray-400" />
@@ -418,16 +418,16 @@ export default function DashboardOverview() {
       </div>
 
       <div>
-        <h2 className="mb-4 text-lg font-semibold text-gray-900">Operação</h2>
+        <h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">Operação</h2>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <button
             onClick={() => handleCardClick('orders_today', 'Pedidos Hoje')}
-            className="rounded-lg border border-gray-200 bg-white p-6 text-left shadow-sm transition-all hover:border-primary-300 hover:shadow-md cursor-pointer"
+            className="rounded-lg border border-gray-200 bg-white p-6 text-left shadow-sm transition-all hover:border-primary-300 hover:shadow-md cursor-pointer dark:bg-gray-800 dark:border-gray-700"
           >
             <div className="flex items-center justify-between">
               <div className="flex-1">
-                <p className="text-sm font-medium text-gray-600">Pedidos Hoje</p>
-                <p className="mt-2 text-2xl font-bold text-gray-900">
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Pedidos Hoje</p>
+                <p className="mt-2 text-2xl font-bold text-gray-900 dark:text-white">
                   {cards?.operational?.orders_today || 0}
                 </p>
                 {cards?.operational?.orders_yesterday !== undefined && (
@@ -437,7 +437,7 @@ export default function DashboardOverview() {
                 )}
               </div>
               <div className="flex items-center gap-2">
-                <div className="rounded-lg bg-blue-50 p-3">
+                <div className="rounded-lg bg-blue-50 p-3 dark:bg-gray-700">
                   <Package className="h-6 w-6 text-blue-600" />
                 </div>
                 <ChevronRight className="h-5 w-5 text-gray-400" />
@@ -447,18 +447,18 @@ export default function DashboardOverview() {
 
           <button
             onClick={() => handleCardClick('orders_completed', 'Pedidos Concluídos')}
-            className="rounded-lg border border-gray-200 bg-white p-6 text-left shadow-sm transition-all hover:border-primary-300 hover:shadow-md cursor-pointer"
+            className="rounded-lg border border-gray-200 bg-white p-6 text-left shadow-sm transition-all hover:border-primary-300 hover:shadow-md cursor-pointer dark:bg-gray-800 dark:border-gray-700"
           >
             <div className="flex items-center justify-between">
               <div className="flex-1">
-                <p className="text-sm font-medium text-gray-600">Pedidos Concluídos</p>
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Pedidos Concluídos</p>
                 <p className="mt-2 text-2xl font-bold text-green-600">
                   {cards?.operational?.orders_completed || 0}
                 </p>
-                <p className="mt-2 text-xs text-gray-500">Total entregues</p>
+                <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">Total entregues</p>
               </div>
               <div className="flex items-center gap-2">
-                <div className="rounded-lg bg-green-50 p-3">
+                <div className="rounded-lg bg-green-50 p-3 dark:bg-gray-700">
                   <CheckCircle2 className="h-6 w-6 text-green-600" />
                 </div>
                 <ChevronRight className="h-5 w-5 text-gray-400" />
@@ -468,20 +468,20 @@ export default function DashboardOverview() {
 
           <button
             onClick={() => handleCardClick('orders_cancelled', 'Cancelados Hoje')}
-            className="rounded-lg border border-gray-200 bg-white p-6 text-left shadow-sm transition-all hover:border-primary-300 hover:shadow-md cursor-pointer"
+            className="rounded-lg border border-gray-200 bg-white p-6 text-left shadow-sm transition-all hover:border-primary-300 hover:shadow-md cursor-pointer dark:bg-gray-800 dark:border-gray-700"
           >
             <div className="flex items-center justify-between">
               <div className="flex-1">
-                <p className="text-sm font-medium text-gray-600">Cancelados Hoje</p>
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Cancelados Hoje</p>
                 <p className="mt-2 text-2xl font-bold text-red-600">
                   {cards?.operational?.orders_cancelled_today || 0}
                 </p>
-                <p className="mt-2 text-xs text-gray-500">
+                <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
                   Total: {cards?.operational?.orders_cancelled || 0}
                 </p>
               </div>
               <div className="flex items-center gap-2">
-                <div className="rounded-lg bg-red-50 p-3">
+                <div className="rounded-lg bg-red-50 p-3 dark:bg-gray-700">
                   <XCircle className="h-6 w-6 text-red-600" />
                 </div>
                 <ChevronRight className="h-5 w-5 text-gray-400" />
@@ -491,24 +491,24 @@ export default function DashboardOverview() {
 
           <button
             onClick={() => handleCardClick('delivery_time', 'Tempo Médio de Entrega')}
-            className="rounded-lg border border-gray-200 bg-white p-6 text-left shadow-sm transition-all hover:border-primary-300 hover:shadow-md cursor-pointer"
+            className="rounded-lg border border-gray-200 bg-white p-6 text-left shadow-sm transition-all hover:border-primary-300 hover:shadow-md cursor-pointer dark:bg-gray-800 dark:border-gray-700"
           >
             <div className="flex items-center justify-between">
               <div className="flex-1">
-                <p className="text-sm font-medium text-gray-600">Tempo Médio</p>
-                <p className="mt-2 text-2xl font-bold text-gray-900">
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Tempo Médio</p>
+                <p className="mt-2 text-2xl font-bold text-gray-900 dark:text-white">
                   {cards?.operational?.average_delivery_time
                     ? `${Math.round(cards.operational.average_delivery_time)} min`
                     : '-'}
                 </p>
                 {cards?.operational?.on_time_delivery_rate !== undefined && cards?.operational?.on_time_delivery_rate !== null && (
-                  <p className="mt-2 text-xs text-gray-500">
+                  <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
                     {(cards.operational.on_time_delivery_rate || 0).toFixed(1)}% no prazo
                   </p>
                 )}
               </div>
               <div className="flex items-center gap-2">
-                <div className="rounded-lg bg-amber-50 p-3">
+                <div className="rounded-lg bg-amber-50 p-3 dark:bg-gray-700">
                   <Clock className="h-6 w-6 text-amber-600" />
                 </div>
                 <ChevronRight className="h-5 w-5 text-gray-400" />
@@ -519,24 +519,24 @@ export default function DashboardOverview() {
       </div>
 
       <div>
-        <h2 className="mb-4 text-lg font-semibold text-gray-900">Pagamentos</h2>
+        <h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">Pagamentos</h2>
         <div className="grid gap-4 sm:grid-cols-3">
           <button
             onClick={() => handleCardClick('card_payment', 'Pagamentos em Cartão')}
-            className="rounded-lg border border-gray-200 bg-white p-6 text-left shadow-sm transition-all hover:border-primary-300 hover:shadow-md cursor-pointer"
+            className="rounded-lg border border-gray-200 bg-white p-6 text-left shadow-sm transition-all hover:border-primary-300 hover:shadow-md cursor-pointer dark:bg-gray-800 dark:border-gray-700"
           >
             <div className="flex items-center justify-between">
               <div className="flex-1">
-                <p className="text-sm font-medium text-gray-600">Cartão</p>
-                <p className="mt-2 text-2xl font-bold text-gray-900">
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Cartão</p>
+                <p className="mt-2 text-2xl font-bold text-gray-900 dark:text-white">
                   {(cards?.payment?.card_percentage || 0).toFixed(1)}%
                 </p>
-                <p className="mt-2 text-xs text-gray-500">
+                <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
                   {cards?.payment?.card_count || 0} pedidos
                 </p>
               </div>
               <div className="flex items-center gap-2">
-                <div className="rounded-lg bg-blue-50 p-3">
+                <div className="rounded-lg bg-blue-50 p-3 dark:bg-gray-700">
                   <CreditCard className="h-6 w-6 text-blue-600" />
                 </div>
                 <ChevronRight className="h-5 w-5 text-gray-400" />
@@ -546,20 +546,20 @@ export default function DashboardOverview() {
 
           <button
             onClick={() => handleCardClick('cash_payment', 'Pagamentos em Dinheiro')}
-            className="rounded-lg border border-gray-200 bg-white p-6 text-left shadow-sm transition-all hover:border-primary-300 hover:shadow-md cursor-pointer"
+            className="rounded-lg border border-gray-200 bg-white p-6 text-left shadow-sm transition-all hover:border-primary-300 hover:shadow-md cursor-pointer dark:bg-gray-800 dark:border-gray-700"
           >
             <div className="flex items-center justify-between">
               <div className="flex-1">
-                <p className="text-sm font-medium text-gray-600">Dinheiro</p>
-                <p className="mt-2 text-2xl font-bold text-gray-900">
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Dinheiro</p>
+                <p className="mt-2 text-2xl font-bold text-gray-900 dark:text-white">
                   {(cards?.payment?.cash_percentage || 0).toFixed(1)}%
                 </p>
-                <p className="mt-2 text-xs text-gray-500">
+                <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
                   {cards?.payment?.cash_count || 0} pedidos
                 </p>
               </div>
               <div className="flex items-center gap-2">
-                <div className="rounded-lg bg-green-50 p-3">
+                <div className="rounded-lg bg-green-50 p-3 dark:bg-gray-700">
                   <Wallet className="h-6 w-6 text-green-600" />
                 </div>
                 <ChevronRight className="h-5 w-5 text-gray-400" />
@@ -569,18 +569,18 @@ export default function DashboardOverview() {
 
           <button
             onClick={() => handleCardClick('approval_rate', 'Taxa de Aprovação')}
-            className="rounded-lg border border-gray-200 bg-white p-6 text-left shadow-sm transition-all hover:border-primary-300 hover:shadow-md cursor-pointer"
+            className="rounded-lg border border-gray-200 bg-white p-6 text-left shadow-sm transition-all hover:border-primary-300 hover:shadow-md cursor-pointer dark:bg-gray-800 dark:border-gray-700"
           >
             <div className="flex items-center justify-between">
               <div className="flex-1">
-                <p className="text-sm font-medium text-gray-600">Taxa de Aprovação</p>
-                <p className="mt-2 text-2xl font-bold text-gray-900">
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Taxa de Aprovação</p>
+                <p className="mt-2 text-2xl font-bold text-gray-900 dark:text-white">
                   {(cards?.payment?.approval_rate || 0).toFixed(1)}%
                 </p>
-                <p className="mt-2 text-xs text-gray-500">Pedidos pagos</p>
+                <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">Pedidos pagos</p>
               </div>
               <div className="flex items-center gap-2">
-                <div className="rounded-lg bg-purple-50 p-3">
+                <div className="rounded-lg bg-purple-50 p-3 dark:bg-gray-700">
                   <CheckCircle2 className="h-6 w-6 text-purple-600" />
                 </div>
                 <ChevronRight className="h-5 w-5 text-gray-400" />
@@ -606,10 +606,10 @@ export default function DashboardOverview() {
             {modalData.items.map((item, idx) => (
               <div
                 key={idx}
-                className="flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-4 py-3"
+                className="flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 dark:bg-gray-700 dark:border-gray-600"
               >
-                <span className="text-sm font-medium text-gray-700">{item.label}</span>
-                <span className="text-sm font-semibold text-gray-900">{item.value}</span>
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{item.label}</span>
+                <span className="text-sm font-semibold text-gray-900 dark:text-white">{item.value}</span>
               </div>
             ))}
           </div>

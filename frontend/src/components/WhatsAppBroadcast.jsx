@@ -81,16 +81,16 @@ export default function WhatsAppBroadcast() {
   return (
     <div className="p-6">
       <div className="mb-6">
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">
+        <h2 className="text-2xl font-bold text-gray-900 mb-2 dark:text-white">
           Disparo de Mensagens WhatsApp
         </h2>
-        <p className="text-gray-600">
+        <p className="text-gray-600 dark:text-gray-400">
           Envie mensagens em massa para seus clientes via WhatsApp
         </p>
       </div>
 
       {/* Campo de Mensagem */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6 dark:bg-gray-800 dark:border-gray-700">
         <label className="block text-sm font-medium text-gray-700 mb-2">
           Mensagem
         </label>
@@ -99,10 +99,10 @@ export default function WhatsAppBroadcast() {
           onChange={(e) => setMessage(e.target.value)}
           placeholder="Digite sua mensagem aqui..."
           rows={6}
-          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
+          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
           disabled={loading}
         />
-        <div className="mt-2 text-sm text-gray-500">
+        <div className="mt-2 text-sm text-gray-500 dark:text-gray-400">
           {message.length} caracteres
         </div>
       </div>
@@ -115,29 +115,29 @@ export default function WhatsAppBroadcast() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 dark:bg-gray-800 dark:border-gray-700">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">Todos os Clientes</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.all}</p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.all}</p>
               </div>
               <Users className="w-8 h-8 text-blue-500" />
             </div>
           </div>
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 dark:bg-gray-800 dark:border-gray-700">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">Última Semana</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.last_week}</p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.last_week}</p>
               </div>
               <Users className="w-8 h-8 text-green-500" />
             </div>
           </div>
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 dark:bg-gray-800 dark:border-gray-700">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">Último Mês</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.last_month}</p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.last_month}</p>
               </div>
               <Users className="w-8 h-8 text-purple-500" />
             </div>

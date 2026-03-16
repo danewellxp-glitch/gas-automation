@@ -2,41 +2,37 @@ import { useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 
-// Cores corporativas Gasmaster
-// Vermelho: #E31E24 (principal)
-// Amarelo: #FFD100 (destaque)
-// Azul escuro: #1B3A57 (textos)
+const ROLE_ROUTES = {
+  admin: '/admin',
+  operator: '/operador',
+  owner: '/owner',
+  user: '/operador',
+  driver: '/driver/dashboard',
+}
 
-// Componente para campo de senha com ícone de olho
 function PasswordInput({ id, value, onChange, placeholder, required }) {
   const [showPassword, setShowPassword] = useState(false)
-
-  const togglePasswordVisibility = () => {
-    setShowPassword(!showPassword)
-  }
-
   return (
     <div className="relative">
-      <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">
+      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
         </svg>
       </span>
       <input
         id={id}
-        type={showPassword ? "text" : "password"}
+        type={showPassword ? 'text' : 'password'}
         value={value}
         onChange={onChange}
         placeholder={placeholder}
         required={required}
-        className="w-full pl-11 pr-12 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-red-500 transition-colors text-gray-700"
+        className="w-full pl-11 pr-12 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-900 transition-colors text-gray-700 text-sm"
         autoComplete="current-password"
       />
       <button
         type="button"
-        onClick={togglePasswordVisibility}
-        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-red-600 focus:outline-none transition-colors"
-        title={showPassword ? "Ocultar senha" : "Mostrar senha"}
+        onClick={() => setShowPassword(v => !v)}
+        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
       >
         {showPassword ? (
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -53,13 +49,6 @@ function PasswordInput({ id, value, onChange, placeholder, required }) {
   )
 }
 
-const ROLE_ROUTES = {
-  admin: '/admin',
-  operator: '/operador',
-  owner: '/owner',
-  user: '/operador'
-}
-
 export default function Login() {
   const [email, setEmail] = useState('admin@gasautomation.local')
   const [password, setPassword] = useState('admin123')
@@ -70,188 +59,169 @@ export default function Login() {
   const location = useLocation()
   const { login } = useAuth()
 
-  const from = location.state?.from?.pathname || '/'
-
   const handleSubmit = async (e) => {
     e.preventDefault()
     setLoading(true)
     setError('')
-
     try {
       await login(email, password)
-
       const savedUser = JSON.parse(localStorage.getItem('user'))
       const userRole = savedUser?.role || 'user'
-
-      const targetRoute = ROLE_ROUTES[userRole] || '/operador'
-      navigate(targetRoute, { replace: true })
+      navigate(ROLE_ROUTES[userRole] || '/operador', { replace: true })
     } catch (err) {
-      setError(err.message || 'Erro ao fazer login')
+      setError('Email ou senha incorretos')
     } finally {
       setLoading(false)
     }
   }
 
+  const setDemo = (role) => {
+    const demos = {
+      Admin: { email: 'admin@gasautomation.local', password: 'admin123' },
+      Owner: { email: 'owner@gasautomation.local', password: 'owner123' },
+      Operador: { email: 'operator@gasautomation.local', password: 'operator123' },
+    }
+    if (demos[role]) {
+      setEmail(demos[role].email)
+      setPassword(demos[role].password)
+    }
+  }
+
   return (
-    <div
-      className="min-h-screen flex items-center justify-center p-4"
-      style={{
-        background: 'linear-gradient(135deg, #1B3A57 0%, #0D1F2D 50%, #1B3A57 100%)'
-      }}
-    >
-      {/* Decorative elements */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div
-          className="absolute -top-20 -right-20 w-96 h-96 rounded-full opacity-10"
-          style={{ background: '#E31E24' }}
-        />
-        <div
-          className="absolute -bottom-32 -left-32 w-[500px] h-[500px] rounded-full opacity-10"
-          style={{ background: '#FFD100' }}
-        />
-      </div>
+    <div className="min-h-screen flex">
+      {/* Lado esquerdo - Brand */}
+      <div
+        className="hidden lg:flex lg:w-1/2 flex-col justify-between p-12 relative overflow-hidden"
+        style={{ background: 'linear-gradient(135deg, #0D1117 0%, #1a0a00 40%, #c2390a 100%)' }}
+      >
+        {/* Decorative blur circles */}
+        <div className="absolute top-0 right-0 w-96 h-96 rounded-full opacity-20 blur-3xl" style={{ background: '#E31E24' }} />
+        <div className="absolute bottom-0 left-0 w-80 h-80 rounded-full opacity-10 blur-3xl" style={{ background: '#FFD100' }} />
 
-      <div className="w-full max-w-md relative z-10">
-        {/* Card principal */}
-        <div className="bg-white rounded-2xl shadow-2xl overflow-hidden">
-          {/* Header com logo */}
-          <div
-            className="px-8 py-6 text-center bg-white"
-          >
-            <img
-              src="https://www.grupogasmaster.com.br/wp-content/uploads/2020/11/gasmaster-distribuidora-de-gas-em-curitiba.png"
-              alt="Gasmaster - Distribuidora de Gás em Curitiba"
-              className="h-20 mx-auto mb-3 object-contain drop-shadow-sm"
-            />
-            <p className="text-gray-600 text-sm font-medium">Sistema de Gerenciamento</p>
+        {/* Logo Gásmaster */}
+        <div className="relative z-10 flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+              <circle cx="24" cy="24" r="24" fill="#E31E24" opacity="0.15" />
+              <path d="M24 8 C20 14 14 18 16 26 C18 32 24 36 24 36 C24 36 30 32 32 26 C34 18 28 14 24 8Z" fill="#FFD100" />
+              <path d="M24 16 C22 20 18 22 20 27 C21 30 24 32 24 32 C24 32 27 30 28 27 C30 22 26 20 24 16Z" fill="#E31E24" />
+            </svg>
+            <div>
+              <div className="text-white font-bold text-2xl tracking-wide">GÁSMASTER</div>
+              <div className="text-orange-300 text-xs tracking-widest font-medium">DISTRIBUIDORA</div>
+            </div>
           </div>
+        </div>
 
-          {/* Faixa amarela decorativa */}
-          <div
-            className="h-1.5"
-            style={{ background: 'linear-gradient(90deg, #E31E24 0%, #FFD100 50%, #E31E24 100%)' }}
-          />
-
-          {/* Conteúdo do form */}
-          <div className="p-8">
-            {/* Error Message */}
-            {error && (
-              <div
-                className="mb-6 p-4 rounded-lg flex items-center gap-3"
-                style={{ background: '#FEE2E2', border: '1px solid #E31E24' }}
-              >
-                <svg className="w-5 h-5 flex-shrink-0" style={{ color: '#E31E24' }} fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                </svg>
-                <span style={{ color: '#991B1B' }}>{error}</span>
-              </div>
-            )}
-
-            {/* Form */}
-            <form onSubmit={handleSubmit} className="space-y-5">
-              {/* Email Input */}
-              <div>
-                <label
-                  htmlFor="email"
-                  className="block text-sm font-semibold mb-2"
-                  style={{ color: '#1B3A57' }}
-                >
-                  Email
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207" />
-                    </svg>
-                  </span>
-                  <input
-                    id="email"
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full pl-11 pr-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-red-500 transition-colors text-gray-700"
-                    placeholder="seu@email.com"
-                    required
-                  />
-                </div>
-              </div>
-
-              {/* Password Input */}
-              <div>
-                <label
-                  htmlFor="password"
-                  className="block text-sm font-semibold mb-2"
-                  style={{ color: '#1B3A57' }}
-                >
-                  Senha
-                </label>
-                <PasswordInput
-                  id="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Sua senha"
-                  required
-                />
-              </div>
-
-              {/* Submit Button */}
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full py-3.5 px-4 rounded-lg font-bold text-white transition-all duration-300 transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none shadow-lg"
-                style={{
-                  background: loading ? '#9CA3AF' : 'linear-gradient(135deg, #E31E24 0%, #C41A1F 100%)',
-                  boxShadow: loading ? 'none' : '0 4px 15px rgba(227, 30, 36, 0.4)'
-                }}
-              >
-                {loading ? (
-                  <span className="flex items-center justify-center gap-2">
-                    <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                    </svg>
-                    Entrando...
-                  </span>
-                ) : 'Entrar'}
-              </button>
-            </form>
-
-          </div>
+        {/* Texto central */}
+        <div className="relative z-10">
+          <h1 className="text-white text-4xl font-bold leading-tight mb-4">
+            Plataforma de<br />Atendimento
+          </h1>
+          <p className="text-gray-300 text-sm leading-relaxed max-w-sm">
+            Gestão inteligente e comunicação corporativa em um novo ritmo.
+            Integrando o padrão de qualidade Gasmaster com a automação
+            em tempo real do sistema MercuryGas
+          </p>
         </div>
 
         {/* Footer */}
-        <div className="mt-6 text-center">
-          <p className="text-gray-400 text-sm">
-            Gasmaster Distribuidora de Gás
-          </p>
-          <p className="text-gray-500 text-xs mt-1">
-            Curitiba - Umbará e Região
-          </p>
+        <div className="relative z-10 flex items-center gap-2">
+          <div className="w-8 h-px bg-gray-500" />
+          <span className="text-gray-500 text-xs tracking-widest font-medium">POWERED BY MAXWARE</span>
         </div>
+      </div>
 
-        {/* Demo Credentials (dev only) */}
-        <div className="mt-6 bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/20">
-          <p className="text-xs text-gray-300 text-center mb-3 font-medium">Credenciais de teste (desenvolvimento)</p>
-          <div className="grid grid-cols-2 gap-3 text-xs">
-            <div className="bg-white/10 rounded-lg p-2">
-              <p className="font-semibold text-yellow-400">Admin</p>
-              <p className="text-gray-300 font-mono">admin@gasautomation.local</p>
-              <p className="text-gray-400 font-mono">admin123</p>
+      {/* Lado direito - Login form */}
+      <div className="w-full lg:w-1/2 flex items-center justify-center bg-white p-8">
+        <div className="w-full max-w-sm">
+          {/* Logo MercuryGas */}
+          <div className="text-center mb-8">
+            <div className="flex justify-center mb-3">
+              <svg width="72" height="72" viewBox="0 0 72 72" fill="none">
+                <circle cx="36" cy="36" r="36" fill="#EFF6FF" />
+                {/* Wings */}
+                <path d="M12 32 C18 24 26 28 30 32" stroke="#1d4ed8" strokeWidth="2.5" strokeLinecap="round" fill="none" />
+                <path d="M60 32 C54 24 46 28 42 32" stroke="#1d4ed8" strokeWidth="2.5" strokeLinecap="round" fill="none" />
+                <path d="M10 36 C16 30 24 32 30 36" stroke="#1d4ed8" strokeWidth="2" strokeLinecap="round" fill="none" opacity="0.6" />
+                <path d="M62 36 C56 30 48 32 42 36" stroke="#1d4ed8" strokeWidth="2" strokeLinecap="round" fill="none" opacity="0.6" />
+                {/* Flame */}
+                <path d="M36 18 C32 24 28 28 30 34 C32 40 36 43 36 43 C36 43 40 40 42 34 C44 28 40 24 36 18Z" fill="#f97316" />
+                <path d="M36 24 C34 28 32 30 33 34 C34 37 36 39 36 39 C36 39 38 37 39 34 C40 30 38 28 36 24Z" fill="#FFD100" />
+                {/* Gas cylinder */}
+                <rect x="30" y="43" width="12" height="14" rx="3" fill="#1d4ed8" />
+                <rect x="33" y="41" width="6" height="4" rx="1" fill="#1d4ed8" opacity="0.7" />
+              </svg>
             </div>
-            <div className="bg-white/10 rounded-lg p-2">
-              <p className="font-semibold text-green-400">Operador</p>
-              <p className="text-gray-300 font-mono">operador@gasautomation.local</p>
-              <p className="text-gray-400 font-mono">Teste@12345</p>
+            <div className="text-2xl font-bold text-gray-900 tracking-tight">
+              MERCURY<span className="text-blue-700">GAS</span>
             </div>
-            <div className="bg-white/10 rounded-lg p-2">
-              <p className="font-semibold text-purple-400">Owner</p>
-              <p className="text-gray-300 font-mono">dono@gasautomation.local</p>
-              <p className="text-gray-400 font-mono">Teste@12345</p>
+            <div className="text-xs text-gray-400 tracking-widest mt-0.5">powered by maxware</div>
+          </div>
+
+          <h2 className="text-xl font-semibold text-gray-900 text-center mb-1">Acesso ao Sistema</h2>
+          <p className="text-sm text-gray-500 text-center mb-6">Entre com suas credenciais para acessar o painel</p>
+
+          {error && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm text-center">
+              {error}
             </div>
-            <div className="bg-white/10 rounded-lg p-2">
-              <p className="font-semibold text-orange-400">User</p>
-              <p className="text-gray-300 font-mono">usuario@gasautomation.local</p>
-              <p className="text-gray-400 font-mono">Teste@12345</p>
+          )}
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207" />
+                </svg>
+              </span>
+              <input
+                type="email"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                placeholder="seu@email.com"
+                required
+                className="w-full pl-11 pr-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-900 text-gray-700 text-sm"
+                autoComplete="email"
+              />
+            </div>
+
+            <PasswordInput
+              id="password"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              placeholder="••••••••"
+              required
+            />
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full py-3 rounded-lg text-white font-semibold text-sm transition-all"
+              style={{ background: '#1B3A57' }}
+            >
+              {loading ? 'Entrando...' : 'Entrar na Plataforma'}
+            </button>
+          </form>
+
+          <p className="text-center text-xs text-gray-400 mt-4 cursor-pointer hover:text-gray-600">
+            Problemas com o acesso? / Esqueci minha senha
+          </p>
+
+          {/* Demo badges */}
+          <div className="mt-8 pt-6 border-t border-gray-100 text-center">
+            <p className="text-xs text-gray-400 mb-3">Ambiente de Demonstração</p>
+            <div className="flex justify-center gap-2">
+              {['Admin', 'Owner', 'Operador'].map(role => (
+                <button
+                  key={role}
+                  type="button"
+                  onClick={() => setDemo(role)}
+                  className="px-3 py-1 text-xs border border-gray-200 rounded-full text-gray-500 hover:bg-gray-50 hover:text-gray-700 transition-colors"
+                >
+                  {role}
+                </button>
+              ))}
             </div>
           </div>
         </div>

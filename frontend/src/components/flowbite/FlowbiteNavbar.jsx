@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Menu, X, LogOut } from 'lucide-react'
+import { Menu, LogOut, Moon, Sun } from 'lucide-react'
 
 export default function FlowbiteNavbar({
   appName,
@@ -7,7 +7,9 @@ export default function FlowbiteNavbar({
   userEmail,
   onLogout,
   onToggleSidebar,
-  rightSlot = null,
+  rightSlot =        null,
+  isDark = false,
+  onToggleDark,
 }) {
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false)
 
@@ -18,7 +20,7 @@ export default function FlowbiteNavbar({
   }, [userEmail])
 
   return (
-    <nav className="fixed top-0 z-30 w-full border-b border-gray-200 bg-white">
+    <nav className="fixed top-0 z-30 w-full border-b    border-gray-200 bg-white dark:border-gray-700  dark:bg-gray-800">
       <div className="px-4 py-3 lg:px-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -47,7 +49,16 @@ export default function FlowbiteNavbar({
           <div className="flex items-center gap-3">
             {rightSlot}
 
-            {/* User */}
+              {/* Dark mode toggle */}
+            <button
+  type="button"
+              onClick={onToggleDark}
+              className="rounded-lg p-2 text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700"
+              >
+              {isDark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+            </button>
+
+            {/* User  */}
             <div className="relative">
               <button
                 type="button"

@@ -20,13 +20,17 @@ export default function TopProductsChart({ data }) {
     )
   }
 
+  const isDark = document.documentElement.classList.contains('dark')
+  const textColor = isDark ? '#9ca3af' : '#6b7280'
+  const gridColor = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)'
+
   const top10 = data.slice(0, 10)
 
   return (
     <div className="h-full">
       <Bar
         data={{
-          labels: top10.map(p => p.code || 'Sem código'),
+          labels: top10.map(p => p.code || 'Sem codigo'),
           datasets: [
             {
               label: 'Receita',
@@ -44,32 +48,21 @@ export default function TopProductsChart({ data }) {
           maintainAspectRatio: true,
           aspectRatio: 2.5,
           plugins: {
-            legend: { 
-              display: false 
-            },
+            legend: { display: false },
             tooltip: {
               backgroundColor: 'rgba(0, 0, 0, 0.8)',
               padding: 12,
-              titleFont: {
-                size: 13,
-                weight: 'bold',
-              },
-              bodyFont: {
-                size: 12,
-              },
+              titleFont: { size: 13, weight: 'bold' },
+              bodyFont: { size: 12 },
               callbacks: {
                 title: function(context) {
                   const product = top10[context[0].dataIndex]
-                  return `${product.code || 'Sem código'} - ${product.name || 'Sem nome'}`
+                  return `${product.code || 'Sem codigo'} - ${product.name || 'Sem nome'}`
                 },
                 label: function(context) {
                   const product = top10[context.dataIndex]
                   return [
-                    `Receita: ${new Intl.NumberFormat('pt-BR', {
-                      style: 'currency',
-                      currency: 'BRL',
-                      minimumFractionDigits: 2,
-                    }).format(context.parsed.x)}`,
+                    `Receita: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2 }).format(context.parsed.x)}`,
                     `Quantidade vendida: ${product.quantity || 0}`,
                   ]
                 },
@@ -79,30 +72,19 @@ export default function TopProductsChart({ data }) {
           scales: {
             x: {
               beginAtZero: true,
-              grid: {
-                color: 'rgba(0, 0, 0, 0.05)',
-              },
+              grid: { color: gridColor },
               ticks: {
-                font: {
-                  size: 11,
-                },
+                color: textColor,
+                font: { size: 11 },
                 callback: function(value) {
-                  if (value >= 1000) {
-                    return 'R$ ' + (value / 1000).toFixed(1) + 'k'
-                  }
+                  if (value >= 1000) return 'R$ ' + (value / 1000).toFixed(1) + 'k'
                   return 'R$ ' + value.toLocaleString('pt-BR')
                 },
               },
             },
             y: {
-              grid: {
-                display: false,
-              },
-              ticks: {
-                font: {
-                  size: 11,
-                },
-              },
+              grid: { display: false },
+              ticks: { color: textColor, font: { size: 11 } },
             },
           },
         }}

@@ -51,7 +51,8 @@ export default function FinancialChart({ data }) {
         plugins: {
           legend: {
             display: true,
-            position: 'top'
+            position: 'top',
+            labels: { color: textColor },
           },
           tooltip: {
             callbacks: {

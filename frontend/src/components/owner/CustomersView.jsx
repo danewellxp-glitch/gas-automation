@@ -43,7 +43,7 @@ export default function CustomersView() {
       <div className="flex items-center justify-center h-96">
         <div className="text-center">
           <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-gray-200 border-t-primary-600" />
-          <p className="mt-4 text-gray-600">Carregando dados de clientes...</p>
+          <p className="mt-4 text-gray-600 dark:text-gray-400">Carregando dados de clientes...</p>
         </div>
       </div>
     )
@@ -73,19 +73,19 @@ export default function CustomersView() {
   const bairros = dashboardData?.bairro_metrics
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 dark:text-gray-100">
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Clientes & Mercado</h1>
-          <p className="mt-1 text-sm text-gray-600">
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Clientes & Mercado</h1>
+          <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
             Análise de clientes e performance por região
           </p>
         </div>
         <button
           onClick={fetchDashboard}
           disabled={loading}
-          className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+          className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:border-gray-600 disabled:opacity-50"
         >
           <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
           Atualizar
@@ -95,46 +95,46 @@ export default function CustomersView() {
       {/* Métricas de Clientes */}
       {customers && (
         <div className="grid gap-6 lg:grid-cols-2">
-          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:bg-gray-800 dark:border-gray-700">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-lg font-semibold text-gray-900">Métricas de Clientes</h2>
               <Users className="h-5 w-5 text-gray-400" />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <p className="text-sm text-gray-600">Total Ativo</p>
-                <p className="mt-1 text-2xl font-bold text-gray-900">
+                <p className="text-sm text-gray-600 dark:text-gray-400">Total Ativo</p>
+                <p className="mt-1 text-2xl font-bold text-gray-900 dark:text-white">
                   {customers.total_active}
                 </p>
-                <p className="mt-1 text-xs text-gray-500">Últimos 30 dias</p>
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Últimos 30 dias</p>
               </div>
               <div>
-                <p className="text-sm text-gray-600">Novos Hoje</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Novos Hoje</p>
                 <p className="mt-1 text-2xl font-bold text-green-600">
                   {customers.new_today}
                 </p>
-                <p className="mt-1 text-xs text-gray-500">Novos clientes</p>
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Novos clientes</p>
               </div>
               <div>
-                <p className="text-sm text-gray-600">Novos no Mês</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Novos no Mês</p>
                 <p className="mt-1 text-2xl font-bold text-blue-600">
                   {customers.new_month}
                 </p>
-                <p className="mt-1 text-xs text-gray-500">Este mês</p>
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Este mês</p>
               </div>
               <div>
-                <p className="text-sm text-gray-600">Taxa de Repetição</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Taxa de Repetição</p>
                 <p className="mt-1 text-2xl font-bold text-purple-600">
                   {(customers.repeat_rate || 0).toFixed(1)}%
                 </p>
-                <p className="mt-1 text-xs text-gray-500">Fidelização</p>
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Fidelização</p>
               </div>
             </div>
           </div>
 
-          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:bg-gray-800 dark:border-gray-700">
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-gray-900">Top Clientes</h2>
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Top Clientes</h2>
               <TrendingUp className="h-5 w-5 text-gray-400" />
             </div>
             {customers.top_customers && customers.top_customers.length > 0 ? (
@@ -142,23 +142,23 @@ export default function CustomersView() {
                 {customers.top_customers.slice(0, 5).map((customer, idx) => (
                   <div
                     key={idx}
-                    className="flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 p-3"
+                    className="flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 p-3 dark:bg-gray-700 dark:border-gray-600"
                   >
                     <div>
-                      <div className="font-medium text-gray-900">{customer.name}</div>
-                      <div className="text-xs text-gray-500">{customer.phone}</div>
+                      <div className="font-medium text-gray-900 dark:text-white">{customer.name}</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">{customer.phone}</div>
                     </div>
                     <div className="text-right">
-                      <div className="font-semibold text-gray-900">
+                      <div className="font-semibold text-gray-900 dark:text-white">
                         {formatCurrency(customer.total_revenue)}
                       </div>
-                      <div className="text-xs text-gray-500">{customer.orders_count} pedidos</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">{customer.orders_count} pedidos</div>
                     </div>
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-gray-500">Sem dados de clientes</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Sem dados de clientes</p>
             )}
           </div>
         </div>
@@ -168,17 +168,17 @@ export default function CustomersView() {
       {bairros && (
         <div>
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-gray-900">Análise por Bairro</h2>
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Análise por Bairro</h2>
             <MapPin className="h-5 w-5 text-gray-400" />
           </div>
           <div className="grid gap-6 lg:grid-cols-3">
-            <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-              <h3 className="mb-4 font-semibold text-gray-900">Mais Lucrativos</h3>
+            <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:bg-gray-800 dark:border-gray-700">
+              <h3 className="mb-4 font-semibold text-gray-900 dark:text-white">Mais Lucrativos</h3>
               {bairros.most_profitable && bairros.most_profitable.length > 0 ? (
                 <div className="space-y-2">
                   {bairros.most_profitable.map((b, idx) => (
                     <div key={idx} className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-gray-700">{b.bairro}</span>
+                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{b.bairro}</span>
                       <span className="text-sm font-bold text-green-600">
                         {formatCurrency(b.revenue)}
                       </span>
@@ -186,33 +186,33 @@ export default function CustomersView() {
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-gray-500">Sem dados</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Sem dados</p>
               )}
             </div>
 
-            <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+            <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:bg-gray-800 dark:border-gray-700">
               <h3 className="mb-4 font-semibold text-gray-900">Mais Cancelamentos</h3>
               {bairros.most_cancelled && bairros.most_cancelled.length > 0 ? (
                 <div className="space-y-2">
                   {bairros.most_cancelled.map((b, idx) => (
                     <div key={idx} className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-gray-700">{b.bairro}</span>
+                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{b.bairro}</span>
                       <span className="text-sm font-bold text-red-600">{b.cancelled}</span>
                     </div>
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-gray-500">Sem dados</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Sem dados</p>
               )}
             </div>
 
-            <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+            <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:bg-gray-800 dark:border-gray-700">
               <h3 className="mb-4 font-semibold text-gray-900">Entrega Mais Lenta</h3>
               {bairros.slowest_delivery && bairros.slowest_delivery.length > 0 ? (
                 <div className="space-y-2">
                   {bairros.slowest_delivery.map((b, idx) => (
                     <div key={idx} className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-gray-700">{b.bairro}</span>
+                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{b.bairro}</span>
                       <span className="text-sm font-bold text-amber-600">
                         {b.avg_delivery_time ? `${Math.round(b.avg_delivery_time)} min` : '-'}
                       </span>
@@ -220,7 +220,7 @@ export default function CustomersView() {
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-gray-500">Sem dados</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Sem dados</p>
               )}
             </div>
           </div>

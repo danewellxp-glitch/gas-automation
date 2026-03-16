@@ -35,7 +35,7 @@ export default function PerformanceView() {
       <div className="flex items-center justify-center h-96">
         <div className="text-center">
           <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-gray-200 border-t-primary-600" />
-          <p className="mt-4 text-gray-600">Carregando dados de performance...</p>
+          <p className="mt-4 text-gray-600 dark:text-gray-400">Carregando dados de performance...</p>
         </div>
       </div>
     )
@@ -65,19 +65,19 @@ export default function PerformanceView() {
   const operators = dashboardData?.operator_performance || []
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 dark:text-gray-100">
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Performance Operacional</h1>
-          <p className="mt-1 text-sm text-gray-600">
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Performance Operacional</h1>
+          <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
             Rankings e métricas de entregadores e operadores
           </p>
         </div>
         <button
           onClick={fetchDashboard}
           disabled={loading}
-          className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+          className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:border-gray-600 disabled:opacity-50"
         >
           <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
           Atualizar
@@ -86,9 +86,9 @@ export default function PerformanceView() {
 
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Entregadores */}
-        <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+        <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:bg-gray-800 dark:border-gray-700">
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-gray-900">Entregadores</h2>
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Entregadores</h2>
             <Truck className="h-5 w-5 text-gray-400" />
           </div>
           
@@ -99,7 +99,7 @@ export default function PerformanceView() {
                   key={idx}
                   className={`flex items-center justify-between rounded-lg border p-4 ${
                     idx === 0
-                      ? 'border-amber-200 bg-amber-50'
+                      ? 'border-amber-200 bg-amber-50 dark:bg-amber-950 dark:border-amber-800'
                       : 'border-gray-200 bg-gray-50'
                   }`}
                 >
@@ -111,11 +111,11 @@ export default function PerformanceView() {
                       <span className={`text-lg font-bold ${idx === 0 ? 'text-amber-600' : 'text-gray-400'}`}>
                         #{idx + 1}
                       </span>
-                      <span className="font-semibold text-gray-900">
+                      <span className="font-semibold text-gray-900 dark:text-white">
                         {driver.driver_name || 'Sem nome'}
                       </span>
                     </div>
-                    <div className="mt-1 flex items-center gap-4 text-sm text-gray-600">
+                    <div className="mt-1 flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
                       <span>{driver.deliveries_count} entregas</span>
                       {driver.avg_delivery_time && (
                         <span>{Math.round(driver.avg_delivery_time)} min médio</span>
@@ -136,14 +136,14 @@ export default function PerformanceView() {
               ))}
             </div>
           ) : (
-            <p className="text-sm text-gray-500">Sem dados de entregadores</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Sem dados de entregadores</p>
           )}
         </div>
 
         {/* Operadores */}
-        <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+        <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:bg-gray-800 dark:border-gray-700">
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-gray-900">Operadores</h2>
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Operadores</h2>
             <Users className="h-5 w-5 text-gray-400" />
           </div>
           
@@ -159,7 +159,7 @@ export default function PerformanceView() {
                         key={op.user_id}
                         className={`flex items-center justify-between rounded-lg border p-4 ${
                           idx === 0 && op.orders_approved > 0
-                            ? 'border-amber-200 bg-amber-50'
+                            ? 'border-amber-200 bg-amber-50 dark:bg-amber-950 dark:border-amber-800'
                             : 'border-gray-200 bg-gray-50'
                         }`}
                       >
@@ -168,11 +168,11 @@ export default function PerformanceView() {
                             {idx === 0 && op.orders_approved > 0 && (
                               <Award className="h-4 w-4 text-amber-600" />
                             )}
-                            <div className="font-semibold text-gray-900">{op.username}</div>
+                            <div className="font-semibold text-gray-900 dark:text-white">{op.username}</div>
                           </div>
-                          <div className="mt-1 text-sm text-gray-600">{op.email}</div>
+                          <div className="mt-1 text-sm text-gray-600 dark:text-gray-400">{op.email}</div>
                           <div className="mt-2 flex items-center gap-4 text-sm">
-                            <span className="font-medium text-gray-700">
+                            <span className="font-medium text-gray-700 dark:text-gray-300">
                               {op.orders_approved} pedidos aprovados
                             </span>
                             {op.errors_count > 0 && (
@@ -180,7 +180,7 @@ export default function PerformanceView() {
                             )}
                           </div>
                           {op.avg_response_time !== undefined && op.avg_response_time !== null && (
-                            <div className="mt-1 text-xs text-gray-500">
+                            <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                               Tempo médio de resposta: {op.avg_response_time}s
                             </div>
                           )}
@@ -189,18 +189,18 @@ export default function PerformanceView() {
                     ))}
                 </div>
               ) : (
-                <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-                  <p className="text-sm text-gray-600">
+                <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:bg-gray-700 dark:border-gray-600">
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
                     Nenhum operador aprovou pedidos neste período.
                   </p>
-                  <p className="mt-1 text-xs text-gray-500">
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                     Total de operadores cadastrados: {operators.length}
                   </p>
                 </div>
               )}
             </>
           ) : (
-            <p className="text-sm text-gray-500">Sem dados de operadores</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Sem dados de operadores</p>
           )}
         </div>
       </div>

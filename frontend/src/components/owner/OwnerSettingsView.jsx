@@ -84,18 +84,18 @@ export default function OwnerSettingsView() {
       <div className="flex items-center justify-center h-96">
         <div className="text-center">
           <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-gray-200 border-t-primary-600" />
-          <p className="mt-4 text-gray-600">Carregando configurações...</p>
+          <p className="mt-4 text-gray-600 dark:text-gray-400">Carregando configurações...</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 dark:text-gray-100">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Configurações de Negócio</h1>
-          <p className="mt-1 text-sm text-gray-600">
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Configurações de Negócio</h1>
+          <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
             Gerencie preços, bairros, horários, promoções e metas do seu negócio
           </p>
         </div>
@@ -103,7 +103,7 @@ export default function OwnerSettingsView() {
           <button
             onClick={fetchSettings}
             disabled={loading}
-            className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:border-gray-600 disabled:opacity-50"
           >
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
             Atualizar
@@ -140,9 +140,9 @@ export default function OwnerSettingsView() {
       )}
 
       {/* Preços de Produtos */}
-      <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-        <h2 className="mb-4 text-lg font-semibold text-gray-900">Preços de Produtos</h2>
-        <p className="mb-4 text-sm text-gray-600">
+      <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:bg-gray-800 dark:border-gray-700">
+        <h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">Preços de Produtos</h2>
+        <p className="mb-4 text-sm text-gray-600 dark:text-gray-400">
           Configure os preços dos produtos disponíveis no sistema
         </p>
         <div className="space-y-3">
@@ -150,14 +150,14 @@ export default function OwnerSettingsView() {
             settings.products.map((product) => (
               <div
                 key={product.code}
-                className="flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 p-4"
+                className="flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 p-4 dark:bg-gray-700 dark:border-gray-600"
               >
                 <div>
-                  <div className="font-medium text-gray-900">{product.name}</div>
-                  <div className="text-sm text-gray-500">Código: {product.code}</div>
+                  <div className="font-medium text-gray-900 dark:text-white">{product.name}</div>
+                  <div className="text-sm text-gray-500 dark:text-gray-400">Código: {product.code}</div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-600">R$</span>
+                  <span className="text-sm text-gray-600 dark:text-gray-400">R$</span>
                   <input
                     type="number"
                     step="0.01"
@@ -170,28 +170,28 @@ export default function OwnerSettingsView() {
                       )
                       setSettings({ ...settings, products: newProducts })
                     }}
-                    className="w-24 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-primary-500 focus:ring-primary-500"
+                    className="w-24 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-primary-500 focus:ring-primary-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                   />
                 </div>
               </div>
             ))
           ) : (
-            <p className="text-sm text-gray-500">Nenhum produto configurado</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Nenhum produto configurado</p>
           )}
         </div>
       </div>
 
       {/* Bairros */}
-      <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-        <h2 className="mb-4 text-lg font-semibold text-gray-900">Bairros Atendidos</h2>
-        <p className="mb-4 text-sm text-gray-600">
+      <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:bg-gray-800 dark:border-gray-700">
+        <h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">Bairros Atendidos</h2>
+        <p className="mb-4 text-sm text-gray-600 dark:text-gray-400">
           Ative ou desative bairros para entrega
         </p>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {settings.bairros.map((bairro) => (
             <label
               key={bairro}
-              className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 p-3 hover:bg-gray-100 cursor-pointer"
+              className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 p-3 hover:bg-gray-100 cursor-pointer dark:bg-gray-700 dark:border-gray-600 dark:hover:bg-gray-600"
             >
               <input
                 type="checkbox"
@@ -204,20 +204,20 @@ export default function OwnerSettingsView() {
                 }}
                 className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
               />
-              <span className="text-sm font-medium text-gray-900">{bairro}</span>
+              <span className="text-sm font-medium text-gray-900 dark:text-white">{bairro}</span>
             </label>
           ))}
         </div>
       </div>
 
       {/* Horário de Funcionamento */}
-      <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-        <h2 className="mb-4 text-lg font-semibold text-gray-900">Horário de Funcionamento</h2>
+      <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:bg-gray-800 dark:border-gray-700">
+        <h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">Horário de Funcionamento</h2>
         <div className="space-y-3">
           {Object.entries(settings.operating_hours).map(([day, hours]) => (
             <div
               key={day}
-              className="flex items-center gap-4 rounded-lg border border-gray-200 bg-gray-50 p-4"
+              className="flex items-center gap-4 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:bg-gray-700 dark:border-gray-600"
             >
               <label className="flex items-center gap-2">
                 <input
@@ -257,9 +257,9 @@ export default function OwnerSettingsView() {
                         },
                       })
                     }}
-                    className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-primary-500 focus:ring-primary-500"
+                    className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-primary-500 focus:ring-primary-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                   />
-                  <span className="text-gray-600">até</span>
+                  <span className="text-gray-600 dark:text-gray-400">até</span>
                   <input
                     type="time"
                     value={hours.close}
@@ -272,7 +272,7 @@ export default function OwnerSettingsView() {
                         },
                       })
                     }}
-                    className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-primary-500 focus:ring-primary-500"
+                    className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-primary-500 focus:ring-primary-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                   />
                 </div>
               )}
@@ -282,14 +282,14 @@ export default function OwnerSettingsView() {
       </div>
 
       {/* Metas Mensais */}
-      <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-        <h2 className="mb-4 text-lg font-semibold text-gray-900">Metas Mensais</h2>
-        <p className="mb-4 text-sm text-gray-600">
+      <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:bg-gray-800 dark:border-gray-700">
+        <h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">Metas Mensais</h2>
+        <p className="mb-4 text-sm text-gray-600 dark:text-gray-400">
           Defina metas para acompanhamento mensal
         </p>
         <div className="grid gap-4 sm:grid-cols-3">
           <div>
-            <label className="mb-2 block text-sm font-medium text-gray-700">
+            <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
               Meta de Receita (R$)
             </label>
             <input
@@ -304,11 +304,11 @@ export default function OwnerSettingsView() {
                   },
                 })
               }}
-              className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-primary-500 focus:ring-primary-500"
+              className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-primary-500 focus:ring-primary-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
             />
           </div>
           <div>
-            <label className="mb-2 block text-sm font-medium text-gray-700">
+            <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
               Meta de Pedidos
             </label>
             <input
@@ -323,11 +323,11 @@ export default function OwnerSettingsView() {
                   },
                 })
               }}
-              className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-primary-500 focus:ring-primary-500"
+              className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-primary-500 focus:ring-primary-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
             />
           </div>
           <div>
-            <label className="mb-2 block text-sm font-medium text-gray-700">
+            <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
               Meta de Novos Clientes
             </label>
             <input
@@ -342,7 +342,7 @@ export default function OwnerSettingsView() {
                   },
                 })
               }}
-              className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-primary-500 focus:ring-primary-500"
+              className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-primary-500 focus:ring-primary-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
             />
           </div>
         </div>

@@ -71,6 +71,10 @@ export default function RevenueChart({ data }) {
     while (currentRevenue.length < maxLength) currentRevenue.push(0)
     while (previousRevenue.length < maxLength) previousRevenue.push(0)
 
+    const isDark = document.documentElement.classList.contains('dark')
+    const textColor = isDark ? '#9ca3af' : '#6b7280'
+    const gridColor = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)'
+
     return (
     <Line
       data={{
@@ -102,6 +106,7 @@ export default function RevenueChart({ data }) {
           legend: {
             display: true,
             position: 'top',
+            labels: { color: textColor },
           },
           tooltip: {
             callbacks: {
@@ -118,10 +123,12 @@ export default function RevenueChart({ data }) {
           y: {
             beginAtZero: true,
             ticks: {
+              color: textColor,
               callback: function(value) {
                 return 'R$ ' + value.toLocaleString('pt-BR')
               },
             },
+            grid: { color: gridColor },
           },
         },
       }}

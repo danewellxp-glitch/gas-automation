@@ -52,38 +52,38 @@ export default function OwnerReportsView() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 dark:text-gray-100">
       <div>
-        <h1 className="text-3xl font-bold text-gray-900">Relatórios</h1>
-        <p className="mt-1 text-sm text-gray-600">
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Relatórios</h1>
+        <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
           Gere relatórios exportáveis para análise e tomada de decisão
         </p>
       </div>
 
       {/* Filtros */}
-      <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-        <h2 className="mb-4 text-lg font-semibold text-gray-900">Filtros</h2>
+      <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:bg-gray-800 dark:border-gray-700">
+        <h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">Filtros</h2>
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            <label className="mb-2 block text-sm font-medium text-gray-700">
+            <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
               Data Inicial
             </label>
             <input
               type="date"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
-              className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-primary-500 focus:ring-primary-500"
+              className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-primary-500 focus:ring-primary-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
             />
           </div>
           <div>
-            <label className="mb-2 block text-sm font-medium text-gray-700">
+            <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
               Data Final
             </label>
             <input
               type="date"
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
-              className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-primary-500 focus:ring-primary-500"
+              className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-primary-500 focus:ring-primary-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
             />
           </div>
         </div>
@@ -91,14 +91,14 @@ export default function OwnerReportsView() {
 
       {/* Cards de Relatórios */}
       <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+        <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:bg-gray-800 dark:border-gray-700">
           <div className="mb-4 flex items-center gap-3">
-            <div className="rounded-lg bg-blue-50 p-3">
+            <div className="rounded-lg bg-blue-50 p-3 dark:bg-gray-700">
               <FileText className="h-6 w-6 text-blue-600" />
             </div>
             <div>
-              <h3 className="font-semibold text-gray-900">Faturamento</h3>
-              <p className="text-xs text-gray-500">Receita por período</p>
+              <h3 className="font-semibold text-gray-900 dark:text-white">Faturamento</h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400">Receita por período</p>
             </div>
           </div>
           <div className="flex gap-2">
@@ -113,21 +113,21 @@ export default function OwnerReportsView() {
             <button
               onClick={() => handleExport('pdf', 'revenue')}
               disabled={loading}
-              className="flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+              className="flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:border-gray-600 disabled:opacity-50"
             >
               PDF
             </button>
           </div>
         </div>
 
-        <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+        <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:bg-gray-800 dark:border-gray-700">
           <div className="mb-4 flex items-center gap-3">
-            <div className="rounded-lg bg-green-50 p-3">
+            <div className="rounded-lg bg-green-50 p-3 dark:bg-gray-700">
               <FileText className="h-6 w-6 text-green-600" />
             </div>
             <div>
-              <h3 className="font-semibold text-gray-900">Pedidos</h3>
-              <p className="text-xs text-gray-500">Por produto</p>
+              <h3 className="font-semibold text-gray-900 dark:text-white">Pedidos</h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400">Por produto</p>
             </div>
           </div>
           <div className="flex gap-2">
@@ -142,21 +142,21 @@ export default function OwnerReportsView() {
             <button
               onClick={() => handleExport('pdf', 'orders')}
               disabled={loading}
-              className="flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+              className="flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:border-gray-600 disabled:opacity-50"
             >
               PDF
             </button>
           </div>
         </div>
 
-        <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+        <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:bg-gray-800 dark:border-gray-700">
           <div className="mb-4 flex items-center gap-3">
-            <div className="rounded-lg bg-purple-50 p-3">
+            <div className="rounded-lg bg-purple-50 p-3 dark:bg-gray-700">
               <FileText className="h-6 w-6 text-purple-600" />
             </div>
             <div>
-              <h3 className="font-semibold text-gray-900">Comissões</h3>
-              <p className="text-xs text-gray-500">Entregadores</p>
+              <h3 className="font-semibold text-gray-900 dark:text-white">Comissões</h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400">Entregadores</p>
             </div>
           </div>
           <div className="flex gap-2">
@@ -171,21 +171,21 @@ export default function OwnerReportsView() {
             <button
               onClick={() => handleExport('pdf', 'drivers')}
               disabled={loading}
-              className="flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+              className="flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:border-gray-600 disabled:opacity-50"
             >
               PDF
             </button>
           </div>
         </div>
 
-        <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+        <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:bg-gray-800 dark:border-gray-700">
           <div className="mb-4 flex items-center gap-3">
-            <div className="rounded-lg bg-amber-50 p-3">
+            <div className="rounded-lg bg-amber-50 p-3 dark:bg-gray-700">
               <FileText className="h-6 w-6 text-amber-600" />
             </div>
             <div>
-              <h3 className="font-semibold text-gray-900">Desempenho</h3>
-              <p className="text-xs text-gray-500">Mensal completo</p>
+              <h3 className="font-semibold text-gray-900 dark:text-white">Desempenho</h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400">Mensal completo</p>
             </div>
           </div>
           <div className="flex gap-2">
@@ -200,7 +200,7 @@ export default function OwnerReportsView() {
             <button
               onClick={() => handleExport('pdf', 'performance')}
               disabled={loading}
-              className="flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+              className="flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:border-gray-600 disabled:opacity-50"
             >
               PDF
             </button>

@@ -31,6 +31,9 @@ export default function OrdersByTypeChart({ data }) {
       )
     }
 
+    const isDark = document.documentElement.classList.contains('dark')
+    const textColor = isDark ? '#9ca3af' : '#374151'
+
     const chartData = {
       labels: ['Troca', 'Venda', 'Retira'],
       datasets: [
@@ -66,7 +69,8 @@ export default function OrdersByTypeChart({ data }) {
                     position: 'bottom',
                     labels: {
                       padding: 15,
-                      font: {
+                      color: textColor,
+                    font: {
                         size: 12,
                       },
                       usePointStyle: true,
@@ -96,11 +100,11 @@ export default function OrdersByTypeChart({ data }) {
             />
           </div>
         </div>
-        <div className="mt-4 grid grid-cols-3 gap-3 border-t border-gray-200 pt-4">
+        <div className="mt-4 grid grid-cols-3 gap-3 border-t border-gray-200 dark:border-gray-700 pt-4">
           <div className="text-center">
             <div className="text-xl font-bold text-blue-600">{troca}</div>
-            <div className="text-xs font-medium text-gray-600">Troca</div>
-            <div className="mt-1 text-xs text-gray-700">
+            <div className="text-xs font-medium text-gray-600 dark:text-gray-400">Troca</div>
+            <div className="mt-1 text-xs text-gray-700 dark:text-gray-400">
               {new Intl.NumberFormat('pt-BR', {
                 style: 'currency',
                 currency: 'BRL',
@@ -110,8 +114,8 @@ export default function OrdersByTypeChart({ data }) {
           </div>
           <div className="text-center">
             <div className="text-xl font-bold text-green-600">{venda}</div>
-            <div className="text-xs font-medium text-gray-600">Venda</div>
-            <div className="mt-1 text-xs text-gray-700">
+            <div className="text-xs font-medium text-gray-600 dark:text-gray-400">Venda</div>
+            <div className="mt-1 text-xs text-gray-700 dark:text-gray-400">
               {new Intl.NumberFormat('pt-BR', {
                 style: 'currency',
                 currency: 'BRL',
@@ -121,8 +125,8 @@ export default function OrdersByTypeChart({ data }) {
           </div>
           <div className="text-center">
             <div className="text-xl font-bold text-orange-600">{retira}</div>
-            <div className="text-xs font-medium text-gray-600">Retira</div>
-            <div className="mt-1 text-xs text-gray-700">
+            <div className="text-xs font-medium text-gray-600 dark:text-gray-400">Retira</div>
+            <div className="mt-1 text-xs text-gray-700 dark:text-gray-400">
               {new Intl.NumberFormat('pt-BR', {
                 style: 'currency',
                 currency: 'BRL',

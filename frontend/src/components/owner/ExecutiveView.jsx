@@ -105,11 +105,11 @@ export default function ExecutiveView() {
   const alerts = dashboardData?.alerts || []
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 dark:text-gray-100">
       {/* Header com controles */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Visão Executiva</h1>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Visão Executiva</h1>
           <p className="mt-1 text-sm text-gray-600">
             Visão geral do negócio em tempo real
             {lastUpdate && (
@@ -120,7 +120,7 @@ export default function ExecutiveView() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <div className="flex rounded-lg border border-gray-300 bg-white p-1">
+          <div className="flex rounded-lg border border-gray-300 bg-white p-1 dark:bg-gray-800 dark:border-gray-600">
             {['day', 'week', 'month'].map((p) => (
               <button
                 key={p}
@@ -128,7 +128,7 @@ export default function ExecutiveView() {
                 className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
                   period === p
                     ? 'bg-primary-600 text-white'
-                    : 'text-gray-700 hover:bg-gray-100'
+                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
                 }`}
               >
                 {p === 'day' ? 'Dia' : p === 'week' ? 'Semana' : 'Mês'}
@@ -138,7 +138,7 @@ export default function ExecutiveView() {
           <button
             onClick={fetchDashboard}
             disabled={loading}
-            className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:border-gray-600 disabled:opacity-50"
           >
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
             Atualizar
@@ -154,8 +154,8 @@ export default function ExecutiveView() {
               key={idx}
               className={`flex items-start gap-3 rounded-lg border p-4 ${
                 alert.type === 'critical'
-                  ? 'border-red-200 bg-red-50'
-                  : 'border-amber-200 bg-amber-50'
+                  ? 'border-red-200 bg-red-50 dark:bg-red-950 dark:border-red-800'
+                  : 'border-amber-200 bg-amber-50 dark:bg-amber-950 dark:border-amber-800'
               }`}
             >
               <AlertCircle
@@ -164,10 +164,10 @@ export default function ExecutiveView() {
                 }`}
               />
               <div className="flex-1">
-                <div className="font-semibold text-gray-900">{alert.title}</div>
-                <div className="mt-1 text-sm text-gray-700">{alert.message}</div>
+                <div className="font-semibold text-gray-900 dark:text-white">{alert.title}</div>
+                <div className="mt-1 text-sm text-gray-700 dark:text-gray-300">{alert.message}</div>
                 {alert.count !== undefined && (
-                  <div className="mt-1 text-xs text-gray-600">Quantidade: {alert.count}</div>
+                  <div className="mt-1 text-xs text-gray-600 dark:text-gray-400">Quantidade: {alert.count}</div>
                 )}
               </div>
             </div>
@@ -178,14 +178,14 @@ export default function ExecutiveView() {
       {/* Seção: Financeiro */}
       <section>
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-xl font-semibold text-gray-900">Financeiro</h2>
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Financeiro</h2>
         </div>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:bg-gray-800 dark:border-gray-700">
             <div className="flex items-center justify-between">
               <div className="flex-1">
-                <p className="text-sm font-medium text-gray-600">Faturamento Hoje</p>
-                <p className="mt-2 text-2xl font-bold text-gray-900">
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Faturamento Hoje</p>
+                <p className="mt-2 text-2xl font-bold text-gray-900 dark:text-white">
                   {formatCurrency(cards?.financial?.revenue_today || 0)}
                 </p>
                 {cards?.financial?.growth_vs_yesterday !== undefined && cards?.financial?.growth_vs_yesterday !== null && (
@@ -195,17 +195,17 @@ export default function ExecutiveView() {
                   </div>
                 )}
               </div>
-              <div className="rounded-lg bg-green-50 p-3">
+              <div className="rounded-lg bg-green-50 p-3 dark:bg-gray-700">
                 <DollarSign className="h-6 w-6 text-green-600" />
               </div>
             </div>
           </div>
 
-          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:bg-gray-800 dark:border-gray-700">
             <div className="flex items-center justify-between">
               <div className="flex-1">
-                <p className="text-sm font-medium text-gray-600">Faturamento Mês</p>
-                <p className="mt-2 text-2xl font-bold text-gray-900">
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Faturamento Mês</p>
+                <p className="mt-2 text-2xl font-bold text-gray-900 dark:text-white">
                   {formatCurrency(cards?.financial?.revenue_month || 0)}
                 </p>
                 {cards?.financial?.growth_vs_last_month !== undefined && cards?.financial?.growth_vs_last_month !== null && (
@@ -215,37 +215,37 @@ export default function ExecutiveView() {
                   </div>
                 )}
               </div>
-              <div className="rounded-lg bg-blue-50 p-3">
+              <div className="rounded-lg bg-blue-50 p-3 dark:bg-gray-700">
                 <TrendingUpIcon className="h-6 w-6 text-blue-600" />
               </div>
             </div>
           </div>
 
-          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:bg-gray-800 dark:border-gray-700">
             <div className="flex items-center justify-between">
               <div className="flex-1">
-                <p className="text-sm font-medium text-gray-600">Ticket Médio</p>
-                <p className="mt-2 text-2xl font-bold text-gray-900">
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Ticket Médio</p>
+                <p className="mt-2 text-2xl font-bold text-gray-900 dark:text-white">
                   {formatCurrency(cards?.financial?.average_ticket || 0)}
                 </p>
-                <p className="mt-2 text-xs text-gray-500">Por pedido</p>
+                <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">Por pedido</p>
               </div>
-              <div className="rounded-lg bg-purple-50 p-3">
+              <div className="rounded-lg bg-purple-50 p-3 dark:bg-gray-700">
                 <BarChart3 className="h-6 w-6 text-purple-600" />
               </div>
             </div>
           </div>
 
-          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:bg-gray-800 dark:border-gray-700">
             <div className="flex items-center justify-between">
               <div className="flex-1">
-                <p className="text-sm font-medium text-gray-600">Crescimento Semanal</p>
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Crescimento Semanal</p>
                 <p className={`mt-2 text-2xl font-bold ${getTrendColor(cards?.financial?.growth_vs_last_week || 0)}`}>
                   {formatPercent(cards?.financial?.growth_vs_last_week || 0)}
                 </p>
-                <p className="mt-2 text-xs text-gray-500">vs semana passada</p>
+                <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">vs semana passada</p>
               </div>
-              <div className="rounded-lg bg-indigo-50 p-3">
+              <div className="rounded-lg bg-indigo-50 p-3 dark:bg-gray-700">
                 <Activity className="h-6 w-6 text-indigo-600" />
               </div>
             </div>
@@ -256,14 +256,14 @@ export default function ExecutiveView() {
       {/* Seção: Operação */}
       <section>
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-xl font-semibold text-gray-900">Operação</h2>
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Operação</h2>
         </div>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:bg-gray-800 dark:border-gray-700">
             <div className="flex items-center justify-between">
               <div className="flex-1">
-                <p className="text-sm font-medium text-gray-600">Pedidos Hoje</p>
-                <p className="mt-2 text-2xl font-bold text-gray-900">
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Pedidos Hoje</p>
+                <p className="mt-2 text-2xl font-bold text-gray-900 dark:text-white">
                   {cards?.operational?.orders_today || 0}
                 </p>
                 {cards?.operational?.orders_yesterday !== undefined && (
@@ -272,60 +272,60 @@ export default function ExecutiveView() {
                   </div>
                 )}
               </div>
-              <div className="rounded-lg bg-blue-50 p-3">
+              <div className="rounded-lg bg-blue-50 p-3 dark:bg-gray-700">
                 <Package className="h-6 w-6 text-blue-600" />
               </div>
             </div>
           </div>
 
-          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:bg-gray-800 dark:border-gray-700">
             <div className="flex items-center justify-between">
               <div className="flex-1">
-                <p className="text-sm font-medium text-gray-600">Pedidos Concluídos</p>
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Pedidos Concluídos</p>
                 <p className="mt-2 text-2xl font-bold text-green-600">
                   {cards?.operational?.orders_completed || 0}
                 </p>
-                <p className="mt-2 text-xs text-gray-500">Total entregues</p>
+                <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">Total entregues</p>
               </div>
-              <div className="rounded-lg bg-green-50 p-3">
+              <div className="rounded-lg bg-green-50 p-3 dark:bg-gray-700">
                 <CheckCircle2 className="h-6 w-6 text-green-600" />
               </div>
             </div>
           </div>
 
-          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:bg-gray-800 dark:border-gray-700">
             <div className="flex items-center justify-between">
               <div className="flex-1">
-                <p className="text-sm font-medium text-gray-600">Cancelados Hoje</p>
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Cancelados Hoje</p>
                 <p className="mt-2 text-2xl font-bold text-red-600">
                   {cards?.operational?.orders_cancelled_today || 0}
                 </p>
-                <p className="mt-2 text-xs text-gray-500">
+                <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
                   Total: {cards?.operational?.orders_cancelled || 0}
                 </p>
               </div>
-              <div className="rounded-lg bg-red-50 p-3">
+              <div className="rounded-lg bg-red-50 p-3 dark:bg-gray-700">
                 <XCircle className="h-6 w-6 text-red-600" />
               </div>
             </div>
           </div>
 
-          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:bg-gray-800 dark:border-gray-700">
             <div className="flex items-center justify-between">
               <div className="flex-1">
-                <p className="text-sm font-medium text-gray-600">Tempo Médio de Entrega</p>
-                <p className="mt-2 text-2xl font-bold text-gray-900">
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Tempo Médio de Entrega</p>
+                <p className="mt-2 text-2xl font-bold text-gray-900 dark:text-white">
                   {cards?.operational?.average_delivery_time
                     ? `${Math.round(cards.operational.average_delivery_time)} min`
                     : '-'}
                 </p>
                 {cards?.operational?.on_time_delivery_rate !== undefined && cards?.operational?.on_time_delivery_rate !== null && (
-                  <p className="mt-2 text-xs text-gray-500">
+                  <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
                     {(cards.operational.on_time_delivery_rate || 0).toFixed(1)}% no prazo
                   </p>
                 )}
               </div>
-              <div className="rounded-lg bg-amber-50 p-3">
+              <div className="rounded-lg bg-amber-50 p-3 dark:bg-gray-700">
                 <Clock className="h-6 w-6 text-amber-600" />
               </div>
             </div>
@@ -336,53 +336,53 @@ export default function ExecutiveView() {
       {/* Seção: Pagamentos */}
       <section>
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-xl font-semibold text-gray-900">Pagamentos</h2>
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Pagamentos</h2>
         </div>
         <div className="grid gap-4 sm:grid-cols-3">
-          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:bg-gray-800 dark:border-gray-700">
             <div className="flex items-center justify-between">
               <div className="flex-1">
-                <p className="text-sm font-medium text-gray-600">Cartão</p>
-                <p className="mt-2 text-2xl font-bold text-gray-900">
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Cartão</p>
+                <p className="mt-2 text-2xl font-bold text-gray-900 dark:text-white">
                   {(cards?.payment?.card_percentage || 0).toFixed(1)}%
                 </p>
-                <p className="mt-2 text-xs text-gray-500">
+                <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
                   {cards?.payment?.card_count || 0} pedidos
                 </p>
               </div>
-              <div className="rounded-lg bg-blue-50 p-3">
+              <div className="rounded-lg bg-blue-50 p-3 dark:bg-gray-700">
                 <CreditCard className="h-6 w-6 text-blue-600" />
               </div>
             </div>
           </div>
 
-          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:bg-gray-800 dark:border-gray-700">
             <div className="flex items-center justify-between">
               <div className="flex-1">
-                <p className="text-sm font-medium text-gray-600">Dinheiro</p>
-                <p className="mt-2 text-2xl font-bold text-gray-900">
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Dinheiro</p>
+                <p className="mt-2 text-2xl font-bold text-gray-900 dark:text-white">
                   {(cards?.payment?.cash_percentage || 0).toFixed(1)}%
                 </p>
-                <p className="mt-2 text-xs text-gray-500">
+                <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
                   {cards?.payment?.cash_count || 0} pedidos
                 </p>
               </div>
-              <div className="rounded-lg bg-green-50 p-3">
+              <div className="rounded-lg bg-green-50 p-3 dark:bg-gray-700">
                 <Wallet className="h-6 w-6 text-green-600" />
               </div>
             </div>
           </div>
 
-          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:bg-gray-800 dark:border-gray-700">
             <div className="flex items-center justify-between">
               <div className="flex-1">
-                <p className="text-sm font-medium text-gray-600">Taxa de Aprovação</p>
-                <p className="mt-2 text-2xl font-bold text-gray-900">
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Taxa de Aprovação</p>
+                <p className="mt-2 text-2xl font-bold text-gray-900 dark:text-white">
                   {(cards?.payment?.approval_rate || 0).toFixed(1)}%
                 </p>
-                <p className="mt-2 text-xs text-gray-500">Pedidos pagos</p>
+                <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">Pedidos pagos</p>
               </div>
-              <div className="rounded-lg bg-purple-50 p-3">
+              <div className="rounded-lg bg-purple-50 p-3 dark:bg-gray-700">
                 <CheckCircle2 className="h-6 w-6 text-purple-600" />
               </div>
             </div>
@@ -393,32 +393,32 @@ export default function ExecutiveView() {
       {/* Seção: Gráficos */}
       <section>
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-xl font-semibold text-gray-900">Análise Visual</h2>
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Análise Visual</h2>
         </div>
         <div className="grid gap-6 lg:grid-cols-2">
-          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-            <h3 className="mb-4 text-lg font-semibold text-gray-900">Receita ao Longo do Tempo</h3>
+          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:bg-gray-800 dark:border-gray-700">
+            <h3 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">Receita ao Longo do Tempo</h3>
             {dashboardData?.revenue_chart && (
               <RevenueChart data={dashboardData.revenue_chart} />
             )}
           </div>
 
-          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-            <h3 className="mb-4 text-lg font-semibold text-gray-900">Pedidos por Tipo</h3>
+          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:bg-gray-800 dark:border-gray-700">
+            <h3 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">Pedidos por Tipo</h3>
             {dashboardData?.orders_by_type && (
               <OrdersByTypeChart data={dashboardData.orders_by_type} />
             )}
           </div>
 
-          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-            <h3 className="mb-4 text-lg font-semibold text-gray-900">Pedidos por Bairro</h3>
+          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:bg-gray-800 dark:border-gray-700">
+            <h3 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">Pedidos por Bairro</h3>
             {dashboardData?.orders_by_bairro && dashboardData.orders_by_bairro.length > 0 && (
               <BairroChart data={dashboardData.orders_by_bairro} />
             )}
           </div>
 
-          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-            <h3 className="mb-4 text-lg font-semibold text-gray-900">Produtos Mais Vendidos</h3>
+          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:bg-gray-800 dark:border-gray-700">
+            <h3 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">Produtos Mais Vendidos</h3>
             {dashboardData?.top_products && dashboardData.top_products.length > 0 && (
               <TopProductsChart data={dashboardData.top_products} />
             )}
@@ -429,10 +429,10 @@ export default function ExecutiveView() {
       {/* Seção: Performance Operacional */}
       <section>
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-xl font-semibold text-gray-900">Performance Operacional</h2>
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Performance Operacional</h2>
         </div>
         <div className="grid gap-6 lg:grid-cols-2">
-          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:bg-gray-800 dark:border-gray-700">
             <div className="mb-4 flex items-center justify-between">
               <h3 className="text-lg font-semibold text-gray-900">Entregadores</h3>
             </div>
@@ -446,7 +446,7 @@ export default function ExecutiveView() {
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
                         <span className="text-lg font-bold text-gray-400">#{idx + 1}</span>
-                        <span className="font-semibold text-gray-900">
+                        <span className="font-semibold text-gray-900 dark:text-white">
                           {driver.driver_name || 'Sem nome'}
                         </span>
                       </div>
@@ -471,11 +471,11 @@ export default function ExecutiveView() {
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-gray-500">Sem dados de entregadores</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Sem dados de entregadores</p>
             )}
           </div>
 
-          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:bg-gray-800 dark:border-gray-700">
             <div className="mb-4 flex items-center justify-between">
               <h3 className="text-lg font-semibold text-gray-900">Operadores</h3>
             </div>
@@ -487,7 +487,7 @@ export default function ExecutiveView() {
                     className="flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 p-4"
                   >
                     <div className="flex-1">
-                      <div className="font-semibold text-gray-900">{op.username}</div>
+                      <div className="font-semibold text-gray-900 dark:text-white">{op.username}</div>
                       <div className="mt-1 text-sm text-gray-600">{op.email}</div>
                       <div className="mt-2 flex items-center gap-4 text-sm">
                         <span className="font-medium text-gray-700">
@@ -502,7 +502,7 @@ export default function ExecutiveView() {
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-gray-500">Sem dados de operadores</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Sem dados de operadores</p>
             )}
           </div>
         </div>
@@ -512,36 +512,36 @@ export default function ExecutiveView() {
       {dashboardData?.financial_breakdown && (
         <section>
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-gray-900">Breakdown Financeiro</h2>
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Breakdown Financeiro</h2>
           </div>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-              <p className="text-sm font-medium text-gray-600">Receita Bruta</p>
-              <p className="mt-2 text-2xl font-bold text-gray-900">
+            <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:bg-gray-800 dark:border-gray-700">
+              <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Receita Bruta</p>
+              <p className="mt-2 text-2xl font-bold text-gray-900 dark:text-white">
                 {formatCurrency(dashboardData.financial_breakdown.gross_revenue)}
               </p>
             </div>
-            <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-              <p className="text-sm font-medium text-gray-600">Receita Líquida</p>
+            <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:bg-gray-800 dark:border-gray-700">
+              <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Receita Líquida</p>
               <p className="mt-2 text-2xl font-bold text-green-600">
                 {formatCurrency(dashboardData.financial_breakdown.net_revenue)}
               </p>
             </div>
-            <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-              <p className="text-sm font-medium text-gray-600">Cancelamentos</p>
+            <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:bg-gray-800 dark:border-gray-700">
+              <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Cancelamentos</p>
               <p className="mt-2 text-2xl font-bold text-red-600">
                 {formatCurrency(dashboardData.financial_breakdown.cancelled_revenue)}
               </p>
-              <p className="mt-1 text-xs text-gray-500">
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                 {dashboardData.financial_breakdown.cancelled_count} pedidos
               </p>
             </div>
-            <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-              <p className="text-sm font-medium text-gray-600">Taxa de Repetição</p>
-              <p className="mt-2 text-2xl font-bold text-gray-900">
+            <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:bg-gray-800 dark:border-gray-700">
+              <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Taxa de Repetição</p>
+              <p className="mt-2 text-2xl font-bold text-gray-900 dark:text-white">
                 {(dashboardData.financial_breakdown?.repeat_rate || 0).toFixed(1)}%
               </p>
-              <p className="mt-1 text-xs text-gray-500">
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                 {dashboardData.financial_breakdown.repeat_customers_count} clientes recorrentes
               </p>
             </div>
@@ -553,15 +553,15 @@ export default function ExecutiveView() {
       {dashboardData?.customer_metrics && (
         <section>
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-gray-900">Clientes & Mercado</h2>
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Clientes & Mercado</h2>
           </div>
           <div className="grid gap-6 lg:grid-cols-2">
-            <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-              <h3 className="mb-4 text-lg font-semibold text-gray-900">Métricas de Clientes</h3>
+            <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:bg-gray-800 dark:border-gray-700">
+              <h3 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">Métricas de Clientes</h3>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <p className="text-sm text-gray-600">Total Ativo</p>
-                  <p className="mt-1 text-2xl font-bold text-gray-900">
+                  <p className="mt-1 text-2xl font-bold text-gray-900 dark:text-white">
                     {dashboardData.customer_metrics.total_active}
                   </p>
                 </div>
@@ -586,8 +586,8 @@ export default function ExecutiveView() {
               </div>
             </div>
 
-            <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-              <h3 className="mb-4 text-lg font-semibold text-gray-900">Top Clientes</h3>
+            <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:bg-gray-800 dark:border-gray-700">
+              <h3 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">Top Clientes</h3>
               {dashboardData.customer_metrics.top_customers && dashboardData.customer_metrics.top_customers.length > 0 ? (
                 <div className="space-y-2">
                   {dashboardData.customer_metrics.top_customers.slice(0, 5).map((customer, idx) => (
@@ -597,19 +597,19 @@ export default function ExecutiveView() {
                     >
                       <div>
                         <div className="font-medium text-gray-900">{customer.name}</div>
-                        <div className="text-xs text-gray-500">{customer.phone}</div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400">{customer.phone}</div>
                       </div>
                       <div className="text-right">
-                        <div className="font-semibold text-gray-900">
+                        <div className="font-semibold text-gray-900 dark:text-white">
                           {formatCurrency(customer.total_revenue)}
                         </div>
-                        <div className="text-xs text-gray-500">{customer.orders_count} pedidos</div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400">{customer.orders_count} pedidos</div>
                       </div>
                     </div>
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-gray-500">Sem dados de clientes</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Sem dados de clientes</p>
               )}
             </div>
           </div>
@@ -620,16 +620,16 @@ export default function ExecutiveView() {
       {dashboardData?.bairro_metrics && (
         <section>
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-gray-900">Análise por Bairro</h2>
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Análise por Bairro</h2>
           </div>
           <div className="grid gap-6 lg:grid-cols-3">
-            <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+            <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:bg-gray-800 dark:border-gray-700">
               <h3 className="mb-4 font-semibold text-gray-900">Mais Lucrativos</h3>
               {dashboardData.bairro_metrics.most_profitable && dashboardData.bairro_metrics.most_profitable.length > 0 ? (
                 <div className="space-y-2">
                   {dashboardData.bairro_metrics.most_profitable.map((b, idx) => (
                     <div key={idx} className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-gray-700">{b.bairro}</span>
+                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{b.bairro}</span>
                       <span className="text-sm font-bold text-green-600">
                         {formatCurrency(b.revenue)}
                       </span>
@@ -637,33 +637,33 @@ export default function ExecutiveView() {
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-gray-500">Sem dados</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Sem dados</p>
               )}
             </div>
 
-            <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+            <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:bg-gray-800 dark:border-gray-700">
               <h3 className="mb-4 font-semibold text-gray-900">Mais Cancelamentos</h3>
               {dashboardData.bairro_metrics.most_cancelled && dashboardData.bairro_metrics.most_cancelled.length > 0 ? (
                 <div className="space-y-2">
                   {dashboardData.bairro_metrics.most_cancelled.map((b, idx) => (
                     <div key={idx} className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-gray-700">{b.bairro}</span>
+                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{b.bairro}</span>
                       <span className="text-sm font-bold text-red-600">{b.cancelled}</span>
                     </div>
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-gray-500">Sem dados</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Sem dados</p>
               )}
             </div>
 
-            <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+            <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:bg-gray-800 dark:border-gray-700">
               <h3 className="mb-4 font-semibold text-gray-900">Entrega Mais Lenta</h3>
               {dashboardData.bairro_metrics.slowest_delivery && dashboardData.bairro_metrics.slowest_delivery.length > 0 ? (
                 <div className="space-y-2">
                   {dashboardData.bairro_metrics.slowest_delivery.map((b, idx) => (
                     <div key={idx} className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-gray-700">{b.bairro}</span>
+                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{b.bairro}</span>
                       <span className="text-sm font-bold text-amber-600">
                         {b.avg_delivery_time ? `${Math.round(b.avg_delivery_time)} min` : '-'}
                       </span>
@@ -671,7 +671,7 @@ export default function ExecutiveView() {
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-gray-500">Sem dados</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Sem dados</p>
               )}
             </div>
           </div>

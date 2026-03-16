@@ -13,12 +13,12 @@ export default function CardDetailModal({ isOpen, onClose, title, children }) {
       onClick={onClose}
     >
       <div
-        className="relative w-full max-w-2xl rounded-lg border border-gray-200 bg-white shadow-xl"
+        className="relative w-full max-w-2xl rounded-lg border border-gray-200 bg-white shadow-xl dark:bg-gray-800 dark:border-gray-700"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
-          <h2 className="text-xl font-semibold text-gray-900">{title}</h2>
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">{title}</h2>
           <button
             onClick={onClose}
             className="rounded-lg p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"

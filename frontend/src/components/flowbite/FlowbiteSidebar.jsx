@@ -5,8 +5,8 @@ function SidebarItem({ item, onClick, isActive }) {
   const isButton = item.type === 'button'
 
   const base =
-    'flex items-center rounded-lg p-2 text-base font-normal text-gray-900 hover:bg-gray-100 transition-colors'
-  const active = 'bg-gray-100'
+    'flex items-center rounded-lg p-2 text-base font-normal text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors'
+  const active = 'bg-gray-100 dark:bg-gray-700'
 
   if (isButton) {
     return (
@@ -15,7 +15,7 @@ function SidebarItem({ item, onClick, isActive }) {
         onClick={onClick} 
         className={`${base} ${isActive ? active : ''}`}
       >
-        {Icon ? <Icon className={`h-5 w-5 ${isActive ? 'text-primary-600' : 'text-gray-500'}`} /> : null}
+        {Icon ? <Icon className={`h-5 w-5 ${isActive ? 'text-primary-600' : 'text-gray-500 dark:text-gray-400'}`} /> : null}
         <span className={`ml-3 ${isActive ? 'font-semibold text-gray-900' : ''}`}>{item.label}</span>
       </button>
     )
@@ -44,7 +44,7 @@ export default function FlowbiteSidebar({
   return (
     <aside
       className={[
-        'fixed top-0 left-0 z-20 h-screen w-64 border-r border-gray-200 bg-white pt-16',
+        'fixed top-0 left-0 z-20 h-screen w-64 border-r border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800 pt-16',
         'transition-transform duration-150',
         isMobileOpen ? 'translate-x-0' : '-translate-x-full',
         'lg:translate-x-0',
