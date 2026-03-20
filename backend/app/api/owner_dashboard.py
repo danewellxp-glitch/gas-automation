@@ -24,6 +24,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth import get_current_user
 from app.database import get_db
 from app.models.auth_models import User
+from app.models.business_settings import (
+    BusinessSettings as BusinessSettingsModel,
+    DEFAULT_MONTHLY_GOALS,
+    DEFAULT_OPERATING_HOURS,
+)
 from app.models.customer import Customer
 from app.models.delivery import Delivery, DeliveryStatus as DeliveryStatusEnum
 from app.models.order import Order, OrderItem, OrderStatus, TipoOperacao
@@ -47,6 +52,7 @@ def _require_owner(user: User) -> None:
 class FinancialMetrics(BaseModel):
     """Métricas financeiras."""
     revenue_today: float
+    revenue_week: float       # receita da semana atual (seg → agora)
     revenue_month: float
     revenue_yesterday: float
     revenue_last_week: float
@@ -72,8 +78,13 @@ class PaymentMetrics(BaseModel):
     """Métricas de pagamento."""
     cash_percentage: float
     card_percentage: float
+    pix_percentage: float
     cash_count: int
     card_count: int
+    pix_count: int
+    cash_value: float
+    card_value: float
+    pix_value: float
     approval_rate: float  # %
 
 
@@ -257,6 +268,9 @@ async def get_owner_dashboard(
     now = datetime.now(timezone.utc)
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     yesterday_start = today_start - timedelta(days=1)
+    # Início da semana atual (segunda-feira) — usado para revenue_week
+    this_week_start = today_start - timedelta(days=now.weekday())
+    # Janela de 7 dias rolante — usada para comparativo growth_vs_last_week
     week_start = today_start - timedelta(days=7)
     month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     last_month_start = (month_start - timedelta(days=1)).replace(day=1)
@@ -282,7 +296,16 @@ async def get_owner_dashboard(
     )
     revenue_yesterday = float((await session.execute(revenue_yesterday_stmt)).scalar() or 0)
 
-    # Receita semana passada
+    # Receita semana atual (segunda → agora)
+    revenue_week_stmt = select(func.coalesce(func.sum(Order.total_amount), 0)).where(
+        and_(
+            Order.created_at >= this_week_start,
+            Order.status != OrderStatus.CANCELLED.value,
+        )
+    )
+    revenue_week = float((await session.execute(revenue_week_stmt)).scalar() or 0)
+
+    # Receita semana passada (janela de 7 dias anterior)
     revenue_last_week_stmt = select(func.coalesce(func.sum(Order.total_amount), 0)).where(
         and_(
             Order.created_at >= week_start - timedelta(days=7),
@@ -334,6 +357,7 @@ async def get_owner_dashboard(
 
     financial = FinancialMetrics(
         revenue_today=revenue_today,
+        revenue_week=revenue_week,
         revenue_month=revenue_month,
         revenue_yesterday=revenue_yesterday,
         revenue_last_week=revenue_last_week,
@@ -356,17 +380,14 @@ async def get_owner_dashboard(
     )
     orders_yesterday = (await session.execute(orders_yesterday_stmt)).scalar() or 0
 
-    # Pedidos concluídos (entregues)
+    # Pedidos concluídos hoje (entregues)
     orders_completed_stmt = select(func.count(Order.id)).where(
-        Order.status == OrderStatus.DELIVERED.value
+        and_(
+            Order.created_at >= today_start,
+            Order.status == OrderStatus.DELIVERED.value,
+        )
     )
     orders_completed = (await session.execute(orders_completed_stmt)).scalar() or 0
-
-    # Pedidos cancelados
-    orders_cancelled_stmt = select(func.count(Order.id)).where(
-        Order.status == OrderStatus.CANCELLED.value
-    )
-    orders_cancelled = (await session.execute(orders_cancelled_stmt)).scalar() or 0
 
     # Pedidos cancelados hoje
     orders_cancelled_today_stmt = select(func.count(Order.id)).where(
@@ -376,6 +397,7 @@ async def get_owner_dashboard(
         )
     )
     orders_cancelled_today = (await session.execute(orders_cancelled_today_stmt)).scalar() or 0
+    orders_cancelled = orders_cancelled_today  # alias — ambos referem-se ao dia atual
 
     # Tempo médio de entrega
     avg_delivery_time_stmt = select(func.avg(Delivery.actual_delivery_minutes)).where(
@@ -416,28 +438,50 @@ async def get_owner_dashboard(
 
     # ==================== PAYMENT METRICS ====================
 
-    # Pagamentos por método (hoje)
-    cash_count_stmt = select(func.count(Order.id)).where(
-        and_(
-            Order.created_at >= today_start,
-            Order.payment_method == "cash",
-            Order.status != OrderStatus.CANCELLED.value,
+    # Uma única query agrega count + sum por método de pagamento (hoje, não cancelados)
+    payment_agg_stmt = (
+        select(
+            Order.payment_method,
+            func.count(Order.id).label("cnt"),
+            func.coalesce(func.sum(Order.total_amount), 0).label("val"),
         )
-    )
-    cash_count = (await session.execute(cash_count_stmt)).scalar() or 0
-
-    card_count_stmt = select(func.count(Order.id)).where(
-        and_(
-            Order.created_at >= today_start,
-            Order.payment_method.in_(["credit_card", "debit_card"]),
-            Order.status != OrderStatus.CANCELLED.value,
+        .where(
+            and_(
+                Order.created_at >= today_start,
+                Order.status != OrderStatus.CANCELLED.value,
+                Order.payment_method.is_not(None),
+            )
         )
+        .group_by(Order.payment_method)
     )
-    card_count = (await session.execute(card_count_stmt)).scalar() or 0
+    payment_rows = (await session.execute(payment_agg_stmt)).all()
 
-    total_payments = cash_count + card_count
+    _CASH_METHODS = {"cash"}
+    _CARD_METHODS = {"credit_card", "debit_card"}
+    _PIX_METHODS  = {"pix"}
+
+    cash_count, cash_value = 0, 0.0
+    card_count, card_value = 0, 0.0
+    pix_count,  pix_value  = 0, 0.0
+
+    for row in payment_rows:
+        method = (row.payment_method or "").lower()
+        cnt = int(row.cnt or 0)
+        val = float(row.val or 0)
+        if method in _CASH_METHODS:
+            cash_count += cnt
+            cash_value += val
+        elif method in _CARD_METHODS:
+            card_count += cnt
+            card_value += val
+        elif method in _PIX_METHODS:
+            pix_count += cnt
+            pix_value += val
+
+    total_payments = cash_count + card_count + pix_count
     cash_percentage = (cash_count / total_payments * 100) if total_payments > 0 else 0.0
     card_percentage = (card_count / total_payments * 100) if total_payments > 0 else 0.0
+    pix_percentage  = (pix_count  / total_payments * 100) if total_payments > 0 else 0.0
 
     # Taxa de aprovação (pedidos pagos vs pendentes)
     paid_orders_stmt = select(func.count(Order.id)).where(
@@ -453,8 +497,13 @@ async def get_owner_dashboard(
     payment = PaymentMetrics(
         cash_percentage=cash_percentage,
         card_percentage=card_percentage,
+        pix_percentage=pix_percentage,
         cash_count=cash_count,
         card_count=card_count,
+        pix_count=pix_count,
+        cash_value=cash_value,
+        card_value=card_value,
+        pix_value=pix_value,
         approval_rate=approval_rate,
     )
 
@@ -919,24 +968,6 @@ async def get_owner_dashboard(
 
     alerts = []
 
-    # Pedidos pagos parados
-    stuck_paid_orders_stmt = select(func.count(Order.id)).where(
-        and_(
-            Order.status == OrderStatus.PAID.value,
-            Order.paid_at < now - timedelta(hours=2),
-        )
-    )
-    stuck_paid = (await session.execute(stuck_paid_orders_stmt)).scalar() or 0
-    if stuck_paid > 0:
-        alerts.append(
-            ExecutiveAlert(
-                type="critical",
-                title="Pedidos pagos parados",
-                message=f"{stuck_paid} pedidos pagos há mais de 2 horas sem avanço",
-                count=stuck_paid,
-            )
-        )
-
     # Entregas atrasadas
     late_deliveries_stmt = select(func.count(Delivery.id)).where(
         and_(
@@ -977,6 +1008,25 @@ async def get_owner_dashboard(
             )
         )
 
+    # Pedidos pagos parados (confirmados há mais de 15 min sem avançar para preparando)
+    stuck_paid_stmt = select(func.count(Order.id)).where(
+        and_(
+            Order.status == OrderStatus.PAID.value,
+            Order.paid_at.isnot(None),
+            Order.paid_at < now - timedelta(minutes=15),
+        )
+    )
+    stuck_paid_count = int((await session.execute(stuck_paid_stmt)).scalar() or 0)
+    if stuck_paid_count > 0:
+        alerts.append(
+            ExecutiveAlert(
+                type="critical",
+                title="Pedidos confirmados parados",
+                message=f"{stuck_paid_count} pedido{'s' if stuck_paid_count > 1 else ''} confirmado{'s' if stuck_paid_count > 1 else ''} há mais de 15 minutos sem iniciar preparo",
+                count=stuck_paid_count,
+            )
+        )
+
     return OwnerDashboardResponse(
         cards=cards,
         revenue_chart=revenue_chart,
@@ -990,6 +1040,48 @@ async def get_owner_dashboard(
         bairro_metrics=bairro_metrics,
         alerts=alerts,
     )
+
+
+# ==================== SPARKLINE MENSAL ====================
+
+
+@router.get("/monthly-revenue", response_model=list[RevenueChartPoint])
+async def get_monthly_revenue(
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+):
+    """Receita diária do mês corrente — usado no sparkline do dashboard."""
+    _require_owner(current_user)
+
+    now = datetime.now(timezone.utc)
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+    stmt = (
+        select(
+            func.date(Order.created_at).label("date"),
+            func.coalesce(func.sum(Order.total_amount), 0).label("revenue"),
+            func.count(Order.id).label("orders"),
+        )
+        .where(
+            and_(
+                Order.created_at >= month_start,
+                Order.created_at <= now,
+                Order.status != OrderStatus.CANCELLED.value,
+            )
+        )
+        .group_by(func.date(Order.created_at))
+        .order_by(func.date(Order.created_at))
+    )
+    rows = (await session.execute(stmt)).all()
+
+    return [
+        RevenueChartPoint(
+            date=str(row.date),
+            revenue=float(row.revenue or 0),
+            orders=int(row.orders or 0),
+        )
+        for row in rows
+    ]
 
 
 # ==================== RELATÓRIOS EXPORTÁVEIS ====================
@@ -1226,6 +1318,25 @@ class BusinessSettings(BaseModel):
     monthly_goals: dict[str, float] = {}
 
 
+async def _get_or_create_settings(session: AsyncSession) -> BusinessSettingsModel:
+    """Retorna a linha singleton de settings, criando com defaults se não existir."""
+    result = await session.execute(
+        select(BusinessSettingsModel).where(BusinessSettingsModel.id == 1)
+    )
+    row = result.scalar_one_or_none()
+    if row is None:
+        row = BusinessSettingsModel(
+            id=1,
+            operating_hours=DEFAULT_OPERATING_HOURS,
+            monthly_goals=DEFAULT_MONTHLY_GOALS,
+            enabled_bairros=[],
+            promotions=[],
+        )
+        session.add(row)
+        await session.flush()
+    return row
+
+
 @router.get("/settings", response_model=BusinessSettings)
 async def get_business_settings(
     current_user: User = Depends(get_current_user),
@@ -1246,39 +1357,27 @@ async def get_business_settings(
         for p in products_result.scalars().all()
     ]
 
-    # Buscar bairros únicos dos pedidos
+    # Buscar bairros únicos dos pedidos (lista completa de bairros conhecidos)
     bairros_stmt = select(func.distinct(Order.delivery_bairro)).where(
         Order.delivery_bairro.is_not(None)
     )
     bairros_result = await session.execute(bairros_stmt)
-    bairros = [b[0] for b in bairros_result.all() if b[0]]
+    bairros = sorted([b[0] for b in bairros_result.all() if b[0]])
 
-    # Por enquanto, todos os bairros estão habilitados
-    # Em produção, isso viria de uma tabela de configurações
-    enabled_bairros = bairros
+    # Ler configurações persistidas do banco
+    db_settings = await _get_or_create_settings(session)
+    await session.commit()
 
-    # Horário padrão
-    operating_hours = {
-        "monday": {"open": "08:00", "close": "18:00", "enabled": True},
-        "tuesday": {"open": "08:00", "close": "18:00", "enabled": True},
-        "wednesday": {"open": "08:00", "close": "18:00", "enabled": True},
-        "thursday": {"open": "08:00", "close": "18:00", "enabled": True},
-        "friday": {"open": "08:00", "close": "18:00", "enabled": True},
-        "saturday": {"open": "08:00", "close": "18:00", "enabled": True},
-        "sunday": {"open": "08:00", "close": "18:00", "enabled": False},
-    }
+    # Se enabled_bairros estiver vazio (primeira vez), habilitar todos por padrão
+    enabled_bairros = db_settings.enabled_bairros or bairros
 
     return BusinessSettings(
         products=products,
         bairros=bairros,
         enabled_bairros=enabled_bairros,
-        operating_hours=operating_hours,
-        promotions=[],
-        monthly_goals={
-            "revenue": 0.0,
-            "orders": 0.0,
-            "new_customers": 0.0,
-        },
+        operating_hours=db_settings.operating_hours or DEFAULT_OPERATING_HOURS,
+        promotions=db_settings.promotions or [],
+        monthly_goals=db_settings.monthly_goals or DEFAULT_MONTHLY_GOALS,
     )
 
 
@@ -1291,7 +1390,7 @@ async def update_business_settings(
     """Atualiza configurações de negócio."""
     _require_owner(current_user)
 
-    # Atualizar preços de produtos
+    # 1. Atualizar preços de produtos na tabela products
     updated_count = 0
     for product_data in settings.products:
         code = product_data.get("code")
@@ -1304,13 +1403,17 @@ async def update_business_settings(
                 if new_price != product.price:
                     product.price = new_price
                     updated_count += 1
-    
-    await session.commit()
 
-    # Em produção, salvar outras configurações em uma tabela de settings
-    # Por enquanto, apenas atualizamos preços
+    # 2. Persistir horários, metas, bairros e promoções na tabela business_settings
+    db_settings = await _get_or_create_settings(session)
+    db_settings.operating_hours = settings.operating_hours
+    db_settings.monthly_goals = settings.monthly_goals
+    db_settings.enabled_bairros = settings.enabled_bairros
+    db_settings.promotions = settings.promotions
+
+    await session.commit()
 
     return {
         "message": "Configurações atualizadas com sucesso",
-        "products_updated": updated_count
+        "products_updated": updated_count,
     }
