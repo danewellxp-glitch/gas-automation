@@ -4,7 +4,7 @@
  */
 
 import { useState } from 'react'
-import { Download, FileText } from 'lucide-react'
+import { Download, FileText, Calendar } from 'lucide-react'
 
 export default function OwnerReportsView() {
   const [loading, setLoading] = useState(false)
@@ -23,17 +23,13 @@ export default function OwnerReportsView() {
       const token = localStorage.getItem('token')
       const baseUrl = import.meta.env.VITE_API_URL || 'http://192.168.10.167:8000/api'
       const url = `${baseUrl}/owner/reports/${type}?start_date=${startDate}&end_date=${endDate}&format=${format}`
-      
+
       const response = await fetch(url, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
+        headers: { 'Authorization': `Bearer ${token}` },
       })
-      
-      if (!response.ok) {
-        throw new Error('Erro ao gerar relatório')
-      }
-      
+
+      if (!response.ok) throw new Error('Erro ao gerar relatório')
+
       const blob = await response.blob()
       const blobUrl = window.URL.createObjectURL(blob)
       const link = document.createElement('a')
@@ -51,170 +47,142 @@ export default function OwnerReportsView() {
     }
   }
 
+  const reports = [
+    {
+      type: 'revenue',
+      title: 'Faturamento',
+      subtitle: 'Receita por período',
+      cardBorder: 'border-blue-500/20',
+      cardShadow: 'shadow-blue-500/10',
+      iconBg: 'bg-blue-500/10 ring-blue-500/20',
+      iconColor: 'text-blue-400',
+      labelColor: 'text-blue-400/80',
+      csvBtn: 'bg-blue-600 hover:bg-blue-500',
+    },
+    {
+      type: 'orders',
+      title: 'Pedidos',
+      subtitle: 'Por produto',
+      cardBorder: 'border-emerald-500/20',
+      cardShadow: 'shadow-emerald-500/10',
+      iconBg: 'bg-emerald-500/10 ring-emerald-500/20',
+      iconColor: 'text-emerald-400',
+      labelColor: 'text-emerald-400/80',
+      csvBtn: 'bg-emerald-600 hover:bg-emerald-500',
+    },
+    {
+      type: 'drivers',
+      title: 'Comissões',
+      subtitle: 'Entregadores',
+      cardBorder: 'border-violet-500/20',
+      cardShadow: 'shadow-violet-500/10',
+      iconBg: 'bg-violet-500/10 ring-violet-500/20',
+      iconColor: 'text-violet-400',
+      labelColor: 'text-violet-400/80',
+      csvBtn: 'bg-violet-600 hover:bg-violet-500',
+    },
+    {
+      type: 'performance',
+      title: 'Desempenho',
+      subtitle: 'Mensal completo',
+      cardBorder: 'border-amber-500/20',
+      cardShadow: 'shadow-amber-500/10',
+      iconBg: 'bg-amber-500/10 ring-amber-500/20',
+      iconColor: 'text-amber-400',
+      labelColor: 'text-amber-400/80',
+      csvBtn: 'bg-amber-600 hover:bg-amber-500',
+    },
+  ]
+
   return (
-    <div className="space-y-6 dark:text-gray-100">
+    <div className="space-y-6">
+
+      {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Relatórios</h1>
-        <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-          Gere relatórios exportáveis para análise e tomada de decisão
-        </p>
+        <h1 className="text-2xl font-black tracking-tight text-white">Relatórios</h1>
+        <p className="mt-1 text-xs text-gray-500">Gere relatórios exportáveis para análise e tomada de decisão</p>
       </div>
 
       {/* Filtros */}
-      <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:bg-gray-800 dark:border-gray-700">
-        <h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">Filtros</h2>
+      <div className="rounded-2xl border border-gray-700/40 bg-gray-900 p-5">
+        <div className="mb-4 flex items-center gap-2">
+          <Calendar className="h-4 w-4 text-gray-400" />
+          <span className="text-xs font-bold uppercase tracking-widest text-gray-400">Filtros de Período</span>
+        </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+            <label className="mb-2 block text-xs font-semibold text-gray-400 uppercase tracking-wider">
               Data Inicial
             </label>
             <input
               type="date"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
-              className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-primary-500 focus:ring-primary-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+              className="block w-full rounded-xl border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none"
             />
           </div>
           <div>
-            <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+            <label className="mb-2 block text-xs font-semibold text-gray-400 uppercase tracking-wider">
               Data Final
             </label>
             <input
               type="date"
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
-              className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-primary-500 focus:ring-primary-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+              className="block w-full rounded-xl border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none"
             />
           </div>
         </div>
       </div>
 
-      {/* Cards de Relatórios */}
-      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:bg-gray-800 dark:border-gray-700">
-          <div className="mb-4 flex items-center gap-3">
-            <div className="rounded-lg bg-blue-50 p-3 dark:bg-gray-700">
-              <FileText className="h-6 w-6 text-blue-600" />
+      {/* Report Cards */}
+      <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+        {reports.map((report) => (
+          <div
+            key={report.type}
+            className={`rounded-2xl border ${report.cardBorder} bg-gray-900 p-5 shadow-lg ${report.cardShadow}`}
+          >
+            <div className="mb-4 flex items-center gap-3">
+              <div className={`rounded-xl ${report.iconBg} ring-1 p-3`}>
+                <FileText className={`h-5 w-5 ${report.iconColor}`} />
+              </div>
+              <div>
+                <p className={`text-xs font-bold uppercase tracking-widest ${report.labelColor}`}>
+                  {report.title}
+                </p>
+                <p className="text-xs text-gray-500">{report.subtitle}</p>
+              </div>
             </div>
-            <div>
-              <h3 className="font-semibold text-gray-900 dark:text-white">Faturamento</h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400">Receita por período</p>
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => handleExport('csv', 'revenue')}
-              disabled={loading}
-              className="flex-1 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-            >
-              <Download className="mr-2 inline h-4 w-4" />
-              CSV
-            </button>
-            <button
-              onClick={() => handleExport('pdf', 'revenue')}
-              disabled={loading}
-              className="flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:border-gray-600 disabled:opacity-50"
-            >
-              PDF
-            </button>
-          </div>
-        </div>
-
-        <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:bg-gray-800 dark:border-gray-700">
-          <div className="mb-4 flex items-center gap-3">
-            <div className="rounded-lg bg-green-50 p-3 dark:bg-gray-700">
-              <FileText className="h-6 w-6 text-green-600" />
-            </div>
-            <div>
-              <h3 className="font-semibold text-gray-900 dark:text-white">Pedidos</h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400">Por produto</p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => handleExport('csv', report.type)}
+                disabled={loading}
+                className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold text-white transition-colors ${report.csvBtn} disabled:opacity-40`}
+              >
+                <Download className="h-3.5 w-3.5" />
+                CSV
+              </button>
+              <button
+                onClick={() => handleExport('pdf', report.type)}
+                disabled={loading}
+                className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-gray-700 bg-gray-800 px-3 py-2 text-xs font-bold text-gray-300 transition-colors hover:bg-gray-700 disabled:opacity-40"
+              >
+                <FileText className="h-3.5 w-3.5" />
+                PDF
+              </button>
             </div>
           </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => handleExport('csv', 'orders')}
-              disabled={loading}
-              className="flex-1 rounded-lg bg-green-600 px-3 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
-            >
-              <Download className="mr-2 inline h-4 w-4" />
-              CSV
-            </button>
-            <button
-              onClick={() => handleExport('pdf', 'orders')}
-              disabled={loading}
-              className="flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:border-gray-600 disabled:opacity-50"
-            >
-              PDF
-            </button>
-          </div>
-        </div>
-
-        <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:bg-gray-800 dark:border-gray-700">
-          <div className="mb-4 flex items-center gap-3">
-            <div className="rounded-lg bg-purple-50 p-3 dark:bg-gray-700">
-              <FileText className="h-6 w-6 text-purple-600" />
-            </div>
-            <div>
-              <h3 className="font-semibold text-gray-900 dark:text-white">Comissões</h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400">Entregadores</p>
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => handleExport('csv', 'drivers')}
-              disabled={loading}
-              className="flex-1 rounded-lg bg-purple-600 px-3 py-2 text-sm font-medium text-white hover:bg-purple-700 disabled:opacity-50"
-            >
-              <Download className="mr-2 inline h-4 w-4" />
-              CSV
-            </button>
-            <button
-              onClick={() => handleExport('pdf', 'drivers')}
-              disabled={loading}
-              className="flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:border-gray-600 disabled:opacity-50"
-            >
-              PDF
-            </button>
-          </div>
-        </div>
-
-        <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:bg-gray-800 dark:border-gray-700">
-          <div className="mb-4 flex items-center gap-3">
-            <div className="rounded-lg bg-amber-50 p-3 dark:bg-gray-700">
-              <FileText className="h-6 w-6 text-amber-600" />
-            </div>
-            <div>
-              <h3 className="font-semibold text-gray-900 dark:text-white">Desempenho</h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400">Mensal completo</p>
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => handleExport('csv', 'performance')}
-              disabled={loading}
-              className="flex-1 rounded-lg bg-amber-600 px-3 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50"
-            >
-              <Download className="mr-2 inline h-4 w-4" />
-              CSV
-            </button>
-            <button
-              onClick={() => handleExport('pdf', 'performance')}
-              disabled={loading}
-              className="flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:border-gray-600 disabled:opacity-50"
-            >
-              PDF
-            </button>
-          </div>
-        </div>
+        ))}
       </div>
 
-      {/* Informações */}
-      <div className="rounded-lg border border-gray-200 bg-blue-50 p-4">
-        <p className="text-sm text-blue-800">
+      {/* Info Banner */}
+      <div className="rounded-2xl border border-blue-500/20 bg-blue-950/20 p-4">
+        <p className="text-xs text-blue-300/80">
           <strong>Nota:</strong> Os relatórios são gerados com base nos filtros selecionados e podem levar alguns segundos para processar.
           Os arquivos CSV podem ser abertos no Excel ou Google Sheets. Os PDFs são formatados para impressão.
         </p>
       </div>
+
     </div>
   )
 }

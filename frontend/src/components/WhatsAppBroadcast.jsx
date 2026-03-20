@@ -81,7 +81,7 @@ export default function WhatsAppBroadcast() {
   return (
     <div className="p-6">
       <div className="mb-6">
-        <h2 className="text-2xl font-bold text-gray-900 mb-2 dark:text-white">
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2 dark:text-white">
           Disparo de Mensagens WhatsApp
         </h2>
         <p className="text-gray-600 dark:text-gray-400">
@@ -90,8 +90,8 @@ export default function WhatsAppBroadcast() {
       </div>
 
       {/* Campo de Mensagem */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6 dark:bg-gray-800 dark:border-gray-700">
-        <label className="block text-sm font-medium text-gray-700 mb-2">
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 dark:bg-gray-800 dark:border-gray-700 mb-6">
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 dark:text-gray-300 mb-2">
           Mensagem
         </label>
         <textarea
@@ -99,7 +99,7 @@ export default function WhatsAppBroadcast() {
           onChange={(e) => setMessage(e.target.value)}
           placeholder="Digite sua mensagem aqui..."
           rows={6}
-          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
+          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none dark:bg-gray-700/60 dark:border-gray-500 dark:text-white dark:placeholder-gray-400 text-gray-900"
           disabled={loading}
         />
         <div className="mt-2 text-sm text-gray-500 dark:text-gray-400">
@@ -111,14 +111,14 @@ export default function WhatsAppBroadcast() {
       {loadingStats ? (
         <div className="flex items-center justify-center py-4">
           <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
-          <span className="ml-2 text-gray-600">Carregando estatísticas...</span>
+          <span className="ml-2 text-gray-600 dark:text-gray-400">Carregando estatísticas...</span>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 dark:bg-gray-800 dark:border-gray-700">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Todos os Clientes</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Todos os Clientes</p>
                 <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.all}</p>
               </div>
               <Users className="w-8 h-8 text-blue-500" />
@@ -127,7 +127,7 @@ export default function WhatsAppBroadcast() {
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 dark:bg-gray-800 dark:border-gray-700">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Última Semana</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Última Semana</p>
                 <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.last_week}</p>
               </div>
               <Users className="w-8 h-8 text-green-500" />
@@ -136,7 +136,7 @@ export default function WhatsAppBroadcast() {
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 dark:bg-gray-800 dark:border-gray-700">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Último Mês</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Último Mês</p>
                 <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.last_month}</p>
               </div>
               <Users className="w-8 h-8 text-purple-500" />
@@ -150,7 +150,7 @@ export default function WhatsAppBroadcast() {
         <button
           onClick={() => handleBroadcast('all')}
           disabled={loading || !message.trim()}
-          className="flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-medium"
+          className="flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed transition-all font-medium shadow-sm shadow-blue-500/30"
         >
           {loading ? (
             <Loader2 className="w-5 h-5 animate-spin" />
@@ -163,7 +163,7 @@ export default function WhatsAppBroadcast() {
         <button
           onClick={() => handleBroadcast('last_week')}
           disabled={loading || !message.trim()}
-          className="flex items-center justify-center gap-2 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-medium"
+          className="flex items-center justify-center gap-2 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-500 disabled:opacity-40 disabled:cursor-not-allowed transition-all font-medium shadow-sm shadow-green-500/30"
         >
           {loading ? (
             <Loader2 className="w-5 h-5 animate-spin" />
@@ -176,7 +176,7 @@ export default function WhatsAppBroadcast() {
         <button
           onClick={() => handleBroadcast('last_month')}
           disabled={loading || !message.trim()}
-          className="flex items-center justify-center gap-2 px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-medium"
+          className="flex items-center justify-center gap-2 px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-500 disabled:opacity-40 disabled:cursor-not-allowed transition-all font-medium shadow-sm shadow-purple-500/30"
         >
           {loading ? (
             <Loader2 className="w-5 h-5 animate-spin" />
@@ -189,11 +189,11 @@ export default function WhatsAppBroadcast() {
 
       {/* Mensagem de Erro */}
       {error && (
-        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3">
-          <XCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+        <div className="mb-6 p-4 bg-red-950/40 border border-red-500/30 rounded-lg flex items-start gap-3">
+          <XCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
           <div>
-            <p className="font-medium text-red-800">Erro</p>
-            <p className="text-sm text-red-600">{error}</p>
+            <p className="font-medium text-red-300">Erro</p>
+            <p className="text-sm text-red-400">{error}</p>
           </div>
         </div>
       )}
@@ -201,31 +201,31 @@ export default function WhatsAppBroadcast() {
       {/* Resultado */}
       {result && (
         <div className={`p-4 rounded-lg border ${
-          result.success 
-            ? 'bg-green-50 border-green-200' 
-            : 'bg-yellow-50 border-yellow-200'
+          result.success
+            ? 'bg-emerald-950/40 border-emerald-500/30'
+            : 'bg-amber-950/40 border-amber-500/30'
         }`}>
           <div className="flex items-start gap-3">
             {result.success ? (
-              <CheckCircle2 className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+              <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0 mt-0.5" />
             ) : (
-              <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+              <AlertCircle className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
             )}
             <div className="flex-1">
               <p className={`font-medium ${
-                result.success ? 'text-green-800' : 'text-yellow-800'
+                result.success ? 'text-emerald-300' : 'text-amber-300'
               }`}>
                 {result.message}
               </p>
               <div className="mt-2 text-sm space-y-1">
-                <p className={result.success ? 'text-green-700' : 'text-yellow-700'}>
+                <p className={result.success ? 'text-emerald-400' : 'text-amber-400'}>
                   Total de clientes: {result.total_customers}
                 </p>
-                <p className="text-green-700">
+                <p className="text-emerald-400">
                   ✓ Enviadas: {result.sent}
                 </p>
                 {result.failed > 0 && (
-                  <p className="text-red-700">
+                  <p className="text-red-400">
                     ✗ Falhas: {result.failed}
                   </p>
                 )}
