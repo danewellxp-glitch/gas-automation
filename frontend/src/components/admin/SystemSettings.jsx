@@ -194,11 +194,11 @@ export default function SystemSettings() {
           </div>
           <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded">
             <p className="text-gray-600 dark:text-gray-400">Backend</p>
-            <p className="font-bold text-gray-800 dark:text-gray-100">192.168.10.167:8000</p>
+            <p className="font-bold text-gray-800 dark:text-gray-100">192.168.10.167:5688</p>
           </div>
           <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded">
             <p className="text-gray-600 dark:text-gray-400">Frontend</p>
-            <p className="font-bold text-gray-800 dark:text-gray-100">192.168.10.167:3001</p>
+            <p className="font-bold text-gray-800 dark:text-gray-100">192.168.10.167:5689</p>
           </div>
         </div>
       </div>

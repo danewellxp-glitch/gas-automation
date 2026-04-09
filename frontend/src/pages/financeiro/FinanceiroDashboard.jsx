@@ -410,7 +410,7 @@ export default function FinanceiroDashboard() {
   useEffect(() => {
     const token = localStorage.getItem('access_token') || sessionStorage.getItem('access_token')
     if (!token) return
-    const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://192.168.10.167:8000'
+    const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://192.168.10.167:5688'
     const wsUrl = API_BASE.replace('http', 'ws') + `/ws/dashboard?token=${token}`
     const ws = new WebSocket(wsUrl)
     wsRef.current = ws

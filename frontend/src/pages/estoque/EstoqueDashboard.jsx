@@ -65,7 +65,7 @@ export default function EstoqueDashboard() {
   useEffect(() => {
     const token = localStorage.getItem('token') || sessionStorage.getItem('token')
     if (!token) return
-    const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://192.168.10.167:8000'
+    const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://192.168.10.167:5688'
     const wsUrl = API_BASE.replace('http', 'ws') + `/ws/dashboard?token=${token}`
     const ws = new WebSocket(wsUrl)
     wsRef.current = ws
