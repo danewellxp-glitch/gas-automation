@@ -33,23 +33,23 @@ export default function SystemSettings() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h2 className="text-2xl font-bold text-gray-800">⚙️ Configurações do Sistema</h2>
-        <p className="text-gray-600">Gerencie as configurações gerais da aplicação</p>
+        <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-100">⚙️ Configurações do Sistema</h2>
+        <p className="text-gray-600 dark:text-gray-400">Gerencie as configurações gerais da aplicação</p>
       </div>
 
       {/* Mensagem de Sucesso */}
       {saved && (
-        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-          <p className="text-green-700 font-medium">✓ Configurações salvas com sucesso!</p>
+        <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 rounded-lg p-4">
+          <p className="text-green-700 dark:text-green-400 font-medium">✓ Configurações salvas com sucesso!</p>
         </div>
       )}
 
       {/* Seção: Informações Gerais */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <h3 className="text-lg font-bold text-gray-800 mb-4">📝 Informações Gerais</h3>
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+        <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100 mb-4">📝 Informações Gerais</h3>
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Nome do Sistema
             </label>
             <input
@@ -63,13 +63,13 @@ export default function SystemSettings() {
       </div>
 
       {/* Seção: Funcionalidades */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <h3 className="text-lg font-bold text-gray-800 mb-4">🔧 Funcionalidades</h3>
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+        <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100 mb-4">🔧 Funcionalidades</h3>
         <div className="space-y-4">
-          <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+          <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
             <div>
-              <p className="font-medium text-gray-800">Notificações Push</p>
-              <p className="text-sm text-gray-600">Enviar notificações em tempo real</p>
+              <p className="font-medium text-gray-800 dark:text-gray-100">Notificações Push</p>
+              <p className="text-sm text-gray-600 dark:text-gray-400">Enviar notificações em tempo real</p>
             </div>
             <label className="relative inline-flex items-center cursor-pointer">
               <input
@@ -78,14 +78,14 @@ export default function SystemSettings() {
                 onChange={(e) => setSettings({...settings, enableNotifications: e.target.checked})}
                 className="sr-only peer"
               />
-              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white dark:bg-gray-800 after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
             </label>
           </div>
 
-          <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+          <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
             <div>
-              <p className="font-medium text-gray-800">WebSocket em Tempo Real</p>
-              <p className="text-sm text-gray-600">Comunicação bidirecional instantânea</p>
+              <p className="font-medium text-gray-800 dark:text-gray-100">WebSocket em Tempo Real</p>
+              <p className="text-sm text-gray-600 dark:text-gray-400">Comunicação bidirecional instantânea</p>
             </div>
             <label className="relative inline-flex items-center cursor-pointer">
               <input
@@ -94,14 +94,14 @@ export default function SystemSettings() {
                 onChange={(e) => setSettings({...settings, enableWebSocket: e.target.checked})}
                 className="sr-only peer"
               />
-              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white dark:bg-gray-800 after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
             </label>
           </div>
 
-          <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+          <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
             <div>
-              <p className="font-medium text-gray-800">Auto-atribuir Pedidos</p>
-              <p className="text-sm text-gray-600">Atribuir automaticamente pedidos aos drivers</p>
+              <p className="font-medium text-gray-800 dark:text-gray-100">Auto-atribuir Pedidos</p>
+              <p className="text-sm text-gray-600 dark:text-gray-400">Atribuir automaticamente pedidos aos drivers</p>
             </div>
             <label className="relative inline-flex items-center cursor-pointer">
               <input
@@ -110,18 +110,18 @@ export default function SystemSettings() {
                 onChange={(e) => setSettings({...settings, autoAssignOrders: e.target.checked})}
                 className="sr-only peer"
               />
-              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white dark:bg-gray-800 after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
             </label>
           </div>
         </div>
       </div>
 
       {/* Seção: Entregas */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <h3 className="text-lg font-bold text-gray-800 mb-4">🚚 Configurações de Entregas</h3>
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+        <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100 mb-4">🚚 Configurações de Entregas</h3>
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Máx. Entregas por Driver
             </label>
             <input
@@ -135,7 +135,7 @@ export default function SystemSettings() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Raio de Entrega (km)
             </label>
             <input
@@ -151,11 +151,11 @@ export default function SystemSettings() {
       </div>
 
       {/* Seção: Horário de Funcionamento */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <h3 className="text-lg font-bold text-gray-800 mb-4">🕒 Horário de Funcionamento</h3>
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+        <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100 mb-4">🕒 Horário de Funcionamento</h3>
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Hora de Abertura
             </label>
             <input
@@ -167,7 +167,7 @@ export default function SystemSettings() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Hora de Fechamento
             </label>
             <input
@@ -181,24 +181,24 @@ export default function SystemSettings() {
       </div>
 
       {/* Seção: Informações do Sistema */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <h3 className="text-lg font-bold text-gray-800 mb-4">💻 Informações do Sistema</h3>
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+        <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100 mb-4">💻 Informações do Sistema</h3>
         <div className="grid grid-cols-2 gap-4 text-sm">
-          <div className="p-3 bg-gray-50 rounded">
-            <p className="text-gray-600">Versão</p>
-            <p className="font-bold text-gray-800">v1.0.0</p>
+          <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded">
+            <p className="text-gray-600 dark:text-gray-400">Versão</p>
+            <p className="font-bold text-gray-800 dark:text-gray-100">v1.0.0</p>
           </div>
-          <div className="p-3 bg-gray-50 rounded">
-            <p className="text-gray-600">Ambiente</p>
-            <p className="font-bold text-gray-800">Production</p>
+          <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded">
+            <p className="text-gray-600 dark:text-gray-400">Ambiente</p>
+            <p className="font-bold text-gray-800 dark:text-gray-100">Production</p>
           </div>
-          <div className="p-3 bg-gray-50 rounded">
-            <p className="text-gray-600">Backend</p>
-            <p className="font-bold text-gray-800">192.168.10.167:8000</p>
+          <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded">
+            <p className="text-gray-600 dark:text-gray-400">Backend</p>
+            <p className="font-bold text-gray-800 dark:text-gray-100">192.168.10.167:8000</p>
           </div>
-          <div className="p-3 bg-gray-50 rounded">
-            <p className="text-gray-600">Frontend</p>
-            <p className="font-bold text-gray-800">192.168.10.167:3001</p>
+          <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded">
+            <p className="text-gray-600 dark:text-gray-400">Frontend</p>
+            <p className="font-bold text-gray-800 dark:text-gray-100">192.168.10.167:3001</p>
           </div>
         </div>
       </div>
@@ -207,7 +207,7 @@ export default function SystemSettings() {
       <div className="flex justify-end gap-3">
         <button
           onClick={() => window.location.reload()}
-          className="px-6 py-3 bg-gray-300 text-gray-800 rounded-lg hover:bg-gray-400 transition font-medium"
+          className="px-6 py-3 bg-gray-300 text-gray-800 dark:text-gray-100 rounded-lg hover:bg-gray-400 transition font-medium"
         >
           Cancelar
         </button>

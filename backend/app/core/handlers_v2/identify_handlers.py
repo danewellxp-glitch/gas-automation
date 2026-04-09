@@ -586,3 +586,216 @@ class IdentifyDocumentCNPJHandler(BaseHandler):
             ],
             next_state=ConversationState.COMPLETE_FOLLOWUP
         )
+
+
+class IdentifyUnknownPhoneHandler(BaseHandler):
+    """
+    Handler para IDENTIFY_UNKNOWN_PHONE.
+    Apresenta menu para número não cadastrado.
+
+    Opções:
+    [1] Cadastrar novo → IDENTIFY_TYPE
+    [2] Já sou cliente → IDENTIFY_ASSOCIATE_PHONE
+    [3] Consumidor final → ORDERING_PRODUCT (sem cadastro)
+    """
+
+    async def handle(
+        self,
+        message: str,
+        conversation_context: ConversationContext,
+        customer_context: Optional[CustomerContext] = None,
+        order_context: Optional[OrderContext] = None,
+        entities: Optional[Dict] = None,
+    ) -> HandlerResult:
+        from app.core.message_templates import UNKNOWN_PHONE_MENU
+
+        msg = message.lower().strip()
+
+        # Opção 1 — Cadastrar
+        if msg in ["1", "unknown_cadastrar", "cadastrar", "novo"]:
+            if not customer_context:
+                customer_context = CustomerContext()
+            customer_context.customer_type = "PF"
+            return self._create_result(
+                conversation_context=conversation_context,
+                customer_context=customer_context,
+                order_context=order_context,
+                responses=[self._create_response(
+                    text="📝 Vamos criar seu cadastro!\n\nVocê é:",
+                    buttons=get_quick_replies("customer_type")
+                )],
+                next_state=ConversationState.IDENTIFY_TYPE,
+            )
+
+        # Opção 2 — Associar
+        if msg in ["2", "unknown_associar", "associar", "já sou cliente", "ja sou cliente"]:
+            return self._create_result(
+                conversation_context=conversation_context,
+                customer_context=customer_context,
+                order_context=order_context,
+                responses=[self._create_response(
+                    text="🔍 Para localizar seu cadastro, por favor informe seu CPF ou CNPJ:"
+                )],
+                next_state=ConversationState.IDENTIFY_ASSOCIATE_PHONE,
+            )
+
+        # Opção 3 — Consumidor final
+        if msg in ["3", "unknown_consumidor", "consumidor", "sem cadastro"]:
+            if not customer_context:
+                customer_context = CustomerContext()
+            conversation_context.collected_data["is_consumer_final"] = True
+            conversation_context.collected_data["customer_type"] = "PF"
+            customer_context.name = "Consumidor Final"
+
+            sections = self._build_product_list_sections()
+            product_text = self._build_product_text()
+
+            return self._create_result(
+                conversation_context=conversation_context,
+                customer_context=customer_context,
+                order_context=order_context,
+                responses=[self._create_response(
+                    text=f"🛒 Qual botijão você precisa?\n\n{product_text}",
+                    list_sections=sections,
+                    list_button_text="Ver Produtos",
+                )],
+                next_state=ConversationState.ORDERING_PRODUCT,
+            )
+
+        # Não entendeu — reapresentar menu
+        self._increment_retry(conversation_context)
+        if self._should_escalate_to_human(conversation_context):
+            return self._create_result(
+                conversation_context=conversation_context,
+                customer_context=customer_context,
+                responses=[self._create_response(text="Vou te conectar com um atendente.")],
+                next_state=ConversationState.SUPPORT_HUMAN,
+                needs_human=True,
+            )
+
+        return self._create_result(
+            conversation_context=conversation_context,
+            customer_context=customer_context,
+            order_context=order_context,
+            responses=[self._create_response(
+                text=UNKNOWN_PHONE_MENU,
+                buttons=[
+                    {"id": "unknown_cadastrar", "text": "1️⃣ Cadastrar"},
+                    {"id": "unknown_associar", "text": "2️⃣ Já sou cliente"},
+                    {"id": "unknown_consumidor", "text": "3️⃣ Sem cadastro"},
+                ]
+            )],
+            next_state=ConversationState.IDENTIFY_UNKNOWN_PHONE,
+        )
+
+
+class IdentifyAssociatePhoneHandler(BaseHandler):
+    """
+    Handler para IDENTIFY_ASSOCIATE_PHONE.
+    Coleta CPF/CNPJ, localiza cadastro existente e associa o número.
+    """
+
+    async def handle(
+        self,
+        message: str,
+        conversation_context: ConversationContext,
+        customer_context: Optional[CustomerContext] = None,
+        order_context: Optional[OrderContext] = None,
+        entities: Optional[Dict] = None,
+    ) -> HandlerResult:
+        from app.core.message_templates import UNKNOWN_PHONE_MENU
+
+        doc = ''.join(filter(str.isdigit, message.strip()))
+
+        if len(doc) not in (11, 14):
+            self._increment_retry(conversation_context)
+            return self._create_result(
+                conversation_context=conversation_context,
+                customer_context=customer_context,
+                order_context=order_context,
+                responses=[self._create_response(
+                    text="⚠️ CPF ou CNPJ inválido. Por favor, informe apenas os números (11 dígitos CPF ou 14 dígitos CNPJ):"
+                )],
+                next_state=ConversationState.IDENTIFY_ASSOCIATE_PHONE,
+            )
+
+        # Buscar cliente por CPF/CNPJ no banco
+        customer = await self._find_customer_by_document(doc)
+
+        if not customer:
+            return self._create_result(
+                conversation_context=conversation_context,
+                customer_context=customer_context,
+                order_context=order_context,
+                responses=[self._create_response(
+                    text=f"❌ Não encontrei cadastro com esse documento.\n\nDeseja:\n\n"
+                         + UNKNOWN_PHONE_MENU,
+                    buttons=[
+                        {"id": "unknown_cadastrar", "text": "1️⃣ Cadastrar"},
+                        {"id": "unknown_associar", "text": "2️⃣ Tentar outro documento"},
+                        {"id": "unknown_consumidor", "text": "3️⃣ Sem cadastro"},
+                    ]
+                )],
+                next_state=ConversationState.IDENTIFY_UNKNOWN_PHONE,
+            )
+
+        # Associar número de telefone ao cliente
+        from app.database import AsyncSessionLocal
+        async with AsyncSessionLocal() as db:
+            from sqlalchemy import select
+            from app.models.customer import Customer
+            result = await db.execute(
+                select(Customer).where(Customer.id == customer.id)
+            )
+            db_customer = result.scalar_one_or_none()
+            if db_customer:
+                db_customer.phone = conversation_context.phone
+                await db.commit()
+
+        customer_type = "PJ" if len(doc) == 14 else "PF"
+        customer_context = CustomerContext(
+            customer_id=str(customer.id),
+            name=customer.name,
+            document=customer.cpf_cnpj,
+            customer_type=customer_type,
+            addresses=[customer.address] if customer.address else [],
+        )
+        conversation_context.is_returning = True
+
+        return self._create_result(
+            conversation_context=conversation_context,
+            customer_context=customer_context,
+            order_context=order_context,
+            responses=[self._create_response(
+                text=f"✅ Cadastro encontrado! Olá, *{customer.name}*!\n\n"
+                     f"Seu número foi associado ao seu cadastro.\n\n"
+                     f"Como posso ajudar?",
+                buttons=[
+                    {"id": "new_order", "text": "🛒 Fazer Pedido"},
+                    {"id": "track_order", "text": "📦 Meus Pedidos"},
+                ]
+            )],
+            next_state=ConversationState.GREETING_RETURNING,
+        )
+
+    async def _find_customer_by_document(self, doc: str):
+        """Busca cliente por CPF/CNPJ no banco."""
+        try:
+            from app.database import AsyncSessionLocal
+            from sqlalchemy import select, or_
+            from app.models.customer import Customer
+
+            async with AsyncSessionLocal() as db:
+                result = await db.execute(
+                    select(Customer).where(
+                        or_(
+                            Customer.cpf_cnpj == doc,
+                            Customer.cpf_cnpj == f"{doc[:3]}.{doc[3:6]}.{doc[6:9]}-{doc[9:]}",  # CPF formatado
+                        )
+                    )
+                )
+                return result.scalar_one_or_none()
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"Erro ao buscar cliente por documento: {e}")
+            return None

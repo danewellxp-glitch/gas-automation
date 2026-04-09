@@ -295,7 +295,10 @@ async def list_orders(
     Suporta paginação e metadados (total, has_next, has_prev).
     """
     # Query base
-    base_query = select(Order).options(selectinload(Order.customer))
+    base_query = select(Order).options(
+        selectinload(Order.customer),
+        selectinload(Order.items),
+    )
 
     # Aplicar filtros
     filters = []
@@ -318,8 +321,11 @@ async def list_orders(
     if filters:
         base_query = base_query.where(and_(*filters))
 
-    # Contar total (antes de paginação)
-    count_query = select(func.count()).select_from(base_query.subquery())
+    # Contar total (query separada para evitar problemas com selectinload)
+    count_filters = filters if filters else []
+    count_query = select(func.count(Order.id))
+    if count_filters:
+        count_query = count_query.where(and_(*count_filters))
     total_result = await db.execute(count_query)
     total = total_result.scalar() or 0
 
@@ -331,9 +337,18 @@ async def list_orders(
     result = await db.execute(paginated_query)
     orders = result.scalars().all()
 
+    # Resolver nomes dos aprovadores em batch
+    approver_ids = {o.approved_by for o in orders if o.approved_by}
+    approver_map: dict = {}
+    if approver_ids:
+        approver_result = await db.execute(
+            select(User.id, User.username).where(User.id.in_(approver_ids))
+        )
+        approver_map = {row[0]: row[1] for row in approver_result}
+
     # Retornar resposta paginada
     return PaginatedOrdersResponse.create(
-        items=[OrderBrief.from_order(o) for o in orders],
+        items=[OrderBrief.from_order(o, approved_by_name=approver_map.get(o.approved_by)) for o in orders],
         total=total,
         page=page,
         page_size=page_size,
@@ -384,6 +399,47 @@ async def list_pending_orders(
     orders = result.scalars().all()
 
     return [OrderBrief.from_order(o) for o in orders]
+
+
+@router.get("/agendados")
+async def listar_pedidos_agendados_early(
+    date_from: Optional[date] = Query(None),
+    date_to: Optional[date] = Query(None),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Lista pedidos agendados para entrega futura."""
+    if current_user.role not in ("admin", "owner", "operator"):
+        raise HTTPException(status_code=403, detail="Acesso negado")
+
+    from datetime import timezone as _tz
+
+    filters = [Order.is_scheduled == True]
+    if date_from:
+        filters.append(Order.scheduled_for >= datetime.combine(date_from, datetime.min.time()).replace(tzinfo=_tz.utc))
+    if date_to:
+        filters.append(Order.scheduled_for <= datetime.combine(date_to, datetime.max.time()).replace(tzinfo=_tz.utc))
+
+    result = await db.execute(
+        select(Order)
+        .where(and_(*filters))
+        .order_by(Order.scheduled_for)
+    )
+    orders = result.scalars().all()
+
+    return [
+        {
+            "id": str(o.id),
+            "order_number": o.order_number,
+            "status": o.status,
+            "scheduled_for": o.scheduled_for.isoformat() if o.scheduled_for else None,
+            "customer_id": str(o.customer_id),
+            "total_amount": float(o.total_amount),
+            "delivery_bairro": o.delivery_bairro,
+            "notes": o.notes,
+        }
+        for o in orders
+    ]
 
 
 @router.get("/{order_id}", response_model=OrderResponse)
@@ -468,6 +524,29 @@ async def create_order(
 
         if not customer:
             raise HTTPException(status_code=404, detail="Cliente não encontrado")
+
+        # Verificar limite de crédito para pedidos fiado
+        if getattr(data, "payment_method", None) == "fiado":
+            try:
+                from decimal import Decimal as _D
+                from app.services.financeiro.customer_financial_service import check_credit_limit
+                _order_total = sum(
+                    getattr(item, "unit_price", 0) * getattr(item, "quantity", 1)
+                    for item in (data.items or [])
+                ) or _D("0")
+                _allowed, _balance = await check_credit_limit(
+                    db, data.customer_id, _D(str(_order_total))
+                )
+                if not _allowed:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Limite de crédito excedido. Saldo atual: R$ {float(_balance):.2f}"
+                    )
+            except HTTPException:
+                raise
+            except Exception as _e:
+                import logging as _logging
+                _logging.getLogger(__name__).warning(f"Erro ao verificar crédito: {_e}")
 
         # Processar endereço primeiro (para evitar problemas de serialização JSONB)
         delivery_addr_dict = None
@@ -564,6 +643,15 @@ async def create_order(
 
         # Notificar operadores sobre novo pedido
         asyncio.create_task(_notify_new_order(order))
+
+        # Registrar débito no cliente se pagamento for fiado
+        if order.payment_method == "fiado":
+            try:
+                from app.services.financeiro.financial_hooks import on_order_created_fiado
+                await on_order_created_fiado(db, order)
+                await db.flush()
+            except Exception as _fe:
+                logger.warning(f"Erro ao registrar fiado no pedido {order.id}: {_fe}")
 
         return order
         
@@ -918,4 +1006,137 @@ async def reject_order(
         "message": "Pedido rejeitado com sucesso",
         "order_id": str(order_id),
         "reason": data.reason
+    }
+
+# ─────────────────────────────────────────────────────────
+# Task 8: Troca de Motorista (sem cancelar o pedido)
+# ─────────────────────────────────────────────────────────
+
+from pydantic import BaseModel as _PydBase
+
+
+class _ReassignBody(_PydBase):
+    new_driver_id: UUID
+    motivo: Optional[str] = None
+
+
+@router.patch("/{order_id}/reassign-driver")
+async def reassign_driver(
+    order_id: UUID,
+    body: _ReassignBody,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Reatribui a entrega de um pedido a outro motorista sem cancelar o pedido.
+    Registra log da troca.
+    """
+    if current_user.role not in ("admin", "owner", "operator"):
+        raise HTTPException(status_code=403, detail="Acesso negado")
+
+    # Busca pedido
+    result = await db.execute(select(Order).where(Order.id == order_id))
+    order = result.scalar_one_or_none()
+    if not order:
+        raise HTTPException(status_code=404, detail="Pedido não encontrado")
+
+    if order.status in (OrderStatus.DELIVERED.value, OrderStatus.CANCELLED.value):
+        raise HTTPException(status_code=409, detail=f"Não é possível reatribuir pedido com status {order.status}")
+
+    # Busca Delivery ativa
+    delivery_result = await db.execute(
+        select(Delivery).where(
+            and_(
+                Delivery.order_id == order_id,
+                Delivery.status.not_in([DeliveryStatus.DELIVERED.value, DeliveryStatus.FAILED.value]),
+            )
+        )
+    )
+    delivery = delivery_result.scalar_one_or_none()
+    if not delivery:
+        raise HTTPException(status_code=404, detail="Nenhuma entrega ativa encontrada para este pedido")
+
+    # Valida novo motorista
+    from app.models.driver import Driver
+    new_driver = await db.get(Driver, body.new_driver_id)
+    if not new_driver or not new_driver.is_active:
+        raise HTTPException(status_code=404, detail="Motorista não encontrado ou inativo")
+
+    old_driver_id = delivery.driver_id
+
+    # Atualiza delivery
+    delivery.driver_id = body.new_driver_id
+
+    # Registra no event_log
+    from app.models.event_log import EventLog, EventTypes, ActorTypes
+    log = EventLog(
+        event_type=EventTypes.ORDER_UPDATED.value if hasattr(EventTypes, 'ORDER_UPDATED') else "order.driver_reassigned",
+        actor_type=ActorTypes.OPERATOR.value if hasattr(ActorTypes, 'OPERATOR') else "operator",
+        actor_id=str(current_user.id),
+        entity_type="order",
+        entity_id=str(order_id),
+        metadata={
+            "old_driver_id": str(old_driver_id),
+            "new_driver_id": str(body.new_driver_id),
+            "motivo": body.motivo or "",
+        },
+    )
+    db.add(log)
+    await db.commit()
+
+    # Notifica WebSocket
+    try:
+        from app.api.websocket import manager as ws_manager
+        await ws_manager.broadcast({
+            "type": "driver_reassigned",
+            "order_id": str(order_id),
+            "new_driver_id": str(body.new_driver_id),
+            "new_driver_name": new_driver.name,
+        })
+    except Exception:
+        pass
+
+    return {
+        "success": True,
+        "order_id": str(order_id),
+        "delivery_id": str(delivery.id),
+        "old_driver_id": str(old_driver_id),
+        "new_driver_id": str(body.new_driver_id),
+        "new_driver_name": new_driver.name,
+    }
+
+
+# ─────────────────────────────────────────────────────────
+# Task 9: Agendamento — ver rota GET /agendados acima (antes de /{order_id})
+# ─────────────────────────────────────────────────────────
+
+
+class _ScheduleBody(_PydBase):
+    scheduled_for: datetime
+
+
+@router.patch("/{order_id}/agendar")
+async def agendar_pedido(
+    order_id: UUID,
+    body: _ScheduleBody,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Agenda um pedido para entrega em data/hora específica."""
+    if current_user.role not in ("admin", "owner", "operator"):
+        raise HTTPException(status_code=403, detail="Acesso negado")
+
+    result = await db.execute(select(Order).where(Order.id == order_id))
+    order = result.scalar_one_or_none()
+    if not order:
+        raise HTTPException(status_code=404, detail="Pedido não encontrado")
+
+    order.is_scheduled = True
+    order.scheduled_for = body.scheduled_for
+    await db.commit()
+
+    return {
+        "order_id": str(order_id),
+        "scheduled_for": order.scheduled_for.isoformat(),
+        "is_scheduled": True,
     }

@@ -21,6 +21,8 @@ import TestNotificationsPage from './pages/TestNotificationsPage'
 import OperatorDashboard from './pages/operator/OperatorDashboard'
 import AdminDashboard from './pages/admin/AdminDashboard'
 import OwnerDashboard from './pages/owner/OwnerDashboard'
+import FinanceiroDashboard from './pages/financeiro/FinanceiroDashboard'
+import EstoqueDashboard from './pages/estoque/EstoqueDashboard'
 
 // Pages do Driver
 import DriverLogin from './pages/driver/DriverLogin'
@@ -44,6 +46,8 @@ function AppRoutes() {
       'admin': '/admin',
       'owner': '/owner',
       'operator': '/operador',
+      'financeiro': '/financeiro',
+      'estoque': '/estoque',
       'user': '/operador'
     }
 
@@ -118,6 +122,26 @@ function AppRoutes() {
         element={
           <ProtectedRoute requiredRole="owner">
             <OwnerDashboard />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Painel Financeiro */}
+      <Route
+        path="/financeiro"
+        element={
+          <ProtectedRoute allowedRoles={['financeiro', 'admin', 'owner']}>
+            <FinanceiroDashboard />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Painel de Estoque */}
+      <Route
+        path="/estoque"
+        element={
+          <ProtectedRoute allowedRoles={['estoque', 'admin']}>
+            <EstoqueDashboard />
           </ProtectedRoute>
         }
       />

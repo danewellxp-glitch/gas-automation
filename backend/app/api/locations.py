@@ -11,6 +11,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import select, and_
+from sqlalchemy.orm import noload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -223,7 +224,14 @@ async def get_map_data(
         )
 
     except Exception as e:
+        import traceback as _tb
+        _err = _tb.format_exc()
         logger.error(f"Erro ao buscar dados do mapa: {e}", exc_info=True)
+        try:
+            with open("/app/map_error.log", "w") as _f:
+                _f.write(_err)
+        except Exception:
+            pass
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -284,6 +292,11 @@ async def _fetch_today_orders(db: AsyncSession, today_only: bool) -> List[OrderM
     query = (
         select(Order, Customer)
         .outerjoin(Customer, Order.customer_id == Customer.id)
+        .options(
+            noload(Order.delivery),
+            noload(Customer.orders),
+            noload(Customer.tipo_preco),
+        )
         .where(Order.status != OrderStatus.CANCELLED.value)
     )
 
@@ -350,6 +363,10 @@ async def _fetch_active_deliveries(db: AsyncSession, geocoding_service=None) -> 
         select(Delivery, Order, Customer)
         .join(Order, Delivery.order_id == Order.id)
         .outerjoin(Customer, Order.customer_id == Customer.id)
+        .options(
+            noload(Customer.orders),
+            noload(Customer.tipo_preco),
+        )
         .where(
             Delivery.status.in_([
                 DeliveryStatus.PENDING.value,
@@ -366,47 +383,64 @@ async def _fetch_active_deliveries(db: AsyncSession, geocoding_service=None) -> 
 
     deliveries = []
     for delivery, order, customer in deliveries_db:
+        # Pre-fetch all attributes BEFORE geocoding (which may db.commit() expiring ORM objects)
+        d_id = str(delivery.id)
+        d_order_id = str(delivery.order_id)
+        d_status = delivery.status
+        d_last_location = delivery.last_location
+        d_bairro = delivery.bairro
+        d_driver_id = str(delivery.driver_id) if delivery.driver_id else None
+        d_driver_name = delivery.driver_name
+        d_created_at = delivery.created_at
+        o_delivery_address = order.delivery_address
+        c_name = customer.name if customer else None
+        c_phone = customer.phone if customer else None
+
         loc = None
-        if delivery.last_location:
+        if d_last_location:
             loc = LocationData(
-                latitude=delivery.last_location.get("lat") or delivery.last_location.get("latitude"),
-                longitude=delivery.last_location.get("lng") or delivery.last_location.get("longitude"),
-                timestamp=delivery.last_location.get("timestamp"),
+                latitude=d_last_location.get("lat") or d_last_location.get("latitude"),
+                longitude=d_last_location.get("lng") or d_last_location.get("longitude"),
+                timestamp=d_last_location.get("timestamp"),
             )
-        elif order.delivery_address:
-            # Usar endereco do pedido se tiver coordenadas
-            addr = order.delivery_address
+        elif o_delivery_address:
+            addr = o_delivery_address
             if addr.get("location"):
                 loc = LocationData(
                     latitude=addr["location"].get("latitude"),
                     longitude=addr["location"].get("longitude"),
                 )
-        
-        # Se não tem localização, tentar geocodificar pelo CEP
-        if not loc and order.delivery_address and order.delivery_address.get("cep") and geocoding_service:
-            cep = order.delivery_address.get("cep")
+
+        # Geocoding may call db.commit() expiring all ORM objects — use only pre-fetched vars after
+        if not loc and o_delivery_address and o_delivery_address.get("cep") and geocoding_service:
+            cep = o_delivery_address.get("cep")
             geo_data = await geocoding_service.geocode_by_cep(cep)
-            
             if geo_data and geo_data.get("latitude") and geo_data.get("longitude"):
                 loc = LocationData(
                     latitude=geo_data["latitude"],
                     longitude=geo_data["longitude"],
                 )
-        
-        # Determinar tag
-        tag = get_tag_for_delivery(delivery)
+
+        # Use pre-fetched data (ORM objects may be expired after geocoding commit)
+        class _DeliveryProxy:
+            pass
+        proxy = _DeliveryProxy()
+        proxy.status = d_status
+        proxy.created_at = d_created_at
+
+        tag = get_tag_for_delivery(proxy)
         tag_cfg = get_tag_config(tag)
 
         deliveries.append(DeliveryLocation(
-            id=str(delivery.id),
-            order_id=str(delivery.order_id),
-            customer_name=customer.name if customer else None,
-            customer_phone=customer.phone if customer else None,
-            status=delivery.status,
+            id=d_id,
+            order_id=d_order_id,
+            customer_name=c_name,
+            customer_phone=c_phone,
+            status=d_status,
             location=loc,
-            address=delivery.bairro or (order.delivery_address.get("formatted") if order.delivery_address else None),
-            driver_id=str(delivery.driver_id) if delivery.driver_id else None,
-            driver_name=delivery.driver_name,
+            address=d_bairro or (o_delivery_address.get("formatted") if o_delivery_address else None),
+            driver_id=d_driver_id,
+            driver_name=d_driver_name,
             tags=[tag],
             tag_config=TagConfig(**tag_cfg) if tag_cfg else None,
         ))
@@ -454,7 +488,7 @@ async def get_recent_customer_locations(
 
             if payload.get("latitude") and payload.get("longitude"):
                 # Buscar dados do cliente e contar pedidos
-                customer_query = select(Customer).where(Customer.phone == phone)
+                customer_query = select(Customer).options(noload(Customer.orders), noload(Customer.tipo_preco)).where(Customer.phone == phone)
                 customer_result = await db.execute(customer_query)
                 customer = customer_result.scalar_one_or_none()
                 

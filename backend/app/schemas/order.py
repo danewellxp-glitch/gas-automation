@@ -137,26 +137,35 @@ class OrderBrief(BaseSchema):
     total_amount: Decimal
     customer_name: Optional[str] = None
     customer_phone: str
+    customer_cpf_cnpj: Optional[str] = None
     delivery_bairro: Optional[str] = None
     delivery_address: Optional[str] = None
+    location_type: Optional[str] = None
     items: List[OrderItemBrief] = []
     payment_method: Optional[str] = None
+    tipo_operacao: Optional[str] = None
+    notes: Optional[str] = None
     created_at: datetime
+    delivered_at: Optional[datetime] = None
+    approved_by_name: Optional[str] = None
+    cancellation_reason: Optional[str] = None
 
     @classmethod
-    def from_order(cls, order) -> "OrderBrief":
+    def from_order(cls, order, approved_by_name: Optional[str] = None) -> "OrderBrief":
         # Telefone para exibição: remover sufixo @c.us se existir
         phone = ""
         if order.customer and order.customer.phone:
             phone = (order.customer.phone or "").replace("@c.us", "").strip()
         # Endereço formatado para exibição
         delivery_address_str = None
+        location_type = None
         if order.delivery_address:
             addr = order.delivery_address
             if isinstance(addr, dict):
                 delivery_address_str = addr.get("full_address") or ", ".join(
                     filter(None, [addr.get("street"), addr.get("number"), addr.get("bairro")])
                 )
+                location_type = addr.get("location_type")
             else:
                 delivery_address_str = str(addr)
         # Itens do pedido (order.items já carregado via selectinload)
@@ -179,11 +188,18 @@ class OrderBrief(BaseSchema):
             total_amount=order.total_amount,
             customer_name=(order.customer.name or None) if order.customer else None,
             customer_phone=phone,
+            customer_cpf_cnpj=(order.customer.cpf_cnpj or None) if order.customer else None,
             delivery_bairro=order.delivery_bairro,
             delivery_address=delivery_address_str,
+            location_type=location_type,
             items=item_list,
             payment_method=order.payment_method,
+            tipo_operacao=getattr(order, "tipo_operacao", None),
+            notes=getattr(order, "notes", None),
             created_at=order.created_at,
+            delivered_at=getattr(order, "delivered_at", None),
+            approved_by_name=approved_by_name,
+            cancellation_reason=getattr(order, "cancellation_reason", None),
         )
 
 

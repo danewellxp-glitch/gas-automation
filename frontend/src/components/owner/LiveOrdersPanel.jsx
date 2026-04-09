@@ -1,5 +1,6 @@
 /**
- * LiveOrdersPanel - Pedidos por hora + Últimos pedidos ao vivo + ações rápidas
+ * LiveOrdersPanel — Pedidos por hora + Últimos pedidos ao vivo + ações rápidas
+ * Design Preline-inspired: cards brancos, sem glassmorphism.
  */
 
 import { useState, useEffect, useRef } from 'react'
@@ -15,12 +16,11 @@ const STATUS_CONFIG = {
   cancelled:  { label: 'Cancelado',  color: 'bg-rose-500' },
 }
 
-// Próxima ação principal por status
 const NEXT_ACTION = {
-  pending:    { status: 'paid',       label: 'Confirmar',  btn: 'bg-blue-500 hover:bg-blue-600' },
-  paid:       { status: 'preparing',  label: 'Preparar',   btn: 'bg-violet-500 hover:bg-violet-600' },
-  preparing:  { status: 'dispatched', label: 'Em rota',    btn: 'bg-cyan-500 hover:bg-cyan-600' },
-  dispatched: { status: 'delivered',  label: 'Entregue',   btn: 'bg-emerald-500 hover:bg-emerald-600' },
+  pending:   { status: 'paid',       label: 'Confirmar', cls: 'bg-blue-500 hover:bg-blue-600 text-white' },
+  paid:      { status: 'preparing',  label: 'Preparar',  cls: 'bg-violet-500 hover:bg-violet-600 text-white' },
+  preparing: { status: 'dispatched', label: 'Em rota',   cls: 'bg-cyan-500 hover:bg-cyan-600 text-white' },
+  dispatched:{ status: 'delivered',  label: 'Entregue',  cls: 'bg-emerald-500 hover:bg-emerald-600 text-white' },
 }
 
 const CANCELLABLE = new Set(['pending', 'paid', 'preparing', 'dispatched'])
@@ -48,7 +48,7 @@ function playBeep() {
     gain2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6)
     osc2.start(ctx.currentTime + 0.2)
     osc2.stop(ctx.currentTime + 0.6)
-  } catch (_) { /* AudioContext não suportado */ }
+  } catch (_) {}
 }
 
 export default function LiveOrdersPanel() {
@@ -103,7 +103,6 @@ export default function LiveOrdersPanel() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus }),
       })
-      // Atualiza localmente sem esperar próximo poll
       setOrders((prev) =>
         prev.map((o) => (o.id === orderId ? { ...o, status: newStatus } : o))
       )
@@ -114,7 +113,6 @@ export default function LiveOrdersPanel() {
     }
   }
 
-  // Agrupa pedidos por hora (últimas 12h)
   const buildHourlyData = () => {
     const counts = {}
     orders.forEach(o => {
@@ -139,41 +137,40 @@ export default function LiveOrdersPanel() {
     Date.now() - new Date(order.created_at).getTime() > 15 * 60 * 1000
 
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
+    <div className="flex flex-col gap-6 w-full h-full overflow-y-auto">
 
-      {/* ── PEDIDOS POR HORA ─────────────────────────────────── */}
-      <div className="rounded-2xl border border-gray-200 dark:border-gray-700/60 bg-white dark:bg-gray-800/60 p-6 shadow-sm">
-        <div className="mb-5 flex items-center gap-3">
-          <div className="rounded-xl bg-gradient-to-br from-blue-400 to-indigo-600 p-2.5 shadow-md shadow-blue-500/25">
-            <TrendingUp className="h-4 w-4 text-white" />
-          </div>
-          <div>
-            <h3 className="font-semibold text-gray-900 dark:text-white">Pedidos por Hora</h3>
-            <p className="text-xs text-gray-500 dark:text-gray-400">Últimas 12h — {orders.length} pedidos hoje</p>
+      {/* ── ATIVIDADE POR HORA ─── */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center">
+              <TrendingUp className="w-4 h-4 text-blue-500" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-gray-900 dark:text-white">Atividade Recente</p>
+              <p className="text-xs text-gray-400 dark:text-gray-500">{orders.length} pedidos hoje</p>
+            </div>
           </div>
         </div>
 
-        {/* Gráfico de barras CSS */}
-        <div className="flex items-end gap-1.5 h-28">
+        <div className="flex items-end gap-1 h-24">
           {hourlyData.map(({ hour, count, label }) => {
             const pct = (count / maxCount) * 100
             const isNow = hour === new Date().getHours()
             return (
-              <div key={hour} className="flex flex-1 flex-col items-center gap-1">
+              <div key={hour} className="flex flex-1 flex-col items-center gap-0.5">
                 {count > 0 && (
-                  <span className="text-xs font-bold text-gray-600 dark:text-gray-300">{count}</span>
+                  <span className="text-[9px] text-gray-400 dark:text-gray-500">{count}</span>
                 )}
                 <div className="w-full flex-1 flex items-end">
                   <div
-                    className={`w-full rounded-t-md transition-all duration-700 ${
-                      isNow
-                        ? 'bg-gradient-to-t from-emerald-600 to-emerald-400'
-                        : 'bg-gradient-to-t from-blue-600 to-indigo-400'
+                    className={`w-full rounded-t transition-all duration-500 ${
+                      isNow ? 'bg-primary-500' : 'bg-gray-200 dark:bg-gray-700'
                     }`}
-                    style={{ height: count > 0 ? `${Math.max(pct, 8)}%` : '3px', opacity: count > 0 ? 1 : 0.2 }}
+                    style={{ height: count > 0 ? `${Math.max(pct, 8)}%` : '2px', opacity: count > 0 ? 1 : 0.4 }}
                   />
                 </div>
-                <span className={`text-xs ${isNow ? 'font-bold text-emerald-500' : 'text-gray-400'}`}>
+                <span className={`text-[9px] ${isNow ? 'text-primary-500 font-semibold' : 'text-gray-400 dark:text-gray-600'}`}>
                   {label}
                 </span>
               </div>
@@ -182,34 +179,37 @@ export default function LiveOrdersPanel() {
         </div>
       </div>
 
-      {/* ── ÚLTIMOS PEDIDOS + AÇÕES RÁPIDAS ──────────────────── */}
-      <div className="rounded-2xl border border-gray-200 dark:border-gray-700/60 bg-white dark:bg-gray-800/60 p-6 shadow-sm">
-        <div className="mb-5 flex items-center gap-3">
-          <div className="rounded-xl bg-gradient-to-br from-emerald-400 to-teal-600 p-2.5 shadow-md shadow-emerald-500/25">
-            <Package className="h-4 w-4 text-white" />
-          </div>
-          <div className="flex-1">
-            <h3 className="font-semibold text-gray-900 dark:text-white">Últimos Pedidos</h3>
-            <p className="text-xs text-gray-500 dark:text-gray-400">Atualiza a cada 30s</p>
-          </div>
-          {newCount > 0 && (
-            <div className="flex items-center gap-1.5 rounded-full bg-emerald-500/15 border border-emerald-500/40 px-2.5 py-1 text-xs font-bold text-emerald-600 dark:text-emerald-400 animate-pulse">
-              <Bell className="h-3 w-3" />
-              +{newCount} novo{newCount > 1 ? 's' : ''}
+      <div className="h-px bg-gray-100 dark:bg-gray-700" />
+
+      {/* ── ÚLTIMOS PEDIDOS ─── */}
+      <div className="flex-1">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 flex items-center justify-center">
+              <Package className="w-4 h-4 text-emerald-500" />
             </div>
-          )}
-          <button
-            onClick={fetchOrders}
-            className="rounded-lg p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-          >
-            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-          </button>
+            <p className="text-sm font-semibold text-gray-900 dark:text-white">Últimos Pedidos</p>
+          </div>
+          <div className="flex items-center gap-2">
+            {newCount > 0 && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-700 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                <Bell className="w-3 h-3" />
+                +{newCount}
+              </span>
+            )}
+            <button
+              onClick={fetchOrders}
+              className="p-1.5 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+            </button>
+          </div>
         </div>
 
         {recentOrders.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-8 text-gray-400">
-            <Package className="h-8 w-8 mb-2 opacity-30" />
-            <span className="text-sm">Nenhum pedido hoje</span>
+          <div className="flex flex-col items-center justify-center py-10 text-gray-400 dark:text-gray-600">
+            <Package className="w-8 h-8 mb-2 opacity-40" />
+            <span className="text-xs">Nenhum pedido hoje</span>
           </div>
         ) : (
           <div className="space-y-2">
@@ -223,50 +223,44 @@ export default function LiveOrdersPanel() {
               return (
                 <div
                   key={order.id}
-                  className={`rounded-xl px-3 py-2 ${
+                  className={`rounded-xl border p-3 transition-colors ${
                     stuck
-                      ? 'bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-500/40'
-                      : 'bg-gray-50 dark:bg-gray-700/50'
+                      ? 'bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-700/40'
+                      : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700'
                   }`}
                 >
-                  {/* Linha principal */}
-                  <div className="flex items-center gap-2">
-                    <span className="w-8 text-xs font-bold text-gray-400 shrink-0">
-                      #{order.order_number}
+                  <div className="flex items-center justify-between gap-2 mb-1.5">
+                    <span className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                      {order.customer_name || order.customer_phone || 'Cliente S/N'}
                     </span>
-                    <span className="flex-1 text-sm font-medium text-gray-900 dark:text-white truncate">
-                      {order.customer_name || order.customer_phone || '—'}
-                    </span>
-                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold text-white ${st.color}`}>
+                    <span className={`shrink-0 text-[10px] font-medium text-white rounded-full px-2 py-0.5 ${st.color}`}>
                       {st.label}
-                    </span>
-                    {stuck && (
-                      <span className="shrink-0 rounded-full bg-amber-500 px-2 py-0.5 text-xs font-bold text-white animate-pulse">
-                        ⚠ parado
-                      </span>
-                    )}
-                    <span className="shrink-0 text-sm font-bold text-gray-900 dark:text-white">
-                      {fmt(order.total_amount)}
-                    </span>
-                    <span className="shrink-0 w-10 text-right text-xs text-gray-400">
-                      {fmtTime(order.created_at)}
                     </span>
                   </div>
 
-                  {/* Botões de ação (apenas para status acionáveis) */}
+                  <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+                    <span className="font-semibold text-gray-700 dark:text-gray-300">{fmt(order.total_amount)}</span>
+                    <span>{fmtTime(order.created_at)} · #{order.order_number}</span>
+                  </div>
+
+                  {stuck && (
+                    <p className="mt-1.5 text-[10px] font-medium text-amber-600 dark:text-amber-400">
+                      Parado há mais de 15 min
+                    </p>
+                  )}
+
                   {(next || canCancel) && (
-                    <div className="mt-1.5 flex items-center gap-1.5 pl-10">
+                    <div className="mt-2 pt-2 border-t border-gray-100 dark:border-gray-700 flex items-center gap-1.5">
                       {next && (
                         <button
                           onClick={() => updateStatus(order.id, next.status)}
                           disabled={isUpdating}
-                          className={`flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-semibold text-white transition-colors disabled:opacity-50 ${next.btn}`}
+                          className={`flex flex-1 items-center justify-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors disabled:opacity-40 ${next.cls}`}
                         >
-                          {isUpdating ? (
-                            <span className="h-3 w-3 animate-spin rounded-full border border-white border-t-transparent" />
-                          ) : (
-                            <ChevronRight className="h-3 w-3" />
-                          )}
+                          {isUpdating
+                            ? <span className="w-3 h-3 animate-spin rounded-full border border-white border-t-transparent" />
+                            : <ChevronRight className="w-3 h-3" />
+                          }
                           {next.label}
                         </button>
                       )}
@@ -274,9 +268,9 @@ export default function LiveOrdersPanel() {
                         <button
                           onClick={() => updateStatus(order.id, 'cancelled')}
                           disabled={isUpdating}
-                          className="flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/30 transition-colors disabled:opacity-50"
+                          className="flex items-center justify-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-700/40 hover:bg-rose-100 dark:hover:bg-rose-900/30 transition-colors disabled:opacity-40"
                         >
-                          <X className="h-3 w-3" />
+                          <X className="w-3 h-3" />
                           Cancelar
                         </button>
                       )}

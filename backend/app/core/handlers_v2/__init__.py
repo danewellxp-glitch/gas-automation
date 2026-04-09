@@ -11,6 +11,8 @@ from .identify_handlers import (
     IdentifyNamePJHandler,
     IdentifyDocumentCPFHandler,
     IdentifyDocumentCNPJHandler,
+    IdentifyUnknownPhoneHandler,
+    IdentifyAssociatePhoneHandler,
 )
 from .ordering_handlers import (
     OrderingProductHandler,
@@ -54,6 +56,8 @@ __all__ = [
     "IdentifyNamePJHandler",
     "IdentifyDocumentCPFHandler",
     "IdentifyDocumentCNPJHandler",
+    "IdentifyUnknownPhoneHandler",
+    "IdentifyAssociatePhoneHandler",
     
     # Ordering
     "OrderingProductHandler",

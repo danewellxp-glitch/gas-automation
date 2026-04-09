@@ -143,6 +143,42 @@ class Settings(BaseSettings):
         description="Permite criação manual de pedidos via API. False = apenas via bot/flow engine"
     )
 
+    # Financeiro
+    default_account_name: str = Field(default="Caixa Principal")
+    commission_rate_percent: float = Field(default=5.0, description="Comissão padrão entregador (%)")
+    payable_alert_days_before: int = Field(default=3, description="Alertar X dias antes do vencimento")
+    receivable_alert_days_overdue: int = Field(default=1, description="Alertar após X dia(s) vencido")
+
+    # Estoque
+    stock_low_alert_enabled: bool = Field(default=True, description="Ativar alertas de estoque mínimo")
+    stock_auto_deduct_on_delivery: bool = Field(default=True, description="Baixar estoque automaticamente ao entregar")
+
+    # NF-e / Unimake
+    unimake_api_token: str = Field(default="", description="Token API Unimake Cloud")
+    unimake_ambiente: str = Field(default="2", description="1=Produção, 2=Homologação")
+    unimake_api_url: str = Field(default="https://api.unimake.com.br")
+    nfe_cnpj: str = Field(default="", description="CNPJ da empresa emitente")
+    nfe_razao_social: str = Field(default="", description="Razão social")
+    nfe_nome_fantasia: str = Field(default="")
+    nfe_logradouro: str = Field(default="")
+    nfe_numero: str = Field(default="")
+    nfe_bairro: str = Field(default="")
+    nfe_municipio: str = Field(default="")
+    nfe_uf: str = Field(default="PR")
+    nfe_cep: str = Field(default="")
+    nfe_telefone: str = Field(default="")
+    nfe_ie: str = Field(default="", description="Inscrição Estadual")
+    nfe_regime_tributario: str = Field(default="1", description="1=Simples, 2=Normal")
+    nfe_ncm_gas: str = Field(default="27111900")
+    nfe_ncm_agua: str = Field(default="22011000")
+    nfe_cfop_venda: str = Field(default="5102")
+    # ALÍQUOTAS — PREENCHER COM CONTADOR ANTES DE PRODUÇÃO
+    nfe_aliq_icms: float = Field(default=0.0)
+    nfe_aliq_pis: float = Field(default=0.0)
+    nfe_aliq_cofins: float = Field(default=0.0)
+    nfe_csosn: str = Field(default="400")
+    waha_grupo_financeiro: Optional[str] = Field(default=None, description="ID do grupo WA para alertas")
+
     @field_validator('cors_origins')
     @classmethod
     def validate_cors_origins(cls, v: List[str]) -> List[str]:

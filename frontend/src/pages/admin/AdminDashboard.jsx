@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { LayoutDashboard, Users, FileText, Settings, Plus, RefreshCcw, KeyRound, Activity, Bug, Wrench, MessageSquare } from 'lucide-react'
+import { LayoutDashboard, Users, FileText, Settings, Plus, RefreshCcw, KeyRound, Activity, Bug, Wrench, MessageSquare, ShieldCheck } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import { apiRequest } from '../../utils/api'
 import FlowbiteLayout from '../../components/flowbite/FlowbiteLayout'
@@ -16,6 +16,7 @@ import SystemSettings from '../../components/admin/SystemSettings'
 import SystemHealthPanel from '../../components/admin/SystemHealthPanel'
 import ErrorCenterPanel from '../../components/admin/ErrorCenterPanel'
 import DebugToolsPanel from '../../components/admin/DebugToolsPanel'
+import IntegrityCheckerPanel from '../../components/admin/IntegrityCheckerPanel'
 import WhatsAppBroadcast from '../../components/WhatsAppBroadcast'
 
 const VALID_ROLES = [
@@ -223,6 +224,7 @@ export default function AdminDashboard() {
         { key: 'reports', type: 'button', label: 'Relatórios', icon: FileText, onClick: () => setActiveView('reports') },
         { key: 'whatsapp-broadcast', type: 'button', label: 'Disparo WhatsApp', icon: MessageSquare, onClick: () => setActiveView('whatsapp-broadcast') },
         { key: 'settings', type: 'button', label: 'Configurações', icon: Settings, onClick: () => setActiveView('settings') },
+        { key: 'integrity', type: 'button', label: 'Integrity Check', icon: ShieldCheck, onClick: () => setActiveView('integrity') },
       ]}
     >
       {/* Renderizar view baseada no estado */}
@@ -239,6 +241,8 @@ export default function AdminDashboard() {
 
       {activeView === 'settings' && <SystemSettings />}
 
+      {activeView === 'integrity' && <IntegrityCheckerPanel />}
+
       {activeView === 'whatsapp-broadcast' && <WhatsAppBroadcast />}
 
       {activeView === 'users' && (
@@ -246,13 +250,13 @@ export default function AdminDashboard() {
           {/* Header */}
           <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h2 className="text-2xl font-semibold text-gray-900">Gerenciamento de Usuários</h2>
-              <p className="text-gray-600">Crie usuários reais, edite dados e redefina senhas</p>
+              <h2 className="text-2xl font-semibold text-gray-900 dark:text-white">Gerenciamento de Usuários</h2>
+              <p className="text-gray-600 dark:text-gray-400">Crie usuários reais, edite dados e redefina senhas</p>
             </div>
             <div className="flex gap-2">
               <button
                 onClick={fetchUsers}
-                className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                className="inline-flex items-center gap-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white dark:placeholder-gray-400 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
               >
                 <RefreshCcw className="h-4 w-4" />
                 Atualizar
@@ -269,39 +273,39 @@ export default function AdminDashboard() {
 
               {/* Error Message */}
               {error && (
-                <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+                <div className="mb-4 rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 p-4 text-sm text-red-700 dark:text-red-400">
                   {error}
                 </div>
               )}
 
               {/* Users Table */}
-          <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+          <div className="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm">
             {/* Search Bar */}
-            <div className="border-b border-gray-200 p-4">
+            <div className="border-b border-gray-200 dark:border-gray-700 p-4">
               <input
                 type="text"
                 placeholder="Buscar por email, nome ou usuário..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-primary-500 focus:ring-primary-500"
+                className="block w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white dark:placeholder-gray-400 px-3 py-2 text-sm text-gray-900 focus:border-primary-500 focus:ring-primary-500"
               />
-              <p className="mt-2 text-xs text-gray-500">
+              <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
                 {displayedUsers.length} de {users.length} usuários
               </p>
             </div>
 
             {loading ? (
               <div className="p-8 text-center">
-                <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-gray-200 border-t-primary-600" />
-                <p className="mt-3 text-sm text-gray-600">Carregando usuários...</p>
+                <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-gray-200 dark:border-gray-700 border-t-primary-600" />
+                <p className="mt-3 text-sm text-gray-600 dark:text-gray-400">Carregando usuários...</p>
               </div>
             ) : displayedUsers.length === 0 ? (
-              <div className="p-8 text-center text-sm text-gray-600">
+              <div className="p-8 text-center text-sm text-gray-600 dark:text-gray-400">
                 {searchTerm ? 'Nenhum usuário encontrado com esse critério' : 'Nenhum usuário encontrado'}
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm text-gray-700">
+                <table className="w-full text-left text-sm text-gray-700 dark:text-gray-300">
                   <thead>
                     <tr>
                       <th
@@ -351,23 +355,23 @@ export default function AdminDashboard() {
                   </thead>
                   <tbody>
                     {displayedUsers.map(userData => (
-                      <tr key={userData.id} className="border-t border-gray-100 hover:bg-gray-50">
+                      <tr key={userData.id} className="border-t border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700">
                         <td className="px-4 py-3">{userData.email}</td>
                         <td className="px-4 py-3">{userData.full_name || userData.username || '-'}</td>
-                        <td className="px-4 py-3 text-gray-600">{userData.username || '-'}</td>
+                        <td className="px-4 py-3 text-gray-600 dark:text-gray-400">{userData.username || '-'}</td>
                         <td>
-                          <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700">
+                          <span className="inline-flex items-center rounded-full bg-gray-100 dark:bg-gray-700 px-2.5 py-1 text-xs font-medium text-gray-700 dark:text-gray-300">
                             {userData.role}
                           </span>
                         </td>
                         <td>
                           <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${
-                            userData.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
+                            userData.is_active ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
                           }`}>
                             {userData.is_active ? 'Ativo' : 'Inativo'}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-gray-500">
+                        <td className="px-4 py-3 text-gray-500 dark:text-gray-400">
                           {userData.created_at ? formatDateTime(userData.created_at) : '-'}
                         </td>
                         <td>
@@ -391,40 +395,40 @@ export default function AdminDashboard() {
       {/* Modal: Criar usuário */}
       {showCreateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 p-4">
-          <div className="w-full max-w-lg overflow-hidden rounded-xl bg-white shadow-xl">
-            <div className="border-b border-gray-200 p-6">
-              <h3 className="text-lg font-semibold text-gray-900">Adicionar usuário</h3>
-              <p className="mt-1 text-sm text-gray-500">A senha temporária será exibida uma única vez.</p>
+          <div className="w-full max-w-lg overflow-hidden rounded-xl bg-white dark:bg-gray-800 shadow-xl">
+            <div className="border-b border-gray-200 dark:border-gray-700 p-6">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Adicionar usuário</h3>
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">A senha temporária será exibida uma única vez.</p>
             </div>
 
             <div className="space-y-4 p-6">
               <div>
-                <label className="block text-sm font-medium text-gray-700">Email</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Email</label>
                 <input
                   value={createForm.email}
                   onChange={(e) => setCreateForm((p) => ({ ...p, email: e.target.value }))}
-                  className="mt-1 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-primary-500 focus:ring-primary-500"
+                  className="mt-1 block w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white dark:placeholder-gray-400 px-3 py-2 text-sm text-gray-900 focus:border-primary-500 focus:ring-primary-500"
                   placeholder="ex: joao@empresa.com"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700">Nome</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Nome</label>
                 <input
                   value={createForm.full_name}
                   onChange={(e) => setCreateForm((p) => ({ ...p, full_name: e.target.value }))}
-                  className="mt-1 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-primary-500 focus:ring-primary-500"
+                  className="mt-1 block w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white dark:placeholder-gray-400 px-3 py-2 text-sm text-gray-900 focus:border-primary-500 focus:ring-primary-500"
                   placeholder="Nome completo"
                 />
               </div>
 
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-4 grid-cols-1 sm:grid-cols-2">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Role</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Role</label>
                   <select
                     value={createForm.role}
                     onChange={(e) => setCreateForm((p) => ({ ...p, role: e.target.value }))}
-                    className="mt-1 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-primary-500 focus:ring-primary-500"
+                    className="mt-1 block w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white dark:placeholder-gray-400 px-3 py-2 text-sm text-gray-900 focus:border-primary-500 focus:ring-primary-500"
                   >
                     {VALID_ROLES.map((r) => (
                       <option key={r.value} value={r.value}>
@@ -434,12 +438,12 @@ export default function AdminDashboard() {
                   </select>
                 </div>
                 <div className="flex items-end">
-                  <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+                  <label className="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
                     <input
                       type="checkbox"
                       checked={createForm.is_active}
                       onChange={(e) => setCreateForm((p) => ({ ...p, is_active: e.target.checked }))}
-                      className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                      className="h-4 w-4 rounded border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400 text-primary-600 focus:ring-primary-500"
                     />
                     Usuário ativo
                   </label>
@@ -447,7 +451,7 @@ export default function AdminDashboard() {
               </div>
 
               {createTempPassword && (
-                <div className="rounded-lg border border-green-200 bg-green-50 p-4">
+                <div className="rounded-lg border border-green-200 bg-green-50 dark:bg-green-900/20 p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="text-sm font-semibold text-green-800">Senha temporária</p>
@@ -467,10 +471,10 @@ export default function AdminDashboard() {
               )}
             </div>
 
-            <div className="flex gap-3 border-t border-gray-200 bg-gray-50 p-6">
+            <div className="flex gap-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700 p-6">
               <button
                 onClick={() => setShowCreateModal(false)}
-                className="flex-1 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                className="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white dark:placeholder-gray-400 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
               >
                 Fechar
               </button>
@@ -489,41 +493,41 @@ export default function AdminDashboard() {
       {/* Modal: Editar usuário */}
       {showEditModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 p-4">
-          <div className="w-full max-w-lg overflow-hidden rounded-xl bg-white shadow-xl">
-            <div className="border-b border-gray-200 p-6">
-              <h3 className="text-lg font-semibold text-gray-900">Editar usuário</h3>
-              <p className="mt-1 text-sm text-gray-500">
+          <div className="w-full max-w-lg overflow-hidden rounded-xl bg-white dark:bg-gray-800 shadow-xl">
+            <div className="border-b border-gray-200 dark:border-gray-700 p-6">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Editar usuário</h3>
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                 {editForm.email} {editForm.created_at ? `• Criado em ${formatDateTime(editForm.created_at)}` : ''}
               </p>
             </div>
 
             <div className="space-y-4 p-6">
               <div>
-                <label className="block text-sm font-medium text-gray-700">Email</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Email</label>
                 <input
                   value={editForm.email}
                   onChange={(e) => setEditForm((p) => ({ ...p, email: e.target.value }))}
-                  className="mt-1 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-primary-500 focus:ring-primary-500"
+                  className="mt-1 block w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white dark:placeholder-gray-400 px-3 py-2 text-sm text-gray-900 focus:border-primary-500 focus:ring-primary-500"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700">Nome</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Nome</label>
                 <input
                   value={editForm.full_name}
                   onChange={(e) => setEditForm((p) => ({ ...p, full_name: e.target.value }))}
-                  className="mt-1 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-primary-500 focus:ring-primary-500"
+                  className="mt-1 block w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white dark:placeholder-gray-400 px-3 py-2 text-sm text-gray-900 focus:border-primary-500 focus:ring-primary-500"
                 />
               </div>
 
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-4 grid-cols-1 sm:grid-cols-2">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Role</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Role</label>
                   <select
                     value={editForm.role}
                     onChange={(e) => setEditForm((p) => ({ ...p, role: e.target.value }))}
                     disabled={editForm.id === user?.id}
-                    className="mt-1 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-primary-500 focus:ring-primary-500 disabled:cursor-not-allowed disabled:bg-gray-100"
+                    className="mt-1 block w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white dark:placeholder-gray-400 px-3 py-2 text-sm text-gray-900 focus:border-primary-500 focus:ring-primary-500 disabled:cursor-not-allowed disabled:bg-gray-100 dark:disabled:bg-gray-600"
                   >
                     {VALID_ROLES.map((r) => (
                       <option key={r.value} value={r.value}>
@@ -532,16 +536,16 @@ export default function AdminDashboard() {
                     ))}
                   </select>
                   {editForm.id === user?.id && (
-                    <p className="mt-1 text-xs text-gray-500">Você não pode alterar sua própria role.</p>
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Você não pode alterar sua própria role.</p>
                   )}
                 </div>
                 <div className="flex items-end">
-                  <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+                  <label className="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
                     <input
                       type="checkbox"
                       checked={editForm.is_active}
                       onChange={(e) => setEditForm((p) => ({ ...p, is_active: e.target.checked }))}
-                      className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                      className="h-4 w-4 rounded border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400 text-primary-600 focus:ring-primary-500"
                     />
                     Usuário ativo
                   </label>
@@ -549,12 +553,12 @@ export default function AdminDashboard() {
               </div>
 
               {resetTempPassword && (
-                <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
+                <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-900/20 p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="text-sm font-semibold text-amber-900">Nova senha temporária</p>
                       <p className="mt-1 font-mono text-sm text-amber-900">{resetTempPassword}</p>
-                      <p className="mt-1 text-xs text-amber-800">O usuário deverá trocar no próximo login.</p>
+                      <p className="mt-1 text-xs text-amber-800 dark:text-amber-400">O usuário deverá trocar no próximo login.</p>
                     </div>
                     <button
                       onClick={() => copyToClipboard(resetTempPassword)}
@@ -567,10 +571,10 @@ export default function AdminDashboard() {
               )}
             </div>
 
-            <div className="flex flex-col gap-3 border-t border-gray-200 bg-gray-50 p-6 sm:flex-row">
+            <div className="flex flex-col gap-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700 p-6 sm:flex-row">
               <button
                 onClick={() => setShowEditModal(false)}
-                className="flex-1 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                className="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white dark:placeholder-gray-400 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
               >
                 Cancelar
               </button>

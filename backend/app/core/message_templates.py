@@ -35,6 +35,14 @@ GREETING_ABANDONED_ORDER = """👋 Oi {name}! Vi que você estava {stage}.
 
 Deseja continuar de onde parou?"""
 
+UNKNOWN_PHONE_MENU = """👋 Olá! Não encontrei seu cadastro.
+
+O que deseja fazer?
+
+[1] Cadastrar como novo cliente
+[2] Já sou cliente (associar este número)
+[3] Comprar sem cadastro (consumidor final)"""
+
 
 # ═══════════════════════════════════════════════════════════════════════
 # TEMPLATES DE IDENTIFICAÇÃO
@@ -67,7 +75,7 @@ Verifique e digite novamente.
 # TEMPLATES DE PRODUTO
 # ═══════════════════════════════════════════════════════════════════════
 
-ASK_PRODUCT = """🛒 Qual botijão você precisa?
+ASK_PRODUCT = """🛒 O que você precisa?
 
 {product_list}"""
 

@@ -3,13 +3,13 @@ import FlowbiteNavbar from './FlowbiteNavbar'
 import FlowbiteSidebar from './FlowbiteSidebar'
 
 /**
- * Layout baseado no Flowbite Admin Dashboard (Tailwind).
- * - Tema claro por padrão (sem dark mode)
- * - Sidebar fixa no desktop, drawer no mobile
- * - Conteúdo do menu vem via `navItems`
+ * Layout principal — design Preline-inspired.
+ * Navbar fixa no topo (h-12), sidebar fixa na esquerda (w-56).
+ * Suporte a dark mode, mobile drawer, e grupos de nav com seção.
  */
 export default function FlowbiteLayout({
-  appName = 'Gas Automation',
+  appName = 'GasMaster',
+  logo = null,
   pageTitle = '',
   navItems = [],
   sidebarFooter = null,
@@ -18,63 +18,54 @@ export default function FlowbiteLayout({
   onLogout,
   children,
   activeNavKey = null,
-  variant = 'default', // 'default' ou 'owner'
+  sidebarUserInfo = null, // { name, role, onLogout } — enables dark premium sidebar
 }) {
-  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false)
-  const [isDark, setIsDark] =      useState(() => localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches))
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
+  const [isDark, setIsDark] = useState(
+    () => document.documentElement.classList.contains('dark')
+  )
 
-  // Inicializar Dark Mode
+  // Sync dark mode class + localStorage
   useEffect(() => {
     if (isDark) {
       document.documentElement.classList.add('dark')
-      localStorage.theme = 'dark'
+      localStorage.setItem('hs_theme', 'dark')
     } else {
       document.documentElement.classList.remove('dark')
-      localStorage.theme = 'light'
+      localStorage.setItem('hs_theme', 'light')
     }
   }, [isDark])
 
+  // Lock body scroll when mobile sidebar is open
   useEffect(() => {
-    // trava scroll quando sidebar mobile aberta
-    if (isMobileSidebarOpen) {
+    if (mobileSidebarOpen) {
       document.body.style.overflow = 'hidden'
-      return () => {
-        document.body.style.overflow = ''
-      }
+      return () => { document.body.style.overflow = '' }
     }
     document.body.style.overflow = ''
-  }, [isMobileSidebarOpen])
+  }, [mobileSidebarOpen])
 
   const backdrop = useMemo(() => {
-    if (!isMobileSidebarOpen) return null
+    if (!mobileSidebarOpen) return null
     return (
       <div
-        className="fixed inset-0 z-10 bg-gray-900/50 lg:hidden"
-        onClick={() => setIsMobileSidebarOpen(false)}
+        className="fixed inset-0 z-10 bg-gray-900/40 backdrop-blur-sm lg:hidden"
+        onClick={() => setMobileSidebarOpen(false)}
         aria-hidden="true"
       />
     )
-  }, [isMobileSidebarOpen])
+  }, [mobileSidebarOpen])
 
   return (
-    <div className={`min-h-screen relative overflow-hidden transition-colors duration-300 ${variant === 'owner' ? 'bg-slate-50 dark:bg-slate-950' : 'bg-gray-50 dark:bg-gray-900'}`}>
-      {/* Premium Background Mesh (Owner only) */}
-      {variant === 'owner' && (
-        <div className="pointer-events-none absolute inset-0 overflow-hidden">
-          <div className="absolute -top-[10%] -left-[10%] h-[500px] w-[500px] rounded-full bg-primary-500/10 blur-[100px] animate-pulse" />
-          <div className="absolute -bottom-[10%] -right-[10%] h-[600px] w-[600px] rounded-full bg-blue-500/10 blur-[120px]" />
-          <div className="absolute top-[30%] left-[20%] h-[300px] w-[300px] rounded-full bg-orange-400/5 blur-[80px]" />
-        </div>
-      )}
-
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       <FlowbiteNavbar
         appName={appName}
         pageTitle={pageTitle}
         userEmail={userEmail}
         onLogout={onLogout}
-        onToggleSidebar={() => setIsMobileSidebarOpen((v) => !v)}
+        onToggleSidebar={() => setMobileSidebarOpen(v => !v)}
         isDark={isDark}
-        onToggleDark={() =>         setIsDark(v => !v)}
+        onToggleDark={() => setIsDark(v => !v)}
         rightSlot={rightSlot}
       />
 
@@ -83,17 +74,20 @@ export default function FlowbiteLayout({
       <FlowbiteSidebar
         navItems={navItems}
         footer={sidebarFooter}
-        isMobileOpen={isMobileSidebarOpen}
-        onCloseMobile={() => setIsMobileSidebarOpen(false)}
+        isMobileOpen={mobileSidebarOpen}
+        onCloseMobile={() => setMobileSidebarOpen(false)}
         activeKey={activeNavKey}
-        variant={variant}
+        logo={logo}
+        appName={appName}
+        userInfo={sidebarUserInfo}
       />
 
-      {/* Content */}
-      <main className="pt-16 lg:ml-64 relative z-10">
-        <div className="p-4 sm:p-6">{children}</div>
+      {/* Main content — offset for sidebar (desktop) and navbar */}
+      <main className="lg:pl-56 pt-12 min-h-screen">
+        <div className="p-5 sm:p-6">
+          {children}
+        </div>
       </main>
     </div>
   )
 }
-

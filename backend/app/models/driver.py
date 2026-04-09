@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from typing import Optional, List
 
 from sqlalchemy import Boolean, DateTime, Index, String, Text, func, JSON
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import ARRAY, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import BaseModel
@@ -63,7 +63,19 @@ class Driver(BaseModel):
         String(100),
         nullable=True,
         index=True,
-        comment="Bairro de atuação do entregador"
+        comment="Bairro principal de atuação do entregador"
+    )
+    bairros_atendidos: Mapped[Optional[list]] = mapped_column(
+        ARRAY(String),
+        nullable=True,
+        default=list,
+        comment="Lista de bairros que o entregador atende"
+    )
+    segmentos_atendidos: Mapped[Optional[list]] = mapped_column(
+        ARRAY(String),
+        nullable=True,
+        default=list,
+        comment="Segmentos de clientes: residencial, comercial, industrial, condominio"
     )
 
     # Veículo

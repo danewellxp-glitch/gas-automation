@@ -31,3 +31,4 @@ export default defineConfig({
     __WS_URL__: JSON.stringify('ws://192.168.10.167:8000/ws'),
   },
 })
+// trigger hot-reload restart

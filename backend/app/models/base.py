@@ -11,8 +11,13 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
+from sqlmodel import SQLModel
+
 class Base(DeclarativeBase):
     """Classe base para todos os modelos SQLAlchemy."""
+
+    metadata = SQLModel.metadata
+
 
     # Configuração de tipo para anotações
     type_annotation_map = {

@@ -25,6 +25,7 @@ router = APIRouter()
 @router.get("", response_model=List[ProductResponse])
 async def list_products(
     active_only: bool = Query(True, description="Apenas produtos ativos"),
+    categoria: Optional[str] = Query(None, description="Filtrar por categoria: gas, agua, outro"),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -36,6 +37,9 @@ async def list_products(
 
     if active_only:
         query = query.where(Product.is_active == True)
+
+    if categoria:
+        query = query.where(Product.categoria == categoria)
 
     query = query.order_by(Product.code)
 
@@ -131,7 +135,10 @@ async def create_product(
         code=data.code.upper(),
         name=data.name,
         description=data.description,
+        categoria=data.categoria,
         weight_kg=data.weight_kg,
+        volume_litros=data.volume_litros,
+        requer_retorno_vasilhame=data.requer_retorno_vasilhame,
         price=data.price,
         is_active=data.is_active,
         firebird_code=data.firebird_code,

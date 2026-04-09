@@ -17,36 +17,40 @@ from typing import List, Optional, Dict
 
 @dataclass
 class Product:
-    """Produto GLP disponível para venda."""
-    
+    """Produto disponível para venda (gás ou água)."""
+
     # Identificação
-    code: str              # Código interno (ex: "P13")
+    code: str              # Código interno (ex: "P13", "G20L")
     name: str              # Nome para exibição
     description: str       # Descrição curta
-    
+
     # Especificações
-    weight_kg: float       # Peso em kg
-    
+    weight_kg: float       # Peso em kg (0 para produtos de água)
+
     # Preços
     price_exchange: Decimal  # Preço na TROCA (com vasilhame vazio)
     price_sale: Decimal      # Preço na VENDA (sem vasilhame)
     deposit_value: Decimal   # Valor do vasilhame (caução)
-    
+
     # Controle de estoque
     stock: int             # Quantidade em estoque
     min_quantity: int      # Quantidade mínima por pedido
     max_quantity: int      # Quantidade máxima por pedido
-    
+
     # Flags
     is_active: bool        # Se está disponível para venda
     is_commercial: bool    # Se é produto comercial (PJ)
-    
+
     # Exibição
     emoji: str             # Emoji para WhatsApp
     sort_order: int        # Ordem de exibição
-    
+
     # Especificação para UX (residencial/industrial)
     usage_label: str = ""  # Ex: "Residencial", "Industrial"
+
+    # Categoria
+    categoria: str = "gas"         # "gas" ou "agua"
+    volume_litros: Optional[int] = None  # Para galões: 20
 
 
 # Preços oficiais GÁSMASTER (atualizado 13/02/2026)
@@ -102,6 +106,25 @@ PRODUCTS_CATALOG = {
         emoji="🏭",
         sort_order=3,
         usage_label="Industrial",
+    ),
+    "G20L": Product(
+        code="G20L",
+        name="Galão de Água 20L",
+        description="Galão de água mineral/potável 20 litros",
+        weight_kg=0.0,
+        price_exchange=Decimal("0.00"),   # PREENCHER: preço de troca (galão vazio → cheio)
+        price_sale=Decimal("0.00"),       # PREENCHER: preço de venda (sem vasilhame)
+        deposit_value=Decimal("0.00"),    # PREENCHER: valor do depósito se cobrado
+        stock=0,
+        min_quantity=1,
+        max_quantity=20,
+        is_active=True,
+        is_commercial=False,
+        emoji="💧",
+        sort_order=4,
+        usage_label="Residencial",
+        categoria="agua",
+        volume_litros=20,
     ),
 }
 

@@ -19,6 +19,7 @@ from app.core.message_templates import (
     GREETING_RETURNING,
     GREETING_RETURNING_NO_HISTORY,
     GREETING_ABANDONED_ORDER,
+    UNKNOWN_PHONE_MENU,
 )
 from app.core.flow_config import get_quick_replies
 
@@ -55,11 +56,11 @@ class GreetingInitialHandler(BaseHandler):
         # Detectar intenção da primeira mensagem (para fast-track)
         detected_intent = self._parse_intent(message)
         
-        # Se não existe, criar contexto de cliente novo
+        # Se não existe, apresentar menu de identificação
         if not customer:
             customer_context = CustomerContext()
             conversation_context.is_returning = False
-            
+
             # Salvar intenção detectada para uso após identificação
             if detected_intent.get("product"):
                 conversation_context.collected_data["intent_product"] = detected_intent["product"]
@@ -67,18 +68,21 @@ class GreetingInitialHandler(BaseHandler):
                 conversation_context.collected_data["intent_operation"] = detected_intent["operation"]
             if detected_intent.get("quantity"):
                 conversation_context.collected_data["intent_quantity"] = detected_intent["quantity"]
-            
-            # Cliente novo - perguntar tipo (PF/PJ)
+
             return self._create_result(
                 conversation_context=conversation_context,
                 customer_context=customer_context,
                 responses=[
                     self._create_response(
-                        text=GREETING_NEW,
-                        buttons=get_quick_replies("customer_type")
+                        text=UNKNOWN_PHONE_MENU,
+                        buttons=[
+                            {"id": "unknown_cadastrar", "text": "1️⃣ Cadastrar"},
+                            {"id": "unknown_associar", "text": "2️⃣ Já sou cliente"},
+                            {"id": "unknown_consumidor", "text": "3️⃣ Sem cadastro"},
+                        ]
                     )
                 ],
-                next_state=ConversationState.IDENTIFY_TYPE
+                next_state=ConversationState.IDENTIFY_UNKNOWN_PHONE
             )
         
         # Cliente conhecido - criar contexto do cliente

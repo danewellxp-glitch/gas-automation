@@ -21,6 +21,8 @@ from app.core.handlers_v2 import (
     IdentifyNamePJHandler,
     IdentifyDocumentCPFHandler,
     IdentifyDocumentCNPJHandler,
+    IdentifyUnknownPhoneHandler,
+    IdentifyAssociatePhoneHandler,
     
     # ORDERING
     OrderingProductHandler,
@@ -70,8 +72,10 @@ def create_handler_registry() -> Dict[ConversationState, BaseHandler]:
         ConversationState.GREETING_RETURNING: GreetingReturningHandler(),
         
         # ═══════════════════════════════════════════════════════════════════
-        # FASE 2: IDENTIFY (5 handlers)
+        # FASE 2: IDENTIFY (7 handlers)
         # ═══════════════════════════════════════════════════════════════════
+        ConversationState.IDENTIFY_UNKNOWN_PHONE: IdentifyUnknownPhoneHandler(),
+        ConversationState.IDENTIFY_ASSOCIATE_PHONE: IdentifyAssociatePhoneHandler(),
         ConversationState.IDENTIFY_TYPE: IdentifyTypeHandler(),
         ConversationState.IDENTIFY_NAME_PF: IdentifyNamePFHandler(),
         ConversationState.IDENTIFY_NAME_PJ: IdentifyNamePJHandler(),

@@ -1096,3 +1096,118 @@ async def get_drivers_metrics_dashboard(
         'ranking': ranking,
         'drivers_time': drivers_time
     }
+
+
+# ==================== BAIRROS & SUGESTÃO ====================
+
+
+from typing import Optional as _Optional
+
+from pydantic import BaseModel as _PydanticBase
+
+
+class BairrosUpdate(_PydanticBase):
+    bairros: list[str]
+
+
+@router.put("/{driver_id}/bairros")
+async def update_driver_bairros(
+    driver_id: UUID,
+    body: BairrosUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Configura os bairros atendidos pelo motorista."""
+    if current_user.role not in ("admin", "operator", "owner"):
+        raise HTTPException(status_code=403, detail="Acesso negado")
+
+    result = await db.execute(select(Driver).where(Driver.id == driver_id))
+    driver = result.scalar_one_or_none()
+    if not driver:
+        raise HTTPException(status_code=404, detail="Motorista não encontrado")
+
+    # Normalizar bairros
+    bairros = [b.strip() for b in body.bairros if b.strip()]
+    driver.bairros_atendidos = bairros
+    # Atualizar bairro principal se ainda não definido
+    if bairros and not driver.bairro:
+        driver.bairro = bairros[0]
+
+    await db.commit()
+    await db.refresh(driver)
+    return {"driver_id": str(driver.id), "nome": driver.name, "bairros_atendidos": driver.bairros_atendidos}
+
+
+@router.get("/orders/{order_id}/suggested-driver")
+async def get_suggested_driver(
+    order_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Retorna lista ranqueada de motoristas sugeridos para o pedido,
+    com base no bairro de entrega.
+    """
+    if current_user.role not in ("admin", "operator", "owner"):
+        raise HTTPException(status_code=403, detail="Acesso negado")
+
+    result = await db.execute(select(Order).where(Order.id == order_id))
+    order = result.scalar_one_or_none()
+    if not order:
+        raise HTTPException(status_code=404, detail="Pedido não encontrado")
+
+    from app.services.delivery_service import suggest_driver
+    sugestoes = await suggest_driver(db, order)
+    return {
+        "order_id": str(order_id),
+        "bairro_entrega": order.delivery_bairro,
+        "sugestoes": sugestoes,
+    }
+
+
+# ─────────────────────────────────────────────────────────
+# Task 10: Perfil de Segmento do Motorista
+# ─────────────────────────────────────────────────────────
+
+class _PerfilUpdate(_PydanticBase):
+    bairros_atendidos: _Optional[list[str]] = None
+    segmentos_atendidos: _Optional[list[str]] = None
+
+
+@router.put("/{driver_id}/perfil")
+async def atualizar_perfil_motorista(
+    driver_id: UUID,
+    body: _PerfilUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Atualiza bairros e segmentos atendidos pelo motorista.
+    Segmentos válidos: residencial, comercial, industrial, condominio.
+    """
+    if current_user.role not in ("admin", "owner", "operator"):
+        raise HTTPException(status_code=403, detail="Acesso negado")
+
+    result = await db.execute(select(Driver).where(Driver.id == driver_id))
+    driver = result.scalar_one_or_none()
+    if not driver:
+        raise HTTPException(status_code=404, detail="Motorista não encontrado")
+
+    VALID_SEGMENTOS = {"residencial", "comercial", "industrial", "condominio"}
+
+    if body.bairros_atendidos is not None:
+        driver.bairros_atendidos = body.bairros_atendidos
+    if body.segmentos_atendidos is not None:
+        invalid = set(body.segmentos_atendidos) - VALID_SEGMENTOS
+        if invalid:
+            raise HTTPException(status_code=422, detail=f"Segmentos inválidos: {invalid}. Válidos: {VALID_SEGMENTOS}")
+        driver.segmentos_atendidos = body.segmentos_atendidos
+
+    await db.commit()
+    await db.refresh(driver)
+    return {
+        "driver_id": str(driver.id),
+        "nome": driver.name,
+        "bairros_atendidos": driver.bairros_atendidos or [],
+        "segmentos_atendidos": driver.segmentos_atendidos or [],
+    }

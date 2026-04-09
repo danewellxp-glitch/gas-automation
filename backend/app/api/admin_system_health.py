@@ -126,3 +126,18 @@ async def system_health(
 
     return health
 
+
+
+
+@router.get("/integrity-check")
+async def run_integrity_check(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Executa verificação de integridade do banco sob demanda (admin/owner)."""
+    if current_user.role not in ("admin", "owner"):
+        from fastapi import HTTPException
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acesso negado")
+
+    from app.tasks.integrity_checker import run_integrity_check as _check
+    return await _check(db)

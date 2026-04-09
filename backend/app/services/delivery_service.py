@@ -3,11 +3,85 @@ Delivery Service - Gerenciamento de Entregas
 """
 
 from typing import List, Optional
-from sqlalchemy import select
+from sqlalchemy import and_, func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
 from app.models.delivery import Delivery, DeliveryStatus
+from app.models.driver import Driver, DriverStatus
 from app.models.order import Order
+
+
+async def suggest_driver(
+    db: AsyncSession,
+    order: Order,
+    segmento: Optional[str] = None,
+) -> List[dict]:
+    """
+    Sugere motoristas para um pedido com base no bairro e segmento de entrega.
+
+    Critérios de ordenação:
+    1. Motoristas com bairro_atendido que inclui o bairro do pedido (exato)
+    2. Motoristas com segmento compatível (se fornecido)
+    3. Menos entregas ativas
+
+    Retorna lista de até 5 motoristas ranqueados.
+    """
+    bairro_pedido = (order.delivery_bairro or "").strip().lower()
+
+    result = await db.execute(
+        select(Driver).where(
+            and_(Driver.is_active == True, Driver.status == DriverStatus.AVAILABLE.value)
+        )
+    )
+    drivers = result.scalars().all()
+
+    # Contar entregas ativas por motorista
+    from app.models.delivery import Delivery, DeliveryStatus
+    active_statuses = [
+        DeliveryStatus.ASSIGNED.value,
+        DeliveryStatus.PICKED_UP.value,
+        DeliveryStatus.IN_TRANSIT.value,
+        DeliveryStatus.ARRIVED.value,
+    ]
+    active_counts_result = await db.execute(
+        select(Delivery.driver_id, func.count(Delivery.id).label("cnt"))
+        .where(Delivery.status.in_(active_statuses))
+        .group_by(Delivery.driver_id)
+    )
+    active_counts = {str(row.driver_id): row.cnt for row in active_counts_result.all()}
+
+    def _driver_score(driver: Driver) -> tuple:
+        bairros = [b.strip().lower() for b in (driver.bairros_atendidos or [])]
+        bairro_single = (driver.bairro or "").strip().lower()
+        all_bairros = set(bairros + ([bairro_single] if bairro_single else []))
+
+        exact_bairro = bairro_pedido in all_bairros if bairro_pedido else False
+
+        seg_match = True
+        if segmento and driver.segmentos_atendidos:
+            seg_match = segmento.lower() in [s.lower() for s in driver.segmentos_atendidos]
+
+        active = active_counts.get(str(driver.id), 0)
+        return (0 if exact_bairro else 1, 0 if seg_match else 1, active)
+
+    ranked = sorted(drivers, key=_driver_score)
+
+    return [
+        {
+            "driver_id": str(d.id),
+            "nome": d.name,
+            "phone": d.phone,
+            "bairro": d.bairro,
+            "bairros_atendidos": d.bairros_atendidos or [],
+            "segmentos_atendidos": d.segmentos_atendidos or [],
+            "entregas_ativas": active_counts.get(str(d.id), 0),
+            "status": d.status,
+            "vehicle_type": d.vehicle_type,
+            "license_plate": d.license_plate,
+        }
+        for d in ranked[:5]
+    ]
 
 
 class DeliveryService:

@@ -8,6 +8,8 @@ const ROLE_ROUTES = {
   owner: '/owner',
   user: '/operador',
   driver: '/driver/dashboard',
+  financeiro: '/financeiro',
+  estoque: '/estoque',
 }
 
 function PasswordInput({ id, value, onChange, placeholder, required }) {
@@ -78,8 +80,10 @@ export default function Login() {
   const setDemo = (role) => {
     const demos = {
       Admin: { email: 'admin@gasautomation.local', password: 'admin123' },
-      Owner: { email: 'owner@gasautomation.local', password: 'owner123' },
-      Operador: { email: 'operator@gasautomation.local', password: 'operator123' },
+      Owner: { email: 'dono@gasautomation.local', password: 'Teste@12345' },
+      Operador: { email: 'operador@gasautomation.local', password: 'Teste@12345' },
+      Financeiro: { email: 'financeiro@gasautomation.local', password: 'Teste@12345' },
+      Estoque: { email: 'estoque@gasautomation.local', password: 'Teste@12345' },
     }
     if (demos[role]) {
       setEmail(demos[role].email)
@@ -140,15 +144,12 @@ export default function Login() {
             <div className="flex justify-center mb-3">
               <svg width="72" height="72" viewBox="0 0 72 72" fill="none">
                 <circle cx="36" cy="36" r="36" fill="#EFF6FF" />
-                {/* Wings */}
                 <path d="M12 32 C18 24 26 28 30 32" stroke="#1d4ed8" strokeWidth="2.5" strokeLinecap="round" fill="none" />
                 <path d="M60 32 C54 24 46 28 42 32" stroke="#1d4ed8" strokeWidth="2.5" strokeLinecap="round" fill="none" />
                 <path d="M10 36 C16 30 24 32 30 36" stroke="#1d4ed8" strokeWidth="2" strokeLinecap="round" fill="none" opacity="0.6" />
                 <path d="M62 36 C56 30 48 32 42 36" stroke="#1d4ed8" strokeWidth="2" strokeLinecap="round" fill="none" opacity="0.6" />
-                {/* Flame */}
                 <path d="M36 18 C32 24 28 28 30 34 C32 40 36 43 36 43 C36 43 40 40 42 34 C44 28 40 24 36 18Z" fill="#f97316" />
                 <path d="M36 24 C34 28 32 30 33 34 C34 37 36 39 36 39 C36 39 38 37 39 34 C40 30 38 28 36 24Z" fill="#FFD100" />
-                {/* Gas cylinder */}
                 <rect x="30" y="43" width="12" height="14" rx="3" fill="#1d4ed8" />
                 <rect x="33" y="41" width="6" height="4" rx="1" fill="#1d4ed8" opacity="0.7" />
               </svg>
@@ -212,7 +213,7 @@ export default function Login() {
           <div className="mt-8 pt-6 border-t border-gray-100 text-center">
             <p className="text-xs text-gray-400 mb-3">Ambiente de Demonstração</p>
             <div className="flex justify-center gap-2">
-              {['Admin', 'Owner', 'Operador'].map(role => (
+              {['Admin', 'Owner', 'Operador', 'Financeiro', 'Estoque'].map(role => (
                 <button
                   key={role}
                   type="button"

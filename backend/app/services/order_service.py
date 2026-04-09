@@ -4,10 +4,46 @@ Order Service - Gerenciamento de Pedidos
 
 from typing import List, Optional
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
 from app.models.order import Order, OrderStatus
 from app.models.customer import Customer
+
+
+async def validate_order_before_create(
+    db: AsyncSession,
+    customer_id,
+    items: list,
+) -> list[str]:
+    """
+    Valida dados antes de criar um pedido.
+    Retorna lista de erros (vazia = OK).
+    """
+    from sqlalchemy import text
+
+    errors = []
+
+    if not items:
+        errors.append("Pedido deve ter pelo menos um item.")
+
+    if customer_id:
+        result = await db.execute(
+            text("SELECT id FROM customers WHERE id = :cid AND deleted_at IS NULL"),
+            {"cid": str(customer_id)},
+        )
+        if not result.fetchone():
+            errors.append(f"Cliente {customer_id} não encontrado ou inativo.")
+
+    for idx, item in enumerate(items):
+        product_id = item.get("product_id") or item.get("produto_id")
+        qty = item.get("quantidade") or item.get("quantity", 0)
+        if not product_id:
+            errors.append(f"Item {idx + 1}: product_id ausente.")
+        if not qty or qty <= 0:
+            errors.append(f"Item {idx + 1}: quantidade inválida ({qty}).")
+
+    return errors
 
 
 class OrderService:

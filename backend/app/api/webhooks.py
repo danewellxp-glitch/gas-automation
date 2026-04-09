@@ -982,6 +982,96 @@ async def process_location_message(phone: str, location: dict, message_id: str =
         logger.error(f"Erro ao processar localização no flow: {e}", exc_info=True)
 
 
+# ==================== Asaas (Pagamentos) Webhooks ====================
+
+
+@router.post("/asaas/payment")
+async def asaas_payment_webhook(
+    request: Request,
+    background_tasks: BackgroundTasks,
+):
+    """
+    Recebe webhooks de pagamento do Asaas.
+
+    Eventos tratados:
+    - PAYMENT_CONFIRMED / PAYMENT_RECEIVED → Order.status = paid
+    """
+    import json
+    body_bytes = await request.body()
+    try:
+        body = json.loads(body_bytes.decode("utf-8"))
+    except json.JSONDecodeError:
+        return {"status": "error", "message": "Invalid JSON"}
+
+    event = body.get("event", "")
+    payment_data = body.get("payment", {}) or {}
+    external_reference = payment_data.get("externalReference", "")
+    asaas_payment_id = payment_data.get("id", "")
+    payment_status = payment_data.get("status", "")
+
+    logger.info(f"Asaas webhook: event={event} payment_id={asaas_payment_id} ref={external_reference}")
+
+    if event not in ("PAYMENT_CONFIRMED", "PAYMENT_RECEIVED"):
+        return {"status": "ignored", "event": event}
+
+    if not external_reference:
+        return {"status": "ignored", "reason": "no_external_reference"}
+
+    background_tasks.add_task(
+        _process_asaas_payment_confirmed,
+        external_reference,
+        asaas_payment_id,
+    )
+    return {"status": "queued"}
+
+
+async def _process_asaas_payment_confirmed(order_id_str: str, asaas_payment_id: str) -> None:
+    """Confirma pagamento Asaas: atualiza Order.status → paid e notifica WS."""
+    import uuid as _uuid
+    try:
+        order_id = _uuid.UUID(order_id_str)
+    except ValueError:
+        logger.error(f"Asaas webhook: external_reference inválido: {order_id_str}")
+        return
+
+    async with AsyncSessionLocal() as db:
+        try:
+            from sqlalchemy import select
+            from sqlalchemy.orm import selectinload
+            from app.models.order import Order, OrderStatus
+            from datetime import datetime, timezone
+
+            result = await db.execute(
+                select(Order)
+                .options(selectinload(Order.customer))
+                .where(Order.id == order_id)
+            )
+            order = result.scalar_one_or_none()
+            if not order:
+                logger.warning(f"Asaas webhook: pedido {order_id} não encontrado")
+                return
+
+            if order.status != OrderStatus.PENDING.value:
+                logger.info(f"Asaas webhook: pedido {order_id} já está {order.status}")
+                return
+
+            old_status = order.status
+            order.status = OrderStatus.PAID.value
+            order.paid_at = datetime.now(timezone.utc)
+            if asaas_payment_id:
+                order.asaas_payment_id = asaas_payment_id
+            await db.commit()
+
+            # Notificar dashboard via WebSocket
+            from app.services.order_status_side_effects import notify_operators_order_update
+            await notify_operators_order_update(order, old_status, OrderStatus.PAID.value)
+
+            logger.info(f"Asaas: pedido {order.order_number} confirmado (PIX pago)")
+        except Exception as e:
+            logger.error(f"Erro em _process_asaas_payment_confirmed: {e}", exc_info=True)
+            await db.rollback()
+
+
 # ==================== Health Check ====================
 
 @router.get("/health")
@@ -990,4 +1080,5 @@ async def webhooks_health():
     return {
         "status": "healthy",
         "waha_webhook": "/webhooks/waha",
+        "asaas_webhook": "/webhooks/asaas/payment",
     }

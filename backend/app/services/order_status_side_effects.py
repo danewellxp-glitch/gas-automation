@@ -98,6 +98,23 @@ async def on_order_delivered(order_id: UUID) -> None:
 
             await notify_order_status_change(order, "dispatched", "delivered")
             await notify_operators_order_update(order, "dispatched", "delivered")
+
+            # Módulo Estoque: baixar estoque automaticamente
+            try:
+                from app.services.estoque.stock_service import auto_deduct_on_delivery
+                await auto_deduct_on_delivery(session, order_id)
+                await session.commit()
+            except Exception as stock_err:
+                logger.warning(f"auto_deduct_on_delivery falhou para {order_id}: {stock_err}")
+
+            # Módulo Financeiro: registrar receita
+            try:
+                from app.services.financeiro.financial_hooks import on_order_delivered as fin_hook
+                await fin_hook(session, order)
+                await session.commit()
+            except Exception as fin_err:
+                logger.warning(f"financial hook falhou para {order_id}: {fin_err}")
+
         except Exception as e:
             logger.error(
                 f"Erro em on_order_delivered para pedido {order_id}: {e}",

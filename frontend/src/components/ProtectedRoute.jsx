@@ -1,7 +1,7 @@
 import { Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 
-export default function ProtectedRoute({ children, requiredRole = null }) {
+export default function ProtectedRoute({ children, requiredRole = null, allowedRoles = null }) {
   const { isAuthenticated, loading, user } = useAuth()
   const location = useLocation()
 
@@ -25,16 +25,23 @@ export default function ProtectedRoute({ children, requiredRole = null }) {
     return <Navigate to="/change-password" replace />
   }
 
-  // Verificar se a role é permitida (se requiredRole foi especificado)
+  // Verificar se a role é permitida
+  const roleRoutes = {
+    admin: '/admin',
+    operator: '/operador',
+    owner: '/owner',
+    driver: '/driver/dashboard',
+    financeiro: '/financeiro',
+    estoque: '/estoque',
+    user: '/operador'
+  }
+
+  if (allowedRoles && !allowedRoles.includes(user?.role)) {
+    const targetRoute = roleRoutes[user?.role] || '/operador'
+    return <Navigate to={targetRoute} replace />
+  }
+
   if (requiredRole && user?.role !== requiredRole) {
-    // Redirecionar para o dashboard correto da role do usuário
-    const roleRoutes = {
-      admin: '/admin',
-      operator: '/operador',
-      owner: '/owner',
-      driver: '/driver/dashboard',
-      user: '/operador'
-    }
     const targetRoute = roleRoutes[user?.role] || '/operador'
     return <Navigate to={targetRoute} replace />
   }

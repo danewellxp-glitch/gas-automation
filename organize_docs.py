@@ -110,8 +110,8 @@ def should_organize_file(filepath: Path) -> bool:
         if part in IGNORE_DIRS:
             return False
     
-    # Apenas arquivos .md e .txt na raiz ou em docs/
-    if filepath.suffix not in [".md", ".txt"]:
+    # Apenas arquivos de documentação na raiz ou em docs/
+    if filepath.suffix not in [".md", ".txt", ".docx", ".mmd", ".html"]:
         return False
     
     # Não organizar se já está dentro de docs/

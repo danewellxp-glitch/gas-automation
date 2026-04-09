@@ -52,10 +52,29 @@ class ConversationState(str, Enum):
     # FASE 2: IDENTIFY (Identificação) - 5 estados
     # ═══════════════════════════════════════════════════════════════════════
     
+    IDENTIFY_UNKNOWN_PHONE = "identify_unknown_phone"
+    """
+    Número não cadastrado — apresenta opções.
+
+    TRANSIÇÕES:
+    → [1] Cadastrar novo → IDENTIFY_TYPE
+    → [2] Já sou cliente (associar CPF/CNPJ) → IDENTIFY_ASSOCIATE_PHONE
+    → [3] Comprar sem cadastro → ORDERING_PRODUCT (is_consumer_final)
+    """
+
+    IDENTIFY_ASSOCIATE_PHONE = "identify_associate_phone"
+    """
+    Coleta CPF/CNPJ para localizar cadastro existente e associar telefone.
+
+    TRANSIÇÕES:
+    → Encontrado → GREETING_RETURNING
+    → Não encontrado → IDENTIFY_UNKNOWN_PHONE (retry)
+    """
+
     IDENTIFY_TYPE = "identify_type"
     """
     Pergunta se é PF ou PJ.
-    
+
     TRANSIÇÕES:
     → Pessoa Física → IDENTIFY_NAME_PF
     → Pessoa Jurídica → IDENTIFY_NAME_PJ

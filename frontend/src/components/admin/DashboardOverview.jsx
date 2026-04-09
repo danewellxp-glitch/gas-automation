@@ -81,16 +81,16 @@ export default function DashboardOverview() {
 
   if (loading) {
     return (
-      <div className="rounded-lg border border-gray-200 bg-white p-8 text-center shadow-sm">
-        <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-gray-200 border-t-primary-600" />
-        <p className="mt-3 text-sm text-gray-600">Carregando métricas...</p>
+      <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-8 text-center shadow-sm">
+        <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-gray-200 dark:border-gray-700 border-t-primary-600" />
+        <p className="mt-3 text-sm text-gray-600 dark:text-gray-400">Carregando métricas...</p>
       </div>
     )
   }
 
   if (!metrics) {
     return (
-      <div className="rounded-lg border border-red-200 bg-red-50 p-6 text-sm text-red-700">
+      <div className="rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 p-6 text-sm text-red-700 dark:text-red-400">
         <p className="font-medium">Erro ao carregar métricas</p>
         {errorMsg && <p className="mt-1 text-red-600">{errorMsg}</p>}
         <button
@@ -108,71 +108,71 @@ export default function DashboardOverview() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-semibold text-gray-900">Visão geral</h2>
-        <p className="text-sm text-gray-600">Métricas do sistema em tempo real</p>
+        <h2 className="text-2xl font-semibold text-gray-900 dark:text-white">Visão geral</h2>
+        <p className="text-sm text-gray-600 dark:text-gray-400">Métricas do sistema em tempo real</p>
       </div>
 
       {/* Cards principais */}
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
+      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-5 shadow-sm">
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-sm text-gray-500">Total de usuários</p>
-              <p className="mt-1 text-3xl font-semibold text-gray-900">{metrics.users.total}</p>
-              <p className="mt-1 text-xs text-gray-500">{metrics.users.active} ativos</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Total de usuários</p>
+              <p className="mt-1 text-3xl font-semibold text-gray-900 dark:text-white">{metrics.users.total}</p>
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{metrics.users.active} ativos</p>
             </div>
-            <div className="rounded-lg bg-primary-50 p-3 text-primary-700">
+            <div className="rounded-lg bg-primary-50 dark:bg-primary-900/30 p-3 text-primary-700">
               <Users className="h-5 w-5" />
             </div>
           </div>
         </div>
 
-        <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
+        <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-5 shadow-sm">
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-sm text-gray-500">Entregadores</p>
-              <p className="mt-1 text-3xl font-semibold text-gray-900">{metrics.drivers.total}</p>
-              <p className="mt-1 text-xs text-gray-500">{metrics.drivers.active} online</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Entregadores</p>
+              <p className="mt-1 text-3xl font-semibold text-gray-900 dark:text-white">{metrics.drivers.total}</p>
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{metrics.drivers.active} online</p>
             </div>
-            <div className="rounded-lg bg-green-50 p-3 text-green-700">
+            <div className="rounded-lg bg-green-50 dark:bg-green-900/20 p-3 text-green-700 dark:text-green-400">
               <Truck className="h-5 w-5" />
             </div>
           </div>
         </div>
 
-        <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
+        <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-5 shadow-sm">
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-sm text-gray-500">Entregas hoje</p>
-              <p className="mt-1 text-3xl font-semibold text-gray-900">{metrics.deliveries.today}</p>
-              <p className="mt-1 text-xs text-gray-500">{metrics.deliveries.hoursWorked}h trabalhadas</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Entregas hoje</p>
+              <p className="mt-1 text-3xl font-semibold text-gray-900 dark:text-white">{metrics.deliveries.today}</p>
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{metrics.deliveries.hoursWorked}h trabalhadas</p>
             </div>
-            <div className="rounded-lg bg-indigo-50 p-3 text-indigo-700">
+            <div className="rounded-lg bg-indigo-50 dark:bg-indigo-900/20 p-3 text-indigo-700">
               <Package className="h-5 w-5" />
             </div>
           </div>
         </div>
 
-        <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
+        <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-5 shadow-sm">
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-sm text-gray-500">Status do sistema</p>
-              <p className="mt-1 text-2xl font-semibold text-gray-900">Operacional</p>
-              <p className="mt-1 text-xs text-gray-500">Serviços online</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Status do sistema</p>
+              <p className="mt-1 text-2xl font-semibold text-gray-900 dark:text-white">Operacional</p>
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Serviços online</p>
             </div>
-            <div className="rounded-lg bg-amber-50 p-3 text-amber-700">
+            <div className="rounded-lg bg-amber-50 dark:bg-amber-900/20 p-3 text-amber-700">
               <Activity className="h-5 w-5" />
             </div>
           </div>
         </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-4 grid-cols-1 lg:grid-cols-2">
         {/* Usuários por role */}
-        <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+        <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-6 shadow-sm">
           <div className="mb-4">
-            <h3 className="text-base font-semibold text-gray-900">Usuários por role</h3>
-            <p className="text-sm text-gray-500">Distribuição de perfis</p>
+            <h3 className="text-base font-semibold text-gray-900 dark:text-white">Usuários por role</h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Distribuição de perfis</p>
           </div>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             {[
@@ -182,19 +182,19 @@ export default function DashboardOverview() {
               { label: 'Drivers', value: metrics.users.byRole.driver },
               { label: 'Users', value: metrics.users.byRole.user },
             ].map((r) => (
-              <div key={r.label} className="rounded-lg bg-gray-50 p-4">
-                <div className="text-2xl font-semibold text-gray-900">{r.value}</div>
-                <div className="mt-1 text-xs text-gray-500">{r.label}</div>
+              <div key={r.label} className="rounded-lg bg-gray-50 dark:bg-gray-700 p-4">
+                <div className="text-2xl font-semibold text-gray-900 dark:text-white">{r.value}</div>
+                <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">{r.label}</div>
               </div>
             ))}
           </div>
         </div>
 
         {/* Status drivers */}
-        <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+        <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-6 shadow-sm">
           <div className="mb-4">
-            <h3 className="text-base font-semibold text-gray-900">Status dos entregadores</h3>
-            <p className="text-sm text-gray-500">Situação atual</p>
+            <h3 className="text-base font-semibold text-gray-900 dark:text-white">Status dos entregadores</h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Situação atual</p>
           </div>
           <div className="space-y-2">
             {[
@@ -203,12 +203,12 @@ export default function DashboardOverview() {
               { label: 'Em pausa', value: metrics.drivers.break, dot: 'bg-amber-500' },
               { label: 'Offline', value: metrics.drivers.offline, dot: 'bg-gray-400' },
             ].map((s) => (
-              <div key={s.label} className="flex items-center justify-between rounded-lg bg-gray-50 p-3">
+              <div key={s.label} className="flex items-center justify-between rounded-lg bg-gray-50 dark:bg-gray-700 p-3">
                 <div className="flex items-center gap-3">
                   <span className={`h-2.5 w-2.5 rounded-full ${s.dot}`} />
-                  <span className="text-sm font-medium text-gray-900">{s.label}</span>
+                  <span className="text-sm font-medium text-gray-900 dark:text-white">{s.label}</span>
                 </div>
-                <span className="text-sm font-semibold text-gray-900">{s.value}</span>
+                <span className="text-sm font-semibold text-gray-900 dark:text-white">{s.value}</span>
               </div>
             ))}
           </div>

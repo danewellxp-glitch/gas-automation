@@ -43,6 +43,10 @@ from app.api import admin_system_health
 from app.api import admin_debug
 from app.api import owner_dashboard
 from app.api import images, tipos_preco, vasilhames, locations, exports, firebird_schema, rpa, daily_summary, promotions, whatsapp_broadcast
+from app.api.financeiro import router as financeiro_router
+from app.api.estoque import router as estoque_router
+from app.api.turno import router as turno_router
+from app.api.comodato import router as comodato_router
 
 # Importar serviços para delivery system
 try:
@@ -124,6 +128,60 @@ async def _metrics_updater(ws_manager, redis_bridge):
         logger.error(f"❌ Erro fatal no atualizador de métricas: {e}")
 
 
+async def _seed_demo_users():
+    """Cria/atualiza usuários de demo financeiro e estoque no startup."""
+    from passlib.context import CryptContext
+    from sqlalchemy import text
+
+    pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
+    hashed = pwd_context.hash("Teste@12345")
+
+    demo_users = [
+        {
+            "username": "financeiro",
+            "email": "financeiro@gasautomation.local",
+            "full_name": "Usuário Financeiro",
+            "role": "financeiro",
+        },
+        {
+            "username": "estoque",
+            "email": "estoque@gasautomation.local",
+            "full_name": "Usuário Estoque",
+            "role": "estoque",
+        },
+    ]
+
+    async with AsyncSessionLocal() as session:
+        async with session.begin():
+            for u in demo_users:
+                result = await session.execute(
+                    text("SELECT id FROM users WHERE username = :username"),
+                    {"username": u["username"]},
+                )
+                if result.fetchone():
+                    await session.execute(
+                        text("UPDATE users SET hashed_password = :hp, must_change_password = false, updated_at = :now WHERE username = :username"),
+                        {"hp": hashed, "now": datetime.now(timezone.utc), "username": u["username"]},
+                    )
+                else:
+                    await session.execute(
+                        text("""
+                            INSERT INTO users (username, email, full_name, hashed_password, role,
+                                              is_active, must_change_password, created_at, updated_at)
+                            VALUES (:username, :email, :full_name, :hp, :role,
+                                    true, false, :now, :now)
+                        """),
+                        {
+                            "username": u["username"],
+                            "email": u["email"],
+                            "full_name": u["full_name"],
+                            "hp": hashed,
+                            "role": u["role"],
+                            "now": datetime.now(timezone.utc),
+                        },
+                    )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
@@ -189,6 +247,21 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         secure_logger.warning(f"Erro ao iniciar DLQ Alerter: {e}", exc_info=True)
 
+    # Garantir usuários de demo (financeiro / estoque)
+    try:
+        await _seed_demo_users()
+        print("[OK] Usuários de demo verificados")
+    except Exception as e:
+        secure_logger.warning(f"Erro ao verificar usuários de demo: {e}")
+
+    # Iniciar verificador de integridade diário
+    try:
+        from app.tasks.integrity_checker import integrity_checker
+        await integrity_checker.start()
+        print("[OK] Integrity Checker iniciado (verificação diária)")
+    except Exception as e:
+        secure_logger.warning(f"Erro ao iniciar Integrity Checker: {e}")
+
     # TODO: Pré-carregar modelo Ollama se necessário
     # TODO: Verificar conexão com Firebird se habilitado
 
@@ -238,6 +311,14 @@ async def lifespan(app: FastAPI):
             print("[OK] DLQ Alerter parado")
     except Exception as e:
         secure_logger.warning(f"Erro ao parar DLQ Alerter: {e}")
+
+    # Parar Integrity Checker
+    try:
+        from app.tasks.integrity_checker import integrity_checker
+        await integrity_checker.stop()
+        print("[OK] Integrity Checker parado")
+    except Exception as e:
+        secure_logger.warning(f"Erro ao parar Integrity Checker: {e}")
     
     # Parar Event Batcher
     await ws_manager.disable_batching()
@@ -496,6 +577,10 @@ app.include_router(daily_summary.router, prefix="/api/daily-summary", tags=["Dai
 app.include_router(promotions.router, prefix="/api/promotions", tags=["Promotions"])
 app.include_router(whatsapp_broadcast.router, prefix="/api/whatsapp", tags=["WhatsApp Broadcast"])
 app.include_router(test_flow.router, prefix="/api/test", tags=["Test Flow"])
+app.include_router(financeiro_router, prefix="/api/financeiro", tags=["Financeiro"])
+app.include_router(estoque_router, prefix="/api/estoque", tags=["Estoque"])
+app.include_router(turno_router, prefix="/api/drivers", tags=["Acerto de Turno"])
+app.include_router(comodato_router, prefix="/api", tags=["Comodatos"])
 
 # DLQ Monitoring API
 try:

@@ -385,41 +385,35 @@ class GeocodingService:
         from app.models.geocoding_cache import GeocodingCache
         
         try:
-            # Verificar se já existe
-            result = await self.db.execute(
-                select(GeocodingCache).where(GeocodingCache.cep == cep)
-            )
-            existing = result.scalar_one_or_none()
-            
-            if existing:
-                # Atualizar
-                existing.latitude = data.get("latitude")
-                existing.longitude = data.get("longitude")
-                existing.logradouro = data.get("logradouro")
-                existing.bairro = data.get("bairro")
-                existing.cidade = data.get("cidade")
-                existing.estado = data.get("estado")
-                existing.source = data.get("source")
-            else:
-                # Criar novo
-                cache_obj = GeocodingCache(
-                    cep=cep,
-                    latitude=data.get("latitude"),
-                    longitude=data.get("longitude"),
-                    logradouro=data.get("logradouro"),
-                    bairro=data.get("bairro"),
-                    cidade=data.get("cidade"),
-                    estado=data.get("estado"),
-                    source=data.get("source")
+            # Usar savepoint para não afetar a transação externa em caso de falha
+            async with self.db.begin_nested():
+                result = await self.db.execute(
+                    select(GeocodingCache).where(GeocodingCache.cep == cep)
                 )
-                self.db.add(cache_obj)
-            
-            await self.db.commit()
+                existing = result.scalar_one_or_none()
+                if existing:
+                    existing.latitude = data.get("latitude")
+                    existing.longitude = data.get("longitude")
+                    existing.logradouro = data.get("logradouro")
+                    existing.bairro = data.get("bairro")
+                    existing.cidade = data.get("cidade")
+                    existing.estado = data.get("estado")
+                    existing.source = data.get("source")
+                else:
+                    cache_obj = GeocodingCache(
+                        cep=cep,
+                        latitude=data.get("latitude"),
+                        longitude=data.get("longitude"),
+                        logradouro=data.get("logradouro"),
+                        bairro=data.get("bairro"),
+                        cidade=data.get("cidade"),
+                        estado=data.get("estado"),
+                        source=data.get("source")
+                    )
+                    self.db.add(cache_obj)
             logger.info(f"Geocoding salvo no cache DB: {cep}")
-        
         except Exception as e:
             logger.error(f"Erro ao salvar no cache DB: {e}")
-            await self.db.rollback()
 
 
 # ==================== Funções Helper (Compatibilidade) ====================

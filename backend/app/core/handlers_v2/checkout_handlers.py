@@ -472,7 +472,41 @@ class CheckoutSummaryHandler(BaseHandler):
             
             # Salvar order_id no contexto
             conversation_context.collected_data["order_id"] = str(order.id)
-            
+
+            # PIX Asaas: gerar QR Code após criar pedido
+            pix_message = None
+            if (order_context and order_context.payment_method == "pix"):
+                try:
+                    from app.services.asaas_service import create_pix_for_order
+                    from app.database import AsyncSessionLocal
+                    from sqlalchemy import select
+                    from app.models.customer import Customer
+
+                    async with AsyncSessionLocal() as pix_db:
+                        cust_result = await pix_db.execute(
+                            select(Customer).where(Customer.id == order.customer_id)
+                        )
+                        cust = cust_result.scalar_one_or_none()
+                        # Reload order in new session
+                        from app.models.order import Order as OrderModel
+                        ord_result = await pix_db.execute(
+                            select(OrderModel).where(OrderModel.id == order.id)
+                        )
+                        ord_obj = ord_result.scalar_one_or_none()
+                        if cust and ord_obj and cust.cpf_cnpj:
+                            pix_data = await create_pix_for_order(pix_db, ord_obj, cust)
+                            await pix_db.commit()
+                            if pix_data and pix_data.get("pix_key"):
+                                pix_key = pix_data["pix_key"]
+                                pix_message = (
+                                    f"📱 *Pagamento PIX*\n\n"
+                                    f"Copie e cole o código abaixo:\n\n"
+                                    f"`{pix_key}`\n\n"
+                                    f"⏳ Válido por 1 hora. Após o pagamento confirmado, seu pedido será aprovado automaticamente."
+                                )
+                except Exception as pix_err:
+                    logger.warning(f"PIX Asaas falhou (não crítico): {pix_err}")
+
             # Mensagem de confirmação completa (resumo agrupado: 4x P13 em vez de 1x P13 repetido)
             items_text = self._format_items_summary_aggregated(
                 order_context.items if order_context and order_context.items else []
@@ -500,16 +534,18 @@ class CheckoutSummaryHandler(BaseHandler):
                 delivery_time=delivery_time,
             )
             
+            responses = [self._create_response(text=confirmation_text)]
+            if pix_message:
+                responses.append(self._create_response(text=pix_message))
+
             return self._create_result(
                 conversation_context=conversation_context,
                 customer_context=customer_context,
                 order_context=order_context,
-                responses=[
-                    self._create_response(text=confirmation_text)
-                ],
+                responses=responses,
                 next_state=ConversationState.COMPLETE_CONFIRMED
             )
-        
+
         # Alterar algo
         if msg_lower in ["edit", "alterar", "mudar"]:
             return self._create_result(

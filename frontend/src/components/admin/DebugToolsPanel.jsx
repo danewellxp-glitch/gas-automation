@@ -5,7 +5,7 @@ import { RefreshCcw, ShieldAlert } from 'lucide-react'
 function JsonBox({ value }) {
   if (!value) return null
   return (
-    <pre className="mt-3 max-h-80 overflow-auto rounded-lg bg-gray-50 p-3 text-xs text-gray-700">
+    <pre className="mt-3 max-h-80 overflow-auto rounded-lg bg-gray-50 dark:bg-gray-700 p-3 text-xs text-gray-700 dark:text-gray-300">
       {JSON.stringify(value, null, 2)}
     </pre>
   )
@@ -151,31 +151,31 @@ export default function DebugToolsPanel() {
   return (
     <div>
       <div className="mb-6">
-        <h2 className="text-2xl font-semibold text-gray-900">Ferramentas de Debug</h2>
-        <p className="text-gray-600">Admin-only • ações perigosas exigem confirmação dupla</p>
+        <h2 className="text-2xl font-semibold text-gray-900 dark:text-white">Ferramentas de Debug</h2>
+        <p className="text-gray-600 dark:text-gray-400">Admin-only • ações perigosas exigem confirmação dupla</p>
       </div>
 
       {error && (
-        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>
+        <div className="mb-4 rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 p-4 text-sm text-red-700 dark:text-red-400">{error}</div>
       )}
 
-      <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+      <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-900/20 p-4 text-sm text-amber-900">
         <div className="flex items-start gap-3">
           <ShieldAlert className="mt-0.5 h-5 w-5" />
           <div>
             <div className="font-semibold">Atenção</div>
-            <div className="text-amber-800">
+            <div className="text-amber-800 dark:text-amber-400">
               Use em ambiente controlado. Todas as ações são auditáveis e podem afetar pedidos reais.
             </div>
           </div>
         </div>
       </div>
 
-      <div className="mb-6 rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
+      <div className="mb-6 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-5 shadow-sm">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <div className="text-sm font-semibold text-gray-900">Confirmação dupla</div>
-            <div className="text-xs text-gray-500">Gere um token com validade curta para liberar ações perigosas.</div>
+            <div className="text-sm font-semibold text-gray-900 dark:text-white">Confirmação dupla</div>
+            <div className="text-xs text-gray-500 dark:text-gray-400">Gere um token com validade curta para liberar ações perigosas.</div>
           </div>
           <button
             onClick={requestConfirmToken}
@@ -187,27 +187,27 @@ export default function DebugToolsPanel() {
           </button>
         </div>
         {confirmToken && (
-          <div className="mt-3 rounded-lg border border-gray-200 bg-gray-50 p-3">
-            <div className="text-xs text-gray-600">confirm_token (TTL {confirmExpires}s)</div>
-            <div className="mt-1 break-all font-mono text-sm text-gray-900">{confirmToken}</div>
+          <div className="mt-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700 p-3">
+            <div className="text-xs text-gray-600 dark:text-gray-400">confirm_token (TTL {confirmExpires}s)</div>
+            <div className="mt-1 break-all font-mono text-sm text-gray-900 dark:text-white">{confirmToken}</div>
           </div>
         )}
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
-          <div className="text-sm font-semibold text-gray-900">Simular mensagem WhatsApp</div>
+        <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-5 shadow-sm">
+          <div className="text-sm font-semibold text-gray-900 dark:text-white">Simular mensagem WhatsApp</div>
           <div className="mt-3 space-y-3">
             <input
               value={simulate.phone}
               onChange={(e) => setSimulate((p) => ({ ...p, phone: e.target.value }))}
-              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
+              className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white dark:placeholder-gray-400 px-3 py-2 text-sm"
               placeholder="Telefone (ex: 5541999999999)"
             />
             <textarea
               value={simulate.message}
               onChange={(e) => setSimulate((p) => ({ ...p, message: e.target.value }))}
-              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
+              className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white dark:placeholder-gray-400 px-3 py-2 text-sm"
               rows={3}
               placeholder="Mensagem"
             />
@@ -222,20 +222,20 @@ export default function DebugToolsPanel() {
           <JsonBox value={simulateResult} />
         </div>
 
-        <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
-          <div className="text-sm font-semibold text-gray-900">Contexto Redis (chat:{'{phone}'})</div>
+        <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-5 shadow-sm">
+          <div className="text-sm font-semibold text-gray-900 dark:text-white">Contexto Redis (chat:{'{phone}'})</div>
           <div className="mt-3 space-y-3">
             <input
               value={contextPhone}
               onChange={(e) => setContextPhone(e.target.value)}
-              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
+              className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white dark:placeholder-gray-400 px-3 py-2 text-sm"
               placeholder="Telefone"
             />
             <div className="flex flex-wrap gap-2">
               <button
                 onClick={getContext}
                 disabled={loading || !contextPhone}
-                className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                className="rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white dark:placeholder-gray-400 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
               >
                 Buscar
               </button>
@@ -251,27 +251,27 @@ export default function DebugToolsPanel() {
           <JsonBox value={contextResult} />
         </div>
 
-        <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
-          <div className="text-sm font-semibold text-gray-900">Criar pedido fake</div>
+        <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-5 shadow-sm">
+          <div className="text-sm font-semibold text-gray-900 dark:text-white">Criar pedido fake</div>
           <div className="mt-3 space-y-3">
             <input
               value={fakeOrder.phone}
               onChange={(e) => setFakeOrder((p) => ({ ...p, phone: e.target.value }))}
-              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
+              className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white dark:placeholder-gray-400 px-3 py-2 text-sm"
               placeholder="Telefone"
             />
             <div className="grid gap-2 sm:grid-cols-2">
               <input
                 value={fakeOrder.product_code}
                 onChange={(e) => setFakeOrder((p) => ({ ...p, product_code: e.target.value }))}
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
+                className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white dark:placeholder-gray-400 px-3 py-2 text-sm"
                 placeholder="Produto (ex: P13)"
               />
               <input
                 type="number"
                 value={fakeOrder.quantity}
                 onChange={(e) => setFakeOrder((p) => ({ ...p, quantity: e.target.value }))}
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
+                className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white dark:placeholder-gray-400 px-3 py-2 text-sm"
                 min={1}
               />
             </div>
@@ -286,19 +286,19 @@ export default function DebugToolsPanel() {
           <JsonBox value={fakeOrderResult} />
         </div>
 
-        <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
-          <div className="text-sm font-semibold text-gray-900">Reexecutar state machine (passo a passo)</div>
+        <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-5 shadow-sm">
+          <div className="text-sm font-semibold text-gray-900 dark:text-white">Reexecutar state machine (passo a passo)</div>
           <div className="mt-3 space-y-3">
             <input
               value={reexec.phone}
               onChange={(e) => setReexec((p) => ({ ...p, phone: e.target.value }))}
-              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
+              className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white dark:placeholder-gray-400 px-3 py-2 text-sm"
               placeholder="Telefone"
             />
             <textarea
               value={reexec.messages}
               onChange={(e) => setReexec((p) => ({ ...p, messages: e.target.value }))}
-              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
+              className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white dark:placeholder-gray-400 px-3 py-2 text-sm"
               rows={5}
               placeholder={'Digite uma mensagem por linha\nEx:\nmenu\nfazer_pedido\nP13'}
             />

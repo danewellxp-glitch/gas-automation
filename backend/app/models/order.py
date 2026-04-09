@@ -55,6 +55,7 @@ class PaymentMethod(str, enum.Enum):
     DEBIT_CARD = "debit_card"
     CASH = "cash"
     BOLETO = "boleto"
+    FIADO = "fiado"  # Crédito / débito a prazo
 
 
 class Order(BaseModel):
@@ -212,6 +213,21 @@ class Order(BaseModel):
         nullable=True,
     )
     
+    # Agendamento
+    is_scheduled: Mapped[bool] = mapped_column(
+        sa.Boolean,
+        nullable=False,
+        default=False,
+        server_default=sa.text("false"),
+        comment="Se verdadeiro, pedido é agendado para data futura",
+    )
+    scheduled_for: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        index=True,
+        comment="Data/hora agendada para entrega",
+    )
+
     # Tracking de aprovação
     # use_alter=True para evitar conflito de metadata entre SQLModel (User) e BaseModel (Order)
     approved_by: Mapped[Optional[int]] = mapped_column(
@@ -250,6 +266,7 @@ class Order(BaseModel):
         Index("ix_orders_customer_status", "customer_id", "status"),
         Index("ix_orders_bairro_status", "delivery_bairro", "status"),
         Index("ix_orders_firebird_export", "firebird_export_status", "firebird_exported_at"),
+        Index("ix_orders_scheduled_for", "is_scheduled", "scheduled_for"),
     )
 
     def __repr__(self) -> str:

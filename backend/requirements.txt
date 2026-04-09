@@ -55,3 +55,6 @@ pytz==2025.2
 
 # PDF Export
 reportlab==4.2.5
+
+# Excel Export
+openpyxl==3.1.5

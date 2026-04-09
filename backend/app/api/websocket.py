@@ -810,3 +810,33 @@ async def emit_operator_message_to_driver(driver_id: str, message: str, from_use
             str(m.user_id) == str(driver_id)
         )
     )
+
+
+# =====================================
+# Evento de Atualização de Estoque de Vasilhames (ESTOQUE ↔ FINANCEIRO)
+# =====================================
+
+STOCK_ROLES = {UserRole.ADMIN, UserRole.OWNER, "financeiro", "estoque"}
+
+async def emit_vasilhame_update(posicao: list):
+    """
+    Emite evento de atualização de vasilhames para todos os usuários de Estoque e Financeiro.
+
+    Disparado sempre que o estoque de vasilhames muda (entrada, saída, ajuste, perda).
+    O frontend (FinanceiroDashboard e EstoqueDashboard) escuta 'vasilhame_update'
+    e atualiza os cards em tempo real sem precisar de refresh manual.
+
+    Args:
+        posicao: Lista de dicts com { tipo, qtd_cheios, qtd_vazios, qtd_em_campo }
+    """
+    await manager.broadcast(
+        message={
+            "type": "vasilhame_update",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "data": posicao,
+        },
+        filter_fn=lambda m: m.user_role in (
+            UserRole.ADMIN, UserRole.OWNER, "financeiro", "estoque"
+        ),
+    )
+    logger.info(f"📦 vasilhame_update emitido para {len(posicao)} tipo(s)")

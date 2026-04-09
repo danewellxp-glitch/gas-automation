@@ -33,6 +33,9 @@ from app.models.customer import Customer
 from app.models.delivery import Delivery, DeliveryStatus as DeliveryStatusEnum
 from app.models.order import Order, OrderItem, OrderStatus, TipoOperacao
 from app.models.product import Product
+from app.models.product_price_history import ProductPriceHistory
+from app.models.estoque.stock_product import StockProduct as StockProductModel
+from app.models.estoque.stock_balance import StockBalance as StockBalanceModel
 
 router = APIRouter(prefix="/owner", tags=["Owner", "Dashboard"])
 
@@ -1008,11 +1011,12 @@ async def get_owner_dashboard(
             )
         )
 
-    # Pedidos pagos parados (confirmados há mais de 15 min sem avançar para preparando)
+    # Pedidos pagos parados (confirmados há mais de 15 min sem avançar para preparando) — apenas hoje
     stuck_paid_stmt = select(func.count(Order.id)).where(
         and_(
             Order.status == OrderStatus.PAID.value,
             Order.paid_at.isnot(None),
+            Order.paid_at >= today_start,
             Order.paid_at < now - timedelta(minutes=15),
         )
     )
@@ -1026,6 +1030,91 @@ async def get_owner_dashboard(
                 count=stuck_paid_count,
             )
         )
+
+    # ==================== ALERTAS DE METAS MENSAIS ====================
+
+    db_settings_for_goals = await _get_or_create_settings(session)
+    goals = db_settings_for_goals.monthly_goals or {}
+
+    goal_revenue = float(goals.get("revenue", 0))
+    if goal_revenue > 0:
+        pct_revenue = revenue_month / goal_revenue * 100
+        if pct_revenue >= 100:
+            alerts.append(
+                ExecutiveAlert(
+                    type="warning",
+                    title="Meta de receita batida!",
+                    message=f"Receita do mês R$ {revenue_month:,.2f} — {pct_revenue:.0f}% da meta atingida!",
+                    value=revenue_month,
+                )
+            )
+        elif pct_revenue >= 90:
+            alerts.append(
+                ExecutiveAlert(
+                    type="warning",
+                    title="Quase na meta de receita",
+                    message=f"Receita do mês em {pct_revenue:.0f}% da meta — faltam R$ {goal_revenue - revenue_month:,.2f}",
+                    value=revenue_month,
+                )
+            )
+
+    goal_new_customers = int(goals.get("new_customers", 0))
+    if goal_new_customers > 0:
+        pct_customers = new_month / goal_new_customers * 100
+        if pct_customers >= 100:
+            alerts.append(
+                ExecutiveAlert(
+                    type="warning",
+                    title="Meta de novos clientes batida!",
+                    message=f"{new_month} novos clientes este mês — meta de {goal_new_customers} superada!",
+                    count=new_month,
+                )
+            )
+        elif pct_customers >= 90:
+            alerts.append(
+                ExecutiveAlert(
+                    type="warning",
+                    title="Quase na meta de novos clientes",
+                    message=f"{new_month} de {goal_new_customers} novos clientes este mês ({pct_customers:.0f}%)",
+                    count=new_month,
+                )
+            )
+
+    # ==================== ALERTAS DE ESTOQUE ====================
+
+    try:
+        low_stock_stmt = (
+            select(
+                StockProductModel.name,
+                StockProductModel.code,
+                StockBalanceModel.quantity_depot,
+                StockProductModel.min_stock_alert,
+            )
+            .join(StockBalanceModel, StockBalanceModel.stock_product_id == StockProductModel.id)
+            .where(
+                and_(
+                    StockProductModel.is_active == True,
+                    StockBalanceModel.quantity_depot < StockProductModel.min_stock_alert,
+                )
+            )
+            .order_by(StockBalanceModel.quantity_depot)
+        )
+        low_stock_rows = (await session.execute(low_stock_stmt)).all()
+
+        if low_stock_rows:
+            has_zero = any(r.quantity_depot == 0 for r in low_stock_rows)
+            names = ", ".join(r.name for r in low_stock_rows[:3])
+            suffix = f" (+{len(low_stock_rows) - 3} mais)" if len(low_stock_rows) > 3 else ""
+            alerts.append(
+                ExecutiveAlert(
+                    type="critical" if has_zero else "warning",
+                    title=f"Estoque baixo — {len(low_stock_rows)} produto{'s' if len(low_stock_rows) > 1 else ''}",
+                    message=f"{names}{suffix}",
+                    count=len(low_stock_rows),
+                )
+            )
+    except Exception:
+        pass  # Não quebrar o dashboard se o módulo de estoque tiver problema
 
     return OwnerDashboardResponse(
         cards=cards,
@@ -1401,6 +1490,14 @@ async def update_business_settings(
             if product:
                 new_price = Decimal(str(product_data.get("price", 0)))
                 if new_price != product.price:
+                    history_entry = ProductPriceHistory(
+                        product_code=product.code,
+                        product_name=product.name,
+                        old_price=float(product.price or 0),
+                        new_price=float(new_price),
+                        changed_by=getattr(current_user, "username", str(current_user.id)),
+                    )
+                    session.add(history_entry)
                     product.price = new_price
                     updated_count += 1
 
@@ -1417,3 +1514,72 @@ async def update_business_settings(
         "message": "Configurações atualizadas com sucesso",
         "products_updated": updated_count,
     }
+
+
+# ==================== HISTÓRICO DE PREÇOS ====================
+
+
+@router.get("/products/{code}/price-history")
+async def get_product_price_history(
+    code: str,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+):
+    """Retorna o histórico de alterações de preço de um produto."""
+    _require_owner(current_user)
+
+    stmt = (
+        select(ProductPriceHistory)
+        .where(ProductPriceHistory.product_code == code)
+        .order_by(desc(ProductPriceHistory.changed_at))
+        .limit(50)
+    )
+    result = await session.execute(stmt)
+    rows = result.scalars().all()
+
+    return [
+        {
+            "old_price": float(row.old_price),
+            "new_price": float(row.new_price),
+            "changed_at": row.changed_at.isoformat(),
+            "changed_by": row.changed_by or "sistema",
+        }
+        for row in rows
+    ]
+
+
+@router.get("/price-changes-this-month")
+async def get_price_changes_this_month(
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+):
+    """Mudanças de preço ocorridas no mês corrente, agrupadas por dia — para overlay no gráfico."""
+    _require_owner(current_user)
+
+    now = datetime.now(timezone.utc)
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+    stmt = (
+        select(
+            func.date(ProductPriceHistory.changed_at).label("day"),
+            ProductPriceHistory.product_name,
+            ProductPriceHistory.old_price,
+            ProductPriceHistory.new_price,
+        )
+        .where(ProductPriceHistory.changed_at >= month_start)
+        .order_by(ProductPriceHistory.changed_at)
+    )
+    rows = (await session.execute(stmt)).all()
+
+    by_day: dict[str, list] = {}
+    for row in rows:
+        d = row.day.isoformat()
+        if d not in by_day:
+            by_day[d] = []
+        by_day[d].append({
+            "product_name": row.product_name,
+            "old_price": float(row.old_price),
+            "new_price": float(row.new_price),
+        })
+
+    return [{"date": k, "changes": v} for k, v in sorted(by_day.items())]

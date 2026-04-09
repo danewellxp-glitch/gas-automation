@@ -1,0 +1,841 @@
+/**
+ * Dashboard Overview - Central de Comando
+ * Visão executiva com design de alta performance
+ */
+
+import { useState, useEffect } from 'react'
+import {
+  DollarSign, TrendingUp, TrendingDown, Package, Clock, AlertCircle,
+  RefreshCw, Activity, CheckCircle2, XCircle, CreditCard, Wallet, ChevronRight,
+  Zap, Target, Users
+} from 'lucide-react'
+import { apiRequest } from '../../utils/api'
+import CardDetailModal from './CardDetailModal'
+import RevenueChart from './RevenueChart'
+
+export default function DashboardOverview() {
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [period, setPeriod] = useState('day')
+  const [dashboardData, setDashboardData] = useState(null)
+  const [lastUpdate, setLastUpdate] = useState(null)
+  const [openModal, setOpenModal] = useState(null)
+  const [modalData, setModalData] = useState(null)
+  const [goals, setGoals] = useState(null)
+
+  useEffect(() => {
+    fetchDashboard()
+    fetchGoals()
+    const interval = setInterval(fetchDashboard, 30000)
+    return () => clearInterval(interval)
+  }, [period])
+
+  const fetchGoals = async () => {
+    try {
+      const data = await apiRequest('owner/settings')
+      setGoals(data?.monthly_goals || null)
+    } catch (err) {
+      console.error('Erro ao buscar metas:', err)
+    }
+  }
+
+  const fetchDashboard = async () => {
+    try {
+      setLoading(true)
+      setError('')
+      const data = await apiRequest(`owner/dashboard?period=${period}`)
+      setDashboardData(data)
+      setLastUpdate(new Date())
+    } catch (err) {
+      console.error('Erro ao buscar dashboard:', err)
+      if (err.message.includes('credenciais') || err.message.includes('401') || err.message.includes('Sessão expirada')) {
+        setError('Sessão expirada. Por favor, faça login novamente.')
+        setTimeout(() => {
+          window.location.href = '/login'
+        }, 2000)
+      } else if (err.message.includes('403') || err.message.includes('Acesso negado')) {
+        setError('Você não tem permissão para acessar este dashboard. Apenas owners e admins podem acessar.')
+      } else {
+        setError(err.message || 'Erro ao carregar dashboard')
+      }
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const formatCurrency = (value) => {
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL',
+      minimumFractionDigits: 2,
+    }).format(value || 0)
+  }
+
+  const formatPercent = (value) => {
+    if (value === null || value === undefined || isNaN(value)) return '-'
+    const numValue = parseFloat(value) || 0
+    const sign = numValue >= 0 ? '+' : ''
+    return `${sign}${numValue.toFixed(1)}%`
+  }
+
+  const getTrendIcon = (value) => {
+    if (value > 0) return <TrendingUp className="h-4 w-4 text-emerald-400" />
+    if (value < 0) return <TrendingDown className="h-4 w-4 text-red-400" />
+    return <Activity className="h-4 w-4 text-gray-400" />
+  }
+
+  const getTrendColor = (value) => {
+    if (value > 0) return 'text-emerald-400'
+    if (value < 0) return 'text-red-400'
+    return 'text-gray-400'
+  }
+
+  const handleCardClick = (cardType, title) => {
+    setOpenModal(cardType)
+    const details = fetchCardDetails(cardType)
+    setModalData(details)
+  }
+
+  const fetchCardDetails = (cardType) => {
+    const cards = dashboardData?.cards
+    const financial = dashboardData?.financial_breakdown
+    const operational = dashboardData?.operational_performance
+
+    switch (cardType) {
+      case 'revenue_today':
+        return {
+          title: 'Detalhes do Faturamento Hoje',
+          items: [
+            { label: 'Faturamento Total', value: formatCurrency(cards?.financial?.revenue_today || 0) },
+            { label: 'Pedidos Pagos', value: cards?.operational?.orders_completed || 0 },
+            { label: 'Ticket Médio', value: formatCurrency(cards?.financial?.average_ticket || 0) },
+            { label: 'Crescimento vs Ontem', value: formatPercent(cards?.financial?.growth_vs_yesterday || 0) },
+          ],
+        }
+      case 'revenue_month':
+        return {
+          title: 'Detalhes do Faturamento Mensal',
+          items: [
+            { label: 'Faturamento Total', value: formatCurrency(cards?.financial?.revenue_month || 0) },
+            { label: 'Receita Bruta', value: formatCurrency(financial?.gross_revenue || 0) },
+            { label: 'Receita Líquida', value: formatCurrency(financial?.net_revenue || 0) },
+            { label: 'Crescimento vs Mês Anterior', value: formatPercent(cards?.financial?.growth_vs_last_month || 0) },
+            { label: 'Pedidos Totais', value: cards?.operational?.orders_completed || 0 },
+          ],
+        }
+      case 'average_ticket':
+        const totalOrders = cards?.operational?.orders_completed || 0
+        const totalRevenue = cards?.financial?.revenue_today || 0
+        return {
+          title: 'Detalhes do Ticket Médio',
+          items: [
+            { label: 'Ticket Médio', value: formatCurrency(cards?.financial?.average_ticket || 0) },
+            { label: 'Pedidos Totais', value: totalOrders },
+            { label: 'Faturamento Total', value: formatCurrency(totalRevenue) },
+            { label: 'Cálculo', value: totalOrders > 0 ? formatCurrency(totalRevenue / totalOrders) : formatCurrency(0) },
+          ],
+        }
+      case 'growth_week':
+        return {
+          title: 'Detalhes do Crescimento Semanal',
+          items: [
+            { label: 'Crescimento', value: formatPercent(cards?.financial?.growth_vs_last_week || 0) },
+            { label: 'Faturamento Semana Atual', value: formatCurrency(cards?.financial?.revenue_week || cards?.financial?.revenue_today || 0) },
+            { label: 'Faturamento Semana Anterior', value: formatCurrency(cards?.financial?.revenue_last_week || 0) },
+            { label: 'Diferença', value: formatCurrency((cards?.financial?.revenue_week || cards?.financial?.revenue_today || 0) - (cards?.financial?.revenue_last_week || 0)) },
+          ],
+        }
+      case 'orders_today':
+        return {
+          title: 'Detalhes dos Pedidos Hoje',
+          items: [
+            { label: 'Pedidos Hoje', value: cards?.operational?.orders_today || 0 },
+            { label: 'Pedidos Ontem', value: cards?.operational?.orders_yesterday || 0 },
+            { label: 'Pedidos Concluídos', value: cards?.operational?.orders_completed || 0 },
+            { label: 'Pedidos Pendentes', value: (cards?.operational?.orders_today || 0) - (cards?.operational?.orders_completed || 0) },
+            { label: 'Pedidos Cancelados', value: cards?.operational?.orders_cancelled_today || 0 },
+          ],
+        }
+      case 'orders_completed':
+        const ordersToday = cards?.operational?.orders_today || 0
+        const ordersCompleted = cards?.operational?.orders_completed || 0
+        return {
+          title: 'Detalhes dos Pedidos Concluídos',
+          items: [
+            { label: 'Total Concluídos', value: ordersCompleted },
+            { label: 'Taxa de Conclusão', value: ordersToday > 0 ? `${((ordersCompleted / ordersToday) * 100).toFixed(1)}%` : '0%' },
+            { label: 'Tempo Médio de Entrega', value: cards?.operational?.average_delivery_time ? `${Math.round(cards.operational.average_delivery_time)} min` : '-' },
+            { label: 'Taxa de Entrega no Prazo', value: `${(cards?.operational?.on_time_delivery_rate || 0).toFixed(1)}%` },
+          ],
+        }
+      case 'orders_cancelled':
+        const cancelledToday = cards?.operational?.orders_cancelled_today || 0
+        const totalOrdersToday = cards?.operational?.orders_today || 0
+        return {
+          title: 'Detalhes dos Cancelamentos',
+          items: [
+            { label: 'Cancelados Hoje', value: cancelledToday },
+            { label: 'Total Cancelados', value: cards?.operational?.orders_cancelled || 0 },
+            { label: 'Taxa de Cancelamento', value: totalOrdersToday > 0 ? `${((cancelledToday / totalOrdersToday) * 100).toFixed(1)}%` : '0%' },
+            { label: 'Impacto Financeiro', value: formatCurrency(financial?.cancelled_revenue || 0) },
+          ],
+        }
+      case 'delivery_time':
+        return {
+          title: 'Detalhes do Tempo de Entrega',
+          items: [
+            { label: 'Tempo Médio', value: cards?.operational?.average_delivery_time ? `${Math.round(cards.operational.average_delivery_time)} min` : '-' },
+            { label: 'Taxa de Entrega no Prazo', value: `${(cards?.operational?.on_time_delivery_rate || 0).toFixed(1)}%` },
+            { label: 'Entregas Atrasadas', value: operational?.late_deliveries || 0 },
+            { label: 'Informações', value: 'Detalhes completos disponíveis na aba Performance' },
+          ],
+        }
+      case 'card_payment':
+        const cardCount = cards?.payment?.card_count || 0
+        const cardValue = cards?.payment?.card_value || 0
+        return {
+          title: 'Detalhes de Pagamentos em Cartão',
+          items: [
+            { label: 'Percentual', value: `${(cards?.payment?.card_percentage || 0).toFixed(1)}%` },
+            { label: 'Quantidade de Pedidos', value: cardCount },
+            { label: 'Valor Total', value: formatCurrency(cardValue) },
+            { label: 'Ticket Médio Cartão', value: cardCount > 0 ? formatCurrency(cardValue / cardCount) : formatCurrency(0) },
+          ],
+        }
+      case 'cash_payment':
+        const cashCount = cards?.payment?.cash_count || 0
+        const cashValue = cards?.payment?.cash_value || 0
+        return {
+          title: 'Detalhes de Pagamentos em Dinheiro',
+          items: [
+            { label: 'Percentual', value: `${(cards?.payment?.cash_percentage || 0).toFixed(1)}%` },
+            { label: 'Quantidade de Pedidos', value: cashCount },
+            { label: 'Valor Total', value: formatCurrency(cashValue) },
+            { label: 'Ticket Médio Dinheiro', value: cashCount > 0 ? formatCurrency(cashValue / cashCount) : formatCurrency(0) },
+          ],
+        }
+      case 'approval_rate':
+        const paidCount = cards?.payment?.paid_count || cards?.operational?.orders_completed || 0
+        const pendingCount = cards?.payment?.pending_count || ((cards?.operational?.orders_today || 0) - (cards?.operational?.orders_completed || 0))
+        return {
+          title: 'Detalhes da Taxa de Aprovação',
+          items: [
+            { label: 'Taxa de Aprovação', value: `${(cards?.payment?.approval_rate || 0).toFixed(1)}%` },
+            { label: 'Pedidos Pagos', value: paidCount },
+            { label: 'Pedidos Pendentes', value: pendingCount },
+            { label: 'Total de Pedidos', value: paidCount + pendingCount },
+          ],
+        }
+      default:
+        return { title: 'Detalhes', items: [] }
+    }
+  }
+
+  if (loading && !dashboardData) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <div className="text-center">
+          <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-gray-700 border-t-emerald-500" />
+          <p className="mt-4 text-gray-400 text-sm tracking-wide">CARREGANDO CENTRAL...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (error && !dashboardData) {
+    return (
+      <div className="rounded-xl border border-red-500/30 bg-red-950/40 p-6">
+        <div className="flex items-center gap-2">
+          <AlertCircle className="h-5 w-5 text-red-400" />
+          <span className="font-semibold text-red-300">Erro ao carregar dashboard</span>
+        </div>
+        <p className="mt-2 text-sm text-red-400">{error}</p>
+        <button
+          onClick={fetchDashboard}
+          className="mt-4 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-500"
+        >
+          Tentar novamente
+        </button>
+      </div>
+    )
+  }
+
+  if (!dashboardData) return null
+
+  const cards = dashboardData?.cards
+  const alerts = dashboardData?.alerts || []
+
+  return (
+    <div className="space-y-6">
+
+      {/* -- HEADER ----------------------------------------------- */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-4">
+          <div>
+            <div className="flex items-center gap-3">
+              <h1 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">
+                Central de Comando
+              </h1>
+              <span className="flex items-center gap-1.5 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1 text-xs font-semibold text-emerald-400 uppercase tracking-wider">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                Ao Vivo
+              </span>
+            </div>
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              {lastUpdate
+                ? `Última atualização: ${lastUpdate.toLocaleTimeString('pt-BR')}`
+                : 'Atualizando dados...'}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3">
+          {/* Seletor de período */}
+          <div className="flex rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800/80 p-1 gap-1">
+            {[
+              { key: 'day', label: 'Dia' },
+              { key: 'week', label: 'Semana' },
+              { key: 'month', label: 'Mês' },
+            ].map(({ key, label }) => (
+              <button
+                key={key}
+                onClick={() => setPeriod(key)}
+                className={`rounded-lg px-4 py-1.5 text-sm font-semibold transition-all ${
+                  period === key
+                    ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/20'
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          <button
+            onClick={fetchDashboard}
+            disabled={loading}
+            className="inline-flex items-center gap-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 transition-all"
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            Atualizar
+          </button>
+        </div>
+      </div>
+
+      {/* -- ALERTAS ---------------------------------------------- */}
+      {alerts.length > 0 && (
+        <div className="space-y-2">
+          {alerts.map((alert, idx) => (
+            <div
+              key={idx}
+              className={`flex items-start gap-3 rounded-xl border-l-4 p-4 ${
+                alert.type === 'critical'
+                  ? 'border-l-red-500 border border-red-500/20 bg-red-950/30 dark:bg-red-950/40'
+                  : 'border-l-amber-500 border border-amber-500/20 bg-amber-950/20 dark:bg-amber-950/30'
+              }`}
+            >
+              <AlertCircle
+                className={`h-5 w-5 mt-0.5 flex-shrink-0 ${
+                  alert.type === 'critical' ? 'text-red-400' : 'text-amber-400'
+                }`}
+              />
+              <div className="flex-1">
+                <div className="font-semibold text-gray-900 dark:text-white">{alert.title}</div>
+                <div className="mt-1 text-sm text-gray-600 dark:text-gray-300">{alert.message}</div>
+                {alert.count !== undefined && (
+                  <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">Quantidade: {alert.count}</div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* -- SEÇÃO FINANCEIRO ------------------------------------- */}
+      <div>
+        <div className="mb-4 flex items-center gap-2">
+          <div className="h-4 w-1 rounded-full bg-emerald-500" />
+          <h2 className="text-xs font-bold uppercase tracking-widest text-gray-500 dark:text-gray-400">
+            Financeiro
+          </h2>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+
+          {/* Faturamento Hoje */}
+          <div className="group relative overflow-hidden rounded-2xl border border-gray-200 dark:border-gray-700/60 bg-white dark:bg-gray-800/60 p-6 shadow-sm transition-all hover:shadow-lg hover:shadow-emerald-500/5 hover:border-emerald-500/30">
+            <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-emerald-500 to-teal-400" />
+            <div className="flex items-start justify-between">
+              <div className="flex-1">
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                  Faturamento Hoje
+                </p>
+                <p className="mt-3 text-3xl font-bold text-gray-900 dark:text-white">
+                  {formatCurrency(cards?.financial?.revenue_today || 0)}
+                </p>
+                {cards?.financial?.growth_vs_yesterday !== undefined && cards?.financial?.growth_vs_yesterday !== null && (
+                  <div className={`mt-2 flex items-center gap-1 text-sm font-medium ${getTrendColor(cards.financial.growth_vs_yesterday)}`}>
+                    {getTrendIcon(cards.financial.growth_vs_yesterday)}
+                    <span>{formatPercent(cards.financial.growth_vs_yesterday)} vs ontem</span>
+                  </div>
+                )}
+              </div>
+              <div className="rounded-xl bg-emerald-500/10 ring-1 ring-emerald-500/20 p-3">
+                <DollarSign className="h-5 w-5 text-emerald-500" />
+              </div>
+            </div>
+          </div>
+
+          {/* Faturamento Mês */}
+          <button
+            onClick={() => handleCardClick('revenue_month', 'Faturamento Mês')}
+            className="group relative overflow-hidden rounded-2xl border border-gray-200 dark:border-gray-700/60 bg-white dark:bg-gray-800/60 p-6 text-left shadow-sm transition-all hover:shadow-lg hover:shadow-blue-500/5 hover:border-blue-500/30"
+          >
+            <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-500 to-indigo-400" />
+            <div className="flex items-start justify-between">
+              <div className="flex-1">
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                  Faturamento Mês
+                </p>
+                <p className="mt-3 text-3xl font-bold text-gray-900 dark:text-white">
+                  {formatCurrency(cards?.financial?.revenue_month || 0)}
+                </p>
+                {cards?.financial?.growth_vs_last_month !== undefined && cards?.financial?.growth_vs_last_month !== null && (
+                  <div className={`mt-2 flex items-center gap-1 text-sm font-medium ${getTrendColor(cards.financial.growth_vs_last_month)}`}>
+                    {getTrendIcon(cards.financial.growth_vs_last_month)}
+                    <span>{formatPercent(cards.financial.growth_vs_last_month)} vs mês ant.</span>
+                  </div>
+                )}
+              </div>
+              <div className="flex items-start gap-2">
+                <div className="rounded-xl bg-blue-500/10 ring-1 ring-blue-500/20 p-3">
+                  <TrendingUp className="h-5 w-5 text-blue-500" />
+                </div>
+                <ChevronRight className="h-4 w-4 text-gray-400 mt-1 opacity-0 group-hover:opacity-100 transition-opacity" />
+              </div>
+            </div>
+          </button>
+
+          {/* Ticket Médio */}
+          <button
+            onClick={() => handleCardClick('average_ticket', 'Ticket Médio')}
+            className="group relative overflow-hidden rounded-2xl border border-gray-200 dark:border-gray-700/60 bg-white dark:bg-gray-800/60 p-6 text-left shadow-sm transition-all hover:shadow-lg hover:shadow-violet-500/5 hover:border-violet-500/30"
+          >
+            <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-violet-500 to-purple-400" />
+            <div className="flex items-start justify-between">
+              <div className="flex-1">
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                  Ticket Médio
+                </p>
+                <p className="mt-3 text-3xl font-bold text-gray-900 dark:text-white">
+                  {formatCurrency(cards?.financial?.average_ticket || 0)}
+                </p>
+                <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">Por pedido</p>
+              </div>
+              <div className="flex items-start gap-2">
+                <div className="rounded-xl bg-violet-500/10 ring-1 ring-violet-500/20 p-3">
+                  <Activity className="h-5 w-5 text-violet-500" />
+                </div>
+                <ChevronRight className="h-4 w-4 text-gray-400 mt-1 opacity-0 group-hover:opacity-100 transition-opacity" />
+              </div>
+            </div>
+          </button>
+
+          {/* Crescimento Semanal */}
+          <button
+            onClick={() => handleCardClick('growth_week', 'Crescimento Semanal')}
+            className="group relative overflow-hidden rounded-2xl border border-gray-200 dark:border-gray-700/60 bg-white dark:bg-gray-800/60 p-6 text-left shadow-sm transition-all hover:shadow-lg hover:shadow-cyan-500/5 hover:border-cyan-500/30"
+          >
+            <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-cyan-500 to-sky-400" />
+            <div className="flex items-start justify-between">
+              <div className="flex-1">
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                  Crescimento Semanal
+                </p>
+                <p className={`mt-3 text-3xl font-bold ${getTrendColor(cards?.financial?.growth_vs_last_week || 0)}`}>
+                  {formatPercent(cards?.financial?.growth_vs_last_week || 0)}
+                </p>
+                <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">vs semana passada</p>
+              </div>
+              <div className="flex items-start gap-2">
+                <div className="rounded-xl bg-cyan-500/10 ring-1 ring-cyan-500/20 p-3">
+                  <Zap className="h-5 w-5 text-cyan-500" />
+                </div>
+                <ChevronRight className="h-4 w-4 text-gray-400 mt-1 opacity-0 group-hover:opacity-100 transition-opacity" />
+              </div>
+            </div>
+          </button>
+
+        </div>
+      </div>
+
+      {/* -- SEÇÃO OPERAÇÃO --------------------------------------- */}
+      <div>
+        <div className="mb-4 flex items-center gap-2">
+          <div className="h-4 w-1 rounded-full bg-blue-500" />
+          <h2 className="text-xs font-bold uppercase tracking-widest text-gray-500 dark:text-gray-400">
+            Operação
+          </h2>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+
+          {/* Pedidos Hoje */}
+          <button
+            onClick={() => handleCardClick('orders_today', 'Pedidos Hoje')}
+            className="group relative overflow-hidden rounded-2xl border border-gray-200 dark:border-gray-700/60 bg-white dark:bg-gray-800/60 p-6 text-left shadow-sm transition-all hover:shadow-lg hover:shadow-blue-500/5 hover:border-blue-500/30"
+          >
+            <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-500 to-indigo-400" />
+            <div className="flex items-start justify-between">
+              <div className="flex-1">
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                  Pedidos Hoje
+                </p>
+                <p className="mt-3 text-3xl font-bold text-gray-900 dark:text-white">
+                  {cards?.operational?.orders_today || 0}
+                </p>
+                {cards?.operational?.orders_yesterday !== undefined && (
+                  <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                    Ontem: {cards.operational.orders_yesterday}
+                  </p>
+                )}
+              </div>
+              <div className="flex items-start gap-2">
+                <div className="rounded-xl bg-blue-500/10 ring-1 ring-blue-500/20 p-3">
+                  <Package className="h-5 w-5 text-blue-500" />
+                </div>
+                <ChevronRight className="h-4 w-4 text-gray-400 mt-1 opacity-0 group-hover:opacity-100 transition-opacity" />
+              </div>
+            </div>
+          </button>
+
+          {/* Pedidos Concluídos */}
+          <button
+            onClick={() => handleCardClick('orders_completed', 'Pedidos Concluídos')}
+            className="group relative overflow-hidden rounded-2xl border border-gray-200 dark:border-gray-700/60 bg-white dark:bg-gray-800/60 p-6 text-left shadow-sm transition-all hover:shadow-lg hover:shadow-emerald-500/5 hover:border-emerald-500/30"
+          >
+            <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-emerald-500 to-teal-400" />
+            <div className="flex items-start justify-between">
+              <div className="flex-1">
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                  Concluídos
+                </p>
+                <p className="mt-3 text-3xl font-bold text-emerald-500">
+                  {cards?.operational?.orders_completed || 0}
+                </p>
+                <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">Total entregues</p>
+              </div>
+              <div className="flex items-start gap-2">
+                <div className="rounded-xl bg-emerald-500/10 ring-1 ring-emerald-500/20 p-3">
+                  <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+                </div>
+                <ChevronRight className="h-4 w-4 text-gray-400 mt-1 opacity-0 group-hover:opacity-100 transition-opacity" />
+              </div>
+            </div>
+          </button>
+
+          {/* Cancelados */}
+          <button
+            onClick={() => handleCardClick('orders_cancelled', 'Cancelados Hoje')}
+            className="group relative overflow-hidden rounded-2xl border border-gray-200 dark:border-gray-700/60 bg-white dark:bg-gray-800/60 p-6 text-left shadow-sm transition-all hover:shadow-lg hover:shadow-rose-500/5 hover:border-rose-500/30"
+          >
+            <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-rose-500 to-red-400" />
+            <div className="flex items-start justify-between">
+              <div className="flex-1">
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                  Cancelados Hoje
+                </p>
+                <p className="mt-3 text-3xl font-bold text-rose-500">
+                  {cards?.operational?.orders_cancelled_today || 0}
+                </p>
+                <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                  Total: {cards?.operational?.orders_cancelled || 0}
+                </p>
+              </div>
+              <div className="flex items-start gap-2">
+                <div className="rounded-xl bg-rose-500/10 ring-1 ring-rose-500/20 p-3">
+                  <XCircle className="h-5 w-5 text-rose-500" />
+                </div>
+                <ChevronRight className="h-4 w-4 text-gray-400 mt-1 opacity-0 group-hover:opacity-100 transition-opacity" />
+              </div>
+            </div>
+          </button>
+
+          {/* Tempo Médio de Entrega */}
+          <button
+            onClick={() => handleCardClick('delivery_time', 'Tempo Médio de Entrega')}
+            className="group relative overflow-hidden rounded-2xl border border-gray-200 dark:border-gray-700/60 bg-white dark:bg-gray-800/60 p-6 text-left shadow-sm transition-all hover:shadow-lg hover:shadow-amber-500/5 hover:border-amber-500/30"
+          >
+            <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-amber-500 to-orange-400" />
+            <div className="flex items-start justify-between">
+              <div className="flex-1">
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                  Tempo Médio
+                </p>
+                <p className="mt-3 text-3xl font-bold text-gray-900 dark:text-white">
+                  {cards?.operational?.average_delivery_time
+                    ? `${Math.round(cards.operational.average_delivery_time)} min`
+                    : '-'}
+                </p>
+                {cards?.operational?.on_time_delivery_rate !== undefined && cards?.operational?.on_time_delivery_rate !== null && (
+                  <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                    {(cards.operational.on_time_delivery_rate || 0).toFixed(1)}% no prazo
+                  </p>
+                )}
+              </div>
+              <div className="flex items-start gap-2">
+                <div className="rounded-xl bg-amber-500/10 ring-1 ring-amber-500/20 p-3">
+                  <Clock className="h-5 w-5 text-amber-500" />
+                </div>
+                <ChevronRight className="h-4 w-4 text-gray-400 mt-1 opacity-0 group-hover:opacity-100 transition-opacity" />
+              </div>
+            </div>
+          </button>
+
+        </div>
+      </div>
+
+      {/* -- SEÇÃO PAGAMENTOS ------------------------------------- */}
+      <div>
+        <div className="mb-4 flex items-center gap-2">
+          <div className="h-4 w-1 rounded-full bg-violet-500" />
+          <h2 className="text-xs font-bold uppercase tracking-widest text-gray-500 dark:text-gray-400">
+            Pagamentos
+          </h2>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-3">
+
+          {/* Cartão */}
+          <button
+            onClick={() => handleCardClick('card_payment', 'Pagamentos em Cartão')}
+            className="group relative overflow-hidden rounded-2xl border border-gray-200 dark:border-gray-700/60 bg-white dark:bg-gray-800/60 p-6 text-left shadow-sm transition-all hover:shadow-lg hover:shadow-blue-500/5 hover:border-blue-500/30"
+          >
+            <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-500 to-indigo-400" />
+            <div className="flex items-start justify-between">
+              <div className="flex-1">
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                  Cartão
+                </p>
+                <p className="mt-3 text-3xl font-bold text-gray-900 dark:text-white">
+                  {(cards?.payment?.card_percentage || 0).toFixed(1)}%
+                </p>
+                <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                  {cards?.payment?.card_count || 0} pedidos
+                </p>
+              </div>
+              <div className="flex items-start gap-2">
+                <div className="rounded-xl bg-blue-500/10 ring-1 ring-blue-500/20 p-3">
+                  <CreditCard className="h-5 w-5 text-blue-500" />
+                </div>
+                <ChevronRight className="h-4 w-4 text-gray-400 mt-1 opacity-0 group-hover:opacity-100 transition-opacity" />
+              </div>
+            </div>
+          </button>
+
+          {/* Dinheiro */}
+          <button
+            onClick={() => handleCardClick('cash_payment', 'Pagamentos em Dinheiro')}
+            className="group relative overflow-hidden rounded-2xl border border-gray-200 dark:border-gray-700/60 bg-white dark:bg-gray-800/60 p-6 text-left shadow-sm transition-all hover:shadow-lg hover:shadow-emerald-500/5 hover:border-emerald-500/30"
+          >
+            <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-emerald-500 to-teal-400" />
+            <div className="flex items-start justify-between">
+              <div className="flex-1">
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                  Dinheiro
+                </p>
+                <p className="mt-3 text-3xl font-bold text-gray-900 dark:text-white">
+                  {(cards?.payment?.cash_percentage || 0).toFixed(1)}%
+                </p>
+                <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                  {cards?.payment?.cash_count || 0} pedidos
+                </p>
+              </div>
+              <div className="flex items-start gap-2">
+                <div className="rounded-xl bg-emerald-500/10 ring-1 ring-emerald-500/20 p-3">
+                  <Wallet className="h-5 w-5 text-emerald-500" />
+                </div>
+                <ChevronRight className="h-4 w-4 text-gray-400 mt-1 opacity-0 group-hover:opacity-100 transition-opacity" />
+              </div>
+            </div>
+          </button>
+
+          {/* Taxa de Aprovação */}
+          <button
+            onClick={() => handleCardClick('approval_rate', 'Taxa de Aprovação')}
+            className="group relative overflow-hidden rounded-2xl border border-gray-200 dark:border-gray-700/60 bg-white dark:bg-gray-800/60 p-6 text-left shadow-sm transition-all hover:shadow-lg hover:shadow-violet-500/5 hover:border-violet-500/30"
+          >
+            <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-violet-500 to-purple-400" />
+            <div className="flex items-start justify-between">
+              <div className="flex-1">
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                  Taxa de Aprovação
+                </p>
+                <p className="mt-3 text-3xl font-bold text-gray-900 dark:text-white">
+                  {(cards?.payment?.approval_rate || 0).toFixed(1)}%
+                </p>
+                <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">Pedidos pagos</p>
+              </div>
+              <div className="flex items-start gap-2">
+                <div className="rounded-xl bg-violet-500/10 ring-1 ring-violet-500/20 p-3">
+                  <CheckCircle2 className="h-5 w-5 text-violet-500" />
+                </div>
+                <ChevronRight className="h-4 w-4 text-gray-400 mt-1 opacity-0 group-hover:opacity-100 transition-opacity" />
+              </div>
+            </div>
+          </button>
+
+        </div>
+      </div>
+
+      {/* -- METAS DO MES ----------------------------------------- */}
+      {goals && (goals.revenue > 0 || goals.orders > 0 || goals.new_customers > 0) && (
+        <div>
+          <div className="mb-4 flex items-center gap-2">
+            <div className="h-4 w-1 rounded-full bg-amber-500" />
+            <h2 className="text-xs font-bold uppercase tracking-widest text-gray-500 dark:text-gray-400">
+              Metas do Mes
+            </h2>
+          </div>
+          <div className="rounded-2xl border border-gray-200 dark:border-gray-700/60 bg-white dark:bg-gray-800/60 p-6 shadow-sm">
+            <div className="grid gap-6 sm:grid-cols-3">
+
+              {goals.revenue > 0 && (() => {
+                const current = dashboardData?.cards?.financial?.revenue_month || 0
+                const pct = Math.min((current / goals.revenue) * 100, 100)
+                return (
+                  <div>
+                    <div className="mb-2 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="rounded-lg bg-emerald-500/10 p-1.5 ring-1 ring-emerald-500/20">
+                          <DollarSign className="h-4 w-4 text-emerald-500" />
+                        </div>
+                        <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">Receita</span>
+                      </div>
+                      <span className={`text-sm font-bold ${pct >= 100 ? 'text-emerald-500' : pct >= 70 ? 'text-amber-500' : 'text-gray-400'}`}>
+                        {pct.toFixed(0)}%
+                      </span>
+                    </div>
+                    <div className="h-2 w-full rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
+                      <div
+                        className={`h-2 rounded-full transition-all duration-700 ${pct >= 100 ? 'bg-emerald-500' : pct >= 70 ? 'bg-amber-500' : 'bg-blue-500'}`}
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                    <div className="mt-2 flex justify-between text-xs text-gray-500 dark:text-gray-400">
+                      <span>{formatCurrency(current)}</span>
+                      <span>Meta: {formatCurrency(goals.revenue)}</span>
+                    </div>
+                  </div>
+                )
+              })()}
+
+              {goals.orders > 0 && (() => {
+                const current = dashboardData?.cards?.operational?.orders_completed || 0
+                const pct = Math.min((current / goals.orders) * 100, 100)
+                return (
+                  <div>
+                    <div className="mb-2 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="rounded-lg bg-blue-500/10 p-1.5 ring-1 ring-blue-500/20">
+                          <Package className="h-4 w-4 text-blue-500" />
+                        </div>
+                        <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">Pedidos</span>
+                      </div>
+                      <span className={`text-sm font-bold ${pct >= 100 ? 'text-emerald-500' : pct >= 70 ? 'text-amber-500' : 'text-gray-400'}`}>
+                        {pct.toFixed(0)}%
+                      </span>
+                    </div>
+                    <div className="h-2 w-full rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
+                      <div
+                        className={`h-2 rounded-full transition-all duration-700 ${pct >= 100 ? 'bg-emerald-500' : pct >= 70 ? 'bg-amber-500' : 'bg-blue-500'}`}
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                    <div className="mt-2 flex justify-between text-xs text-gray-500 dark:text-gray-400">
+                      <span>{current} pedidos</span>
+                      <span>Meta: {goals.orders}</span>
+                    </div>
+                  </div>
+                )
+              })()}
+
+              {goals.new_customers > 0 && (() => {
+                const current = dashboardData?.financial_breakdown?.new_customers_count || 0
+                const pct = Math.min((current / goals.new_customers) * 100, 100)
+                return (
+                  <div>
+                    <div className="mb-2 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="rounded-lg bg-violet-500/10 p-1.5 ring-1 ring-violet-500/20">
+                          <Users className="h-4 w-4 text-violet-500" />
+                        </div>
+                        <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">Novos Clientes</span>
+                      </div>
+                      <span className={`text-sm font-bold ${pct >= 100 ? 'text-emerald-500' : pct >= 70 ? 'text-amber-500' : 'text-gray-400'}`}>
+                        {pct.toFixed(0)}%
+                      </span>
+                    </div>
+                    <div className="h-2 w-full rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
+                      <div
+                        className={`h-2 rounded-full transition-all duration-700 ${pct >= 100 ? 'bg-emerald-500' : pct >= 70 ? 'bg-amber-500' : 'bg-violet-500'}`}
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                    <div className="mt-2 flex justify-between text-xs text-gray-500 dark:text-gray-400">
+                      <span>{current} clientes</span>
+                      <span>Meta: {goals.new_customers}</span>
+                    </div>
+                  </div>
+                )
+              })()}
+
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* -- RECEITA RECENTE --------------------------------------- */}
+      {dashboardData?.revenue_chart && (dashboardData.revenue_chart?.current?.length > 0 || dashboardData.revenue_chart?.previous?.length > 0) && (
+        <div>
+          <div className="mb-4 flex items-center gap-2">
+            <div className="h-4 w-1 rounded-full bg-blue-500" />
+            <h2 className="text-xs font-bold uppercase tracking-widest text-gray-500 dark:text-gray-400">
+              Receita Recente
+            </h2>
+          </div>
+          <div className="rounded-2xl border border-gray-200 dark:border-gray-700/60 bg-white dark:bg-gray-800/60 p-6 shadow-sm">
+            <div className="h-64">
+              <RevenueChart data={dashboardData.revenue_chart} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* -- MODAL DE DETALHES ------------------------------------ */}
+      <CardDetailModal
+        isOpen={openModal !== null}
+        onClose={() => {
+          setOpenModal(null)
+          setModalData(null)
+        }}
+        title={modalData?.title || 'Detalhes'}
+      >
+        {modalData?.error ? (
+          <div className="text-center text-red-600">{modalData.error}</div>
+        ) : modalData?.items ? (
+          <div className="space-y-3">
+            {modalData.items.map((item, idx) => (
+              <div
+                key={idx}
+                className="flex items-center justify-between rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-4 py-3"
+              >
+                <span className="text-sm font-medium text-gray-600 dark:text-gray-400">{item.label}</span>
+                <span className="text-sm font-bold text-gray-900 dark:text-white">{item.value}</span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center text-gray-500">Carregando detalhes...</div>
+        )}
+      </CardDetailModal>
+    </div>
+  )
+}

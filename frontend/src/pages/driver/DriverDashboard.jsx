@@ -339,7 +339,7 @@ export default function DriverDashboard() {
         {/* Toggle de Status */}
         <div className="bg-gradient-to-r from-slate-800/90 to-slate-700/90 backdrop-blur-lg rounded-2xl p-6 border border-slate-600/30 shadow-xl">
           <h3 className="text-white font-semibold mb-4">Status da Operação</h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             {Object.entries(DRIVER_STATUS).map(([key, config]) => (
               <button
                 key={key}
@@ -357,7 +357,7 @@ export default function DriverDashboard() {
         </div>
 
         {/* Cards de Estatísticas */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="bg-gradient-to-br from-emerald-500/20 to-emerald-600/20 backdrop-blur-lg rounded-2xl p-5 border border-emerald-500/30 shadow-xl">
             <div className="flex items-center justify-between mb-2">
               <Package className="w-8 h-8 text-emerald-400" />
@@ -398,7 +398,7 @@ export default function DriverDashboard() {
             <Clock className="w-5 h-5 text-emerald-400" />
             Tempo Trabalhado
           </h3>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <p className="text-slate-400 text-sm mb-1">Hoje</p>
               <p className="text-white text-2xl font-bold">{timeWorked.today}</p>

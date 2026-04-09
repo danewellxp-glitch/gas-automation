@@ -1,112 +1,119 @@
-import { useMemo, useState } from 'react'
-import { Menu, LogOut, Moon, Sun } from 'lucide-react'
+import { useState, useMemo } from 'react'
+import { Menu, Bell, Sun, Moon, LogOut, ChevronDown, Flame } from 'lucide-react'
 
 export default function FlowbiteNavbar({
-  appName,
-  pageTitle,
-  userEmail,
+  appName = 'GasMaster',
+  pageTitle = '',
+  userEmail = '',
   onLogout,
   onToggleSidebar,
-  rightSlot =        null,
   isDark = false,
   onToggleDark,
+  rightSlot = null,
 }) {
-  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
 
   const initials = useMemo(() => {
     if (!userEmail) return 'U'
-    const part = userEmail.split('@')[0] || 'U'
-    return part.slice(0, 2).toUpperCase()
+    return (userEmail.split('@')[0] || 'U').slice(0, 2).toUpperCase()
   }, [userEmail])
 
   return (
-    <nav className="fixed top-0 z-30 w-full border-b    border-gray-200 bg-white dark:border-gray-700  dark:bg-gray-800">
-      <div className="px-4 py-3 lg:px-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={onToggleSidebar}
-              className="inline-flex items-center rounded-lg p-2 text-gray-600 hover:bg-gray-100 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-200 lg:hidden"
-              aria-label="Abrir menu"
-            >
-              <Menu className="h-6 w-6" />
-            </button>
+    <header className="fixed top-0 inset-x-0 z-30 flex items-center h-12 bg-white border-b border-gray-200 px-4 dark:bg-gray-900 dark:border-gray-800">
 
-            <div className="flex items-center gap-3">
-              <div className="h-9 w-9 rounded-lg bg-primary-600 text-white grid place-items-center font-semibold">
-                GA
-              </div>
-              <div className="min-w-0">
-                <div className="text-sm font-semibold text-gray-900 leading-4">{appName}</div>
-                {pageTitle ? (
-                  <div className="text-xs text-gray-500 truncate">{pageTitle}</div>
-                ) : null}
-              </div>
-            </div>
-          </div>
+      {/* Left side */}
+      <div className="flex items-center gap-2 min-w-0">
+        {/* Hamburger – mobile only */}
+        <button
+          type="button"
+          onClick={onToggleSidebar}
+          className="lg:hidden p-1.5 rounded-md text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
+          aria-label="Abrir menu"
+        >
+          <Menu className="w-4 h-4" />
+        </button>
 
-          <div className="flex items-center gap-3">
-            {rightSlot}
+        {/* Logo mark — visible only on mobile (desktop: sidebar owns the brand) */}
+        <div className="flex items-center gap-2 shrink-0 lg:hidden">
+          <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-primary-500">
+            <Flame className="w-4 h-4 text-white" />
+          </span>
+          <span className="font-semibold text-sm text-gray-900 dark:text-white">
+            {appName}
+          </span>
+        </div>
 
-              {/* Dark mode toggle */}
-            <button
-  type="button"
-              onClick={onToggleDark}
-              className="rounded-lg p-2 text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700"
-              >
-              {isDark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
-            </button>
+        {/* Page breadcrumb divider – desktop */}
+        {pageTitle && (
+          <>
+            <span className="hidden lg:block h-4 w-px bg-gray-200 dark:bg-gray-700 mx-1" />
+            <span className="hidden lg:block text-sm text-gray-500 dark:text-gray-400 truncate max-w-[200px]">
+              {pageTitle}
+            </span>
+          </>
+        )}
+      </div>
 
-            {/* User  */}
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setIsUserMenuOpen((v) => !v)}
-                className="flex items-center gap-3 rounded-lg p-2 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-200"
-                aria-label="Menu do usuário"
-              >
-                <div className="hidden text-right sm:block">
-                  <div className="text-sm font-medium text-gray-900">Conta</div>
-                  <div className="text-xs text-gray-500">{userEmail || '—'}</div>
+      {/* Right side */}
+      <div className="flex items-center gap-1.5 ml-auto">
+        {rightSlot}
+
+        {/* Dark mode toggle */}
+        <button
+          type="button"
+          onClick={onToggleDark}
+          className="p-1.5 rounded-md text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
+          aria-label="Alternar tema"
+        >
+          {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+        </button>
+
+        {/* Vertical divider */}
+        <span className="h-5 w-px bg-gray-200 dark:bg-gray-700 mx-1" />
+
+        {/* User menu */}
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setMenuOpen(v => !v)}
+            className="flex items-center gap-2 py-1 px-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 focus:outline-none"
+          >
+            <span className="w-7 h-7 rounded-full bg-gray-900 dark:bg-gray-700 text-white text-xs font-semibold grid place-items-center shrink-0">
+              {initials}
+            </span>
+            <span className="hidden sm:flex items-center gap-1 text-sm text-gray-700 dark:text-gray-300 max-w-[140px]">
+              <span className="truncate">{userEmail || '—'}</span>
+              <ChevronDown className="w-3 h-3 shrink-0 text-gray-400" />
+            </span>
+          </button>
+
+          {menuOpen && (
+            <>
+              <div
+                className="fixed inset-0 z-40"
+                onClick={() => setMenuOpen(false)}
+                aria-hidden="true"
+              />
+              <div className="absolute right-0 z-50 mt-1.5 w-56 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg overflow-hidden">
+                <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700">
+                  <p className="text-xs text-gray-400 dark:text-gray-500">Logado como</p>
+                  <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{userEmail || '—'}</p>
                 </div>
-                <div className="h-9 w-9 rounded-full bg-gray-900 text-white grid place-items-center text-sm font-semibold">
-                  {initials}
+                <div className="p-1">
+                  <button
+                    type="button"
+                    onClick={() => { setMenuOpen(false); onLogout?.() }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700"
+                  >
+                    <LogOut className="w-4 h-4 text-gray-400" />
+                    Sair
+                  </button>
                 </div>
-              </button>
-
-              {isUserMenuOpen ? (
-                <>
-                  <div
-                    className="fixed inset-0 z-40"
-                    onClick={() => setIsUserMenuOpen(false)}
-                    aria-hidden="true"
-                  />
-                  <div className="absolute right-0 z-50 mt-2 w-56 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg">
-                    <div className="px-4 py-3">
-                      <div className="text-xs text-gray-500">Logado como</div>
-                      <div className="text-sm font-medium text-gray-900 truncate">{userEmail || '—'}</div>
-                    </div>
-                    <div className="border-t border-gray-100" />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsUserMenuOpen(false)
-                        onLogout?.()
-                      }}
-                      className="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                    >
-                      <LogOut className="h-4 w-4" />
-                      Sair
-                    </button>
-                  </div>
-                </>
-              ) : null}
-            </div>
-          </div>
+              </div>
+            </>
+          )}
         </div>
       </div>
-    </nav>
+    </header>
   )
 }
-
