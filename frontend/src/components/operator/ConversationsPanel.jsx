@@ -404,12 +404,12 @@ function ChatWindow({ conversation, messages, loading, onSend, onAssign, onEnd, 
   return (
     <div className="flex flex-col h-full">
       {/* Chat header */}
-      <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
-        <div className="flex items-center gap-3 min-w-0">
+      <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex-nowrap overflow-visible">
+        <div className="flex items-center gap-3 min-w-0 flex-nowrap">
           <div className="w-9 h-9 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center shrink-0">
             <User className="w-5 h-5 text-primary-600 dark:text-primary-400" />
           </div>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-shrink-0">
             <p className="text-base font-semibold text-gray-900 dark:text-white truncate">
               {conversation.name || 'Cliente'}
             </p>
@@ -429,7 +429,7 @@ function ChatWindow({ conversation, messages, loading, onSend, onAssign, onEnd, 
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5 shrink-0">
+        <div className="flex items-center gap-1.5 shrink-0 flex-nowrap">
           {!isAssignedToMe && conversation.status !== 'closed' && (
             <button
               type="button"
