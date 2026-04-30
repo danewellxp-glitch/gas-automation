@@ -510,6 +510,7 @@ function ChatWindow({ conversation, messages, loading, onSend, onAssign, onEnd, 
             <button
               onClick={handleSend}
               disabled={sending || !inputMessage.trim()}
+              aria-label="Enviar mensagem"
               className="px-3 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {sending

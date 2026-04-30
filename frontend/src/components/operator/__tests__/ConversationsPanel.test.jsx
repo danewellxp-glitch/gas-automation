@@ -320,7 +320,7 @@ describe('ConversationsPanel', () => {
     fireEvent.click(await screen.findByText('João Pedro'))
     const input = screen.getByPlaceholderText('Digite sua mensagem...')
     fireEvent.change(input, { target: { value: 'oi' } })
-    fireEvent.click(screen.getByRole('button', { name: '' }) || screen.getAllByRole('button').at(-1))
+    fireEvent.click(screen.getByRole('button', { name: 'Enviar mensagem' }))
     await new Promise(r => setTimeout(r, 0))
     expect(toast.error).toHaveBeenCalled()
   })
@@ -344,6 +344,31 @@ describe('ConversationsPanel', () => {
   it('renders empty placeholder when no conversation is selected', async () => {
     render(<ConversationsPanel />)
     expect(await screen.findByText('Selecione uma conversa')).toBeInTheDocument()
+  })
+
+  it('renders message bubbles for customer/bot/operator senders', async () => {
+    api.getConversationMessages.mockResolvedValueOnce([
+      { id: '1', sender: 'customer', content: 'Olá', timestamp: new Date().toISOString() },
+      { id: '2', sender: 'bot', content: 'Oi! Como posso ajudar?', timestamp: new Date().toISOString() },
+      { id: '3', sender: 'agent', content: 'Operador aqui', timestamp: new Date().toISOString() },
+      { id: '4', sender: 'system', content: 'Conversa transferida', timestamp: new Date().toISOString() },
+    ])
+    render(<ConversationsPanel />)
+    fireEvent.click(await screen.findByText('João Pedro'))
+    expect(await screen.findByText('Olá')).toBeInTheDocument()
+    expect(screen.getByText('Oi! Como posso ajudar?')).toBeInTheDocument()
+    expect(screen.getByText('Operador aqui')).toBeInTheDocument()
+    expect(screen.getByText('Conversa transferida')).toBeInTheDocument()
+  })
+
+  it('opens transfer-to-bot modal and confirms via transferToBot API', async () => {
+    render(<ConversationsPanel />)
+    fireEvent.click(await screen.findByText('João Pedro'))
+    fireEvent.click(await screen.findByText('Para Bot'))
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText('Transferir para o bot')).toBeInTheDocument()
+    fireEvent.click(within(dialog).getByText('Transferir'))
+    expect(api.transferToBot).toHaveBeenCalledWith('5541999990002')
   })
 
   // Regression for MAX-9: long customer name + bot-typing + action buttons must
