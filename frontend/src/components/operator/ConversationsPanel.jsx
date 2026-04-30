@@ -409,7 +409,7 @@ function ChatWindow({ conversation, messages, loading, onSend, onAssign, onEnd, 
           <div className="w-9 h-9 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center shrink-0">
             <User className="w-5 h-5 text-primary-600 dark:text-primary-400" />
           </div>
-          <div className="min-w-0 flex-shrink-0">
+          <div className="min-w-0">
             <p className="text-base font-semibold text-gray-900 dark:text-white truncate">
               {conversation.name || 'Cliente'}
             </p>
