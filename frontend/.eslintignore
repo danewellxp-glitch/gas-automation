@@ -1,0 +1,8 @@
+dist
+dist-build
+build
+coverage
+node_modules
+android
+public
+*.min.js
