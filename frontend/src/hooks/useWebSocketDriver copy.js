@@ -6,7 +6,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import logger from '../utils/logger'
 
-const WS_URL = import.meta.env.VITE_WS_URL || 'ws://192.168.10.167:8000'
+const WS_URL = import.meta.env.VITE_WS_URL || 'ws://192.168.10.167:5688'
 
 export function useWebSocketDriver(onDeliveryAssigned, onDeliveryUpdated, onOperatorMessage) {
   const [connected, setConnected] = useState(false)

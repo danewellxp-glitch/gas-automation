@@ -21,9 +21,9 @@ services:
       - "--log.level=INFO"
       - "--accesslog=true"
     ports:
-      - "80:80"
-      - "443:443"
-      - "8080:8080"  # Dashboard Traefik
+      - "5696:80"
+      - "5697:443"
+      - "5720:8080"  # Dashboard Traefik
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     labels:
@@ -49,8 +49,8 @@ services:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin123}
     ports:
-      - "9000:9000"  # API S3
-      - "9001:9001"  # Console Web
+      - "5711:9000"  # API S3
+      - "5712:9001"  # Console Web
     volumes:
       - minio_data:/data
     networks:
@@ -82,7 +82,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
-      - "5433:5432"
+      - "5691:5432"
     networks:
       - gas_network
     healthcheck:
@@ -129,7 +129,7 @@ services:
     volumes:
       - redis_data:/data
     ports:
-      - "6379:6379"
+      - "5692:6379"
     networks:
       - gas_network
     healthcheck:
@@ -164,7 +164,7 @@ services:
       WAHA_REDIS_PORT: 6379
       WAHA_REDIS_DB: 1
     ports:
-      - "3000:3000"
+      - "5690:3000"
     volumes:
       - waha_data:/app/.waha
     networks:
@@ -220,7 +220,7 @@ services:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin123}
     ports:
-      - "8000:8000"
+      - "5688:8000"
     volumes:
       - ./backend:/app
     networks:
@@ -253,7 +253,7 @@ services:
       # CORS Headers (Whitelist específica - Segurança)
       - "traefik.http.middlewares.backend-cors.headers.accesscontrolallowmethods=GET,POST,PUT,DELETE,OPTIONS"
       - "traefik.http.middlewares.backend-cors.headers.accesscontrolallowheaders=*"
-      - "traefik.http.middlewares.backend-cors.headers.accesscontrolalloworiginlist=http://192.168.10.167:3001,http://localhost:3001"
+      - "traefik.http.middlewares.backend-cors.headers.accesscontrolalloworiginlist=http://192.168.10.167:5689,http://localhost:5689"
 
   # ===========================================
   # IA LOCAL - OLLAMA
@@ -265,7 +265,7 @@ services:
     volumes:
       - ollama_data:/root/.ollama
     ports:
-      - "11434:11434"
+      - "5717:11434"
     networks:
       - gas_network
     # Para GPU NVIDIA, descomente as linhas abaixo:
@@ -291,7 +291,7 @@ services:
       VITE_WS_URL: ws://192.168.10.167:8000
       VITE_SERVER_URL: http://192.168.10.167:8000
     ports:
-      - "3001:3001"
+      - "5689:3001"
     volumes:
       - ./frontend:/app
       - /app/node_modules
@@ -333,7 +333,7 @@ services:
       SENDGRID_API_KEY: ${SENDGRID_API_KEY:-}
       SENDGRID_FROM_EMAIL: ${SENDGRID_FROM_EMAIL:-noreply@gasautomation.local}
     ports:
-      - "8001:8001"
+      - "5693:8001"
     networks:
       - gas_network
     depends_on:
@@ -362,7 +362,7 @@ services:
       LOW_STOCK_THRESHOLD: 10
       CRITICAL_STOCK_THRESHOLD: 5
     ports:
-      - "8002:8002"
+      - "5694:8002"
     networks:
       - gas_network
     depends_on:
@@ -397,7 +397,7 @@ services:
       SYNC_BATCH_SIZE: 100
       SYNC_ENABLED: "true"
     ports:
-      - "8003:8003"
+      - "5695:8003"
     networks:
       - gas_network
     depends_on:
@@ -424,7 +424,7 @@ services:
       - '--storage.tsdb.retention.time=15d'
       - '--web.enable-lifecycle'
     ports:
-      - "9090:9090"
+      - "5714:9090"
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./prometheus/alerts:/etc/prometheus/alerts:ro
@@ -453,7 +453,7 @@ services:
       GF_SERVER_DOMAIN: grafana.localhost
       GF_SERVER_ROOT_URL: http://grafana.localhost
     ports:
-      - "3002:3000"
+      - "5713:3000"
     volumes:
       - grafana_data:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
@@ -482,7 +482,7 @@ services:
       - '--storage.path=/alertmanager'
       - '--web.external-url=http://alertmanager.localhost'
     ports:
-      - "9093:9093"
+      - "5715:9093"
     volumes:
       - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
       - alertmanager_data:/alertmanager
@@ -507,7 +507,7 @@ services:
     restart: unless-stopped
     command: -config.file=/etc/loki/loki-config.yml
     ports:
-      - "3100:3100"
+      - "5716:3100"
     volumes:
       - ./loki/loki-config.yml:/etc/loki/loki-config.yml:ro
       - loki_data:/loki
@@ -555,7 +555,7 @@ services:
       PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin123}
       PGADMIN_CONFIG_SERVER_MODE: 'False'
     ports:
-      - "5050:80"
+      - "5718:80"
     volumes:
       - pgadmin_data:/var/lib/pgadmin
     networks:
@@ -573,7 +573,7 @@ services:
     environment:
       REDIS_HOSTS: local:redis:6379
     ports:
-      - "8081:8081"
+      - "5719:8081"
     networks:
       - gas_network
     depends_on:

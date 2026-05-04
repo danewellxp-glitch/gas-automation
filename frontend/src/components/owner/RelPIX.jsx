@@ -72,7 +72,7 @@ export default function RelPIX() {
     try {
       setExporting(true)
       const token = localStorage.getItem('token')
-      const base  = import.meta.env.VITE_API_URL || 'http://192.168.10.167:8000/api'
+      const base  = import.meta.env.VITE_API_URL || 'http://192.168.10.167:5688/api'
       const res   = await fetch(`${base}/owner/reports/pix?start_date=${startDate}&end_date=${endDate}&format=${format}`, { headers: { Authorization: `Bearer ${token}` } })
       if (!res.ok) { exportLocalCSV(); return }
       const blob = await res.blob(); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url

@@ -11,7 +11,7 @@
  */
 import logger from '../utils/logger'
 
-const WS_URL = import.meta.env.VITE_WS_URL || 'ws://192.168.10.167:8000/ws'
+const WS_URL = import.meta.env.VITE_WS_URL || 'ws://192.168.10.167:5688/ws'
 const RECONNECT_DELAY = 3000
 const MAX_RECONNECT_ATTEMPTS = 10
 
@@ -172,7 +172,7 @@ class SharedWebSocketService {
     }
     
     // WS_URL já inclui /ws, então o endpoint é /ws/dashboard
-    // Se WS_URL = 'ws://192.168.10.167:8000/ws', então url = 'ws://192.168.10.167:8000/ws/dashboard'
+    // Se WS_URL = 'ws://192.168.10.167:5688/ws', então url = 'ws://192.168.10.167:5688/ws/dashboard'
     const url = `${WS_URL}/dashboard?token=${token}`
     
     logger.log(`[Leader Tab ${this.tabId}] Conectando WebSocket:`, url.replace(token, 'TOKEN_HIDDEN'))

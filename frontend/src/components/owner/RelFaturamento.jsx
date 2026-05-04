@@ -76,7 +76,7 @@ export default function RelFaturamento() {
     try {
       setExporting(true)
       const token = localStorage.getItem('token')
-      const base = import.meta.env.VITE_API_URL || 'http://192.168.10.167:8000/api'
+      const base = import.meta.env.VITE_API_URL || 'http://192.168.10.167:5688/api'
       const url = `${base}/owner/reports/revenue?start_date=${startDate}&end_date=${endDate}&format=${format}&group_by=${groupBy}`
       const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
 
