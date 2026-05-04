@@ -68,19 +68,23 @@ async def vasilhames_posicao(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Retorna posição atual de vasilhames (cheios/vazios/em campo) — mesma fonte que o Financeiro."""
+    """Retorna posicao atual de vasilhames (cheios/vazios/em campo) — mesma fonte que o Financeiro."""
     _require_estoque(current_user)
     from app.models.financeiro.vasilhame_estoque import VasilhameEstoque
     from decimal import Decimal
 
     TODOS_TIPOS = ["P13", "P20", "P45", "G20L"]
 
-    # Garantir que todos os tipos existam
+    result = await db.execute(select(VasilhameEstoque).where(VasilhameEstoque.tipo.in_(TODOS_TIPOS)))
+    existing = {row.tipo: row for row in result.scalars().all()}
+
     for tipo in TODOS_TIPOS:
-        r = await db.execute(select(VasilhameEstoque).where(VasilhameEstoque.tipo == tipo))
-        if not r.scalar_one_or_none():
-            db.add(VasilhameEstoque(tipo=tipo, qtd_cheios=0, qtd_vazios=0, qtd_em_campo=0, custo_unitario=Decimal("0.00")))
-    await db.commit()
+        if tipo not in existing:
+            db.add(VasilhameEstoque(
+                tipo=tipo, qtd_cheios=0, qtd_vazios=0,
+                qtd_em_campo=0, custo_unitario=Decimal("0.00"),
+            ))
+    await db.flush()
 
     result = await db.execute(select(VasilhameEstoque).order_by(VasilhameEstoque.tipo))
     estoques = result.scalars().all()
