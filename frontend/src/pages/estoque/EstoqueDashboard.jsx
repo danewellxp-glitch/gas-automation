@@ -193,16 +193,16 @@ export default function EstoqueDashboard() {
         </div>
 
         {/* Cargas abertas */}
-        {openLoads.length > 0 && (
-          <div className="bg-white border border-amber-200 rounded-xl p-5 mb-6">
-            <h2 className="text-sm font-semibold text-gray-900 mb-4">Cargas Abertas Agora</h2>
-            <VehicleLoadTable
-              loads={openLoads}
-              products={products}
-              onClose={(load) => { setSelectedLoad(load); setModal('close_load') }}
-            />
-          </div>
-        )}
+        <div className={`bg-white border rounded-xl p-5 mb-6 ${openLoads.length > 0 ? 'border-amber-200' : 'border-slate-200'}`}>
+          <h2 className="text-sm font-semibold text-gray-900 mb-4">Cargas Abertas Agora</h2>
+          <VehicleLoadTable
+            loads={openLoads}
+            products={products}
+            drivers={drivers}
+            onClose={(load) => { setSelectedLoad(load); setModal('close_load') }}
+            onOpenLoad={() => setModal('open_load')}
+          />
+        </div>
 
         {/* Movimentações */}
         <div className="bg-white border border-gray-200 rounded-xl p-5">
