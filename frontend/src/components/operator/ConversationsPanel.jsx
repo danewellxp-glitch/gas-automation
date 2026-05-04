@@ -6,7 +6,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import {
   MessageSquare, Send, RefreshCw, User, Bot, Phone,
-  UserCheck, CheckCircle, Clock, AlertCircle
+  UserCheck, CheckCircle, Clock, AlertCircle, X, ArrowRight
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import {
@@ -19,13 +19,13 @@ import {
 } from '../../services/api'
 import { useSharedWebSocketEvent } from '../../hooks/useSharedWebSocket'
 
-function formatTime(dateStr) {
+export function formatTime(dateStr) {
   if (!dateStr) return ''
   const date = new Date(dateStr)
   return date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
 }
 
-function formatRelativeDate(dateStr) {
+export function formatRelativeDate(dateStr) {
   if (!dateStr) return ''
   const date = new Date(dateStr)
   const now = new Date()
@@ -40,10 +40,142 @@ function formatRelativeDate(dateStr) {
 }
 
 const statusConfig = {
-  waiting: { label: 'Aguardando', dot: 'bg-amber-400',  icon: Clock },
-  active:  { label: 'Atendendo',  dot: 'bg-emerald-400', icon: UserCheck },
-  bot:     { label: 'Bot',        dot: 'bg-blue-400',    icon: Bot },
-  closed:  { label: 'Encerrada',  dot: 'bg-gray-300 dark:bg-gray-600',    icon: CheckCircle },
+  waiting: {
+    label: 'Aguardando',
+    icon: Clock,
+    pill: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+    dot: 'bg-amber-400',
+  },
+  active: {
+    label: 'Ativo',
+    icon: UserCheck,
+    pill: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+    dot: 'bg-emerald-400',
+  },
+  bot: {
+    label: 'Bot',
+    icon: Bot,
+    pill: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+    dot: 'bg-blue-400',
+  },
+  closed: {
+    label: 'Encerrado',
+    icon: CheckCircle,
+    pill: 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400',
+    dot: 'bg-gray-300 dark:bg-gray-600',
+  },
+}
+
+// Normalize phone (strip @c.us, @lid suffix and non-digit prefix)
+export function normalizePhone(value) {
+  if (!value) return ''
+  return String(value).split('@')[0].replace(/\D/g, '')
+}
+
+// "há Xmin" wait time relative to last activity
+export function formatWaitTime(dateStr) {
+  if (!dateStr) return ''
+  const date = new Date(dateStr)
+  const diffMs = Date.now() - date.getTime()
+  if (diffMs < 0) return 'agora'
+  const mins = Math.floor(diffMs / 60000)
+  if (mins < 1) return 'agora'
+  if (mins < 60) return `há ${mins}min`
+  const hours = Math.floor(mins / 60)
+  if (hours < 24) return `há ${hours}h`
+  const days = Math.floor(hours / 24)
+  return `há ${days}d`
+}
+
+// Status pill badge — replaces the small color dot
+export function StatusBadge({ status, className = '' }) {
+  const cfg = statusConfig[status] || statusConfig.waiting
+  const Icon = cfg.icon
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${cfg.pill} ${className}`}
+    >
+      <Icon className="w-3 h-3" />
+      {cfg.label}
+    </span>
+  )
+}
+
+// Animated dots — shown when bot is responding
+export function TypingIndicator({ label = 'Bot respondendo' }) {
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+      role="status"
+      aria-live="polite"
+    >
+      <Bot className="w-3 h-3" />
+      <span>{label}</span>
+      <span className="flex items-center gap-0.5" aria-hidden="true">
+        <span className="w-1 h-1 rounded-full bg-current animate-pulse [animation-delay:0ms]" />
+        <span className="w-1 h-1 rounded-full bg-current animate-pulse [animation-delay:150ms]" />
+        <span className="w-1 h-1 rounded-full bg-current animate-pulse [animation-delay:300ms]" />
+      </span>
+    </span>
+  )
+}
+
+// Inline confirmation modal — replaces native confirm()
+export function ConfirmDialog({ open, title, description, confirmLabel, cancelLabel, tone = 'primary', onConfirm, onCancel, busy }) {
+  if (!open) return null
+  const confirmClass =
+    tone === 'danger'
+      ? 'bg-red-600 hover:bg-red-700 focus:ring-red-500'
+      : 'bg-primary-600 hover:bg-primary-700 focus:ring-primary-500'
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 dark:bg-black/70 backdrop-blur-sm p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="confirm-dialog-title"
+      onClick={(e) => { if (e.target === e.currentTarget && !busy) onCancel?.() }}
+    >
+      <div className="w-full max-w-sm rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-xl">
+        <div className="flex items-start justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+          <h3 id="confirm-dialog-title" className="text-sm font-semibold text-gray-900 dark:text-white">
+            {title}
+          </h3>
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={busy}
+            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 disabled:opacity-50"
+            aria-label="Fechar"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">
+          {description}
+        </div>
+        <div className="flex items-center justify-end gap-2 px-4 py-3 border-t border-gray-200 dark:border-gray-700">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={busy}
+            className="min-h-[40px] px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 transition-colors"
+          >
+            {cancelLabel || 'Cancelar'}
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={busy}
+            className={`min-h-[40px] inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-white rounded-md disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-offset-1 dark:focus:ring-offset-gray-800 transition-colors ${confirmClass}`}
+          >
+            {busy && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+            {confirmLabel || 'Confirmar'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 // Dense conversation list
@@ -55,6 +187,40 @@ function ConversationList({ conversations, selectedId, onSelect, onAssign, loadi
     if (filter === 'active') return conv.status === 'active'
     return true
   })
+
+  const renderEmpty = () => {
+    if (filter === 'mine') {
+      return (
+        <div className="flex flex-col items-center justify-center h-full px-4 py-8 text-center">
+          <div className="w-12 h-12 rounded-full bg-primary-50 dark:bg-primary-900/20 flex items-center justify-center mb-3">
+            <UserCheck className="w-5 h-5 text-primary-500 dark:text-primary-400" />
+          </div>
+          <p className="text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
+            Nenhuma conversa atribuída
+          </p>
+          <p className="text-xs text-gray-400 dark:text-gray-500 mb-3">
+            Você ainda não assumiu nenhum atendimento.
+          </p>
+          <button
+            type="button"
+            onClick={() => onFilterChange('waiting')}
+            className="inline-flex items-center gap-1 min-h-[40px] px-3 py-1.5 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 transition-colors"
+          >
+            Assumir uma conversa
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )
+    }
+    return (
+      <div className="flex flex-col items-center justify-center h-24 text-gray-400">
+        <MessageSquare className="w-5 h-5 mb-1" />
+        <p className="text-xs">
+          {filter === 'waiting' ? 'Sem clientes aguardando' : 'Nenhuma conversa'}
+        </p>
+      </div>
+    )
+  }
 
   return (
     <div className="flex flex-col h-full">
@@ -86,61 +252,62 @@ function ConversationList({ conversations, selectedId, onSelect, onAssign, loadi
             <RefreshCw className="w-4 h-4 animate-spin text-gray-400" />
           </div>
         ) : filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-24 text-gray-400">
-            <MessageSquare className="w-5 h-5 mb-1" />
-            <p className="text-xs">Nenhuma conversa</p>
-          </div>
+          renderEmpty()
         ) : (
           filtered.map((conv) => {
-            const status = statusConfig[conv.status] || statusConfig.waiting
-            const StatusIcon = status.icon
             const isSelected = selectedId === conv.id
+            const lastTs = conv.last_message_at || conv.created_at
+            const showAssumeChip = !conv.assigned_to_me && conv.status !== 'closed'
 
             return (
               <div
                 key={conv.id}
                 onClick={() => onSelect(conv)}
-                className={`flex items-start gap-2 px-3 py-2 border-b border-gray-100 dark:border-gray-700 cursor-pointer transition-colors ${
+                className={`flex flex-col gap-1.5 px-3 py-2.5 border-b border-gray-100 dark:border-gray-700 cursor-pointer transition-colors ${
                   isSelected
                     ? 'bg-primary-50 dark:bg-primary-900/20 border-l-2 border-l-primary-500'
                     : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'
                 }`}
               >
-                {/* Status dot */}
-                <span className={`mt-1.5 w-2 h-2 rounded-full shrink-0 ${status.dot}`} />
+                <div className="flex items-center justify-between gap-2 min-w-0">
+                  <span className="text-sm font-medium text-gray-900 dark:text-white truncate flex-1 min-w-0">
+                    {conv.name || conv.customer_number}
+                  </span>
+                  <span className="text-xs text-gray-400 dark:text-gray-500 shrink-0">
+                    {formatRelativeDate(lastTs)}
+                  </span>
+                </div>
 
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between gap-1">
-                    <span className="text-xs font-medium text-gray-900 dark:text-white truncate">
-                      {conv.name || conv.customer_number}
-                    </span>
-                    <span className="text-xs text-gray-400 dark:text-gray-500 shrink-0">
-                      {formatRelativeDate(conv.last_message_at || conv.created_at)}
-                    </span>
+                <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                  {conv.last_message || 'Sem mensagens'}
+                </p>
+
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <StatusBadge status={conv.status} />
+                    {lastTs && (
+                      <span className="text-xs text-gray-400 dark:text-gray-500 truncate">
+                        {formatWaitTime(lastTs)}
+                      </span>
+                    )}
                   </div>
-                  <p className="text-xs text-gray-400 dark:text-gray-500 truncate mt-0.5">
-                    {conv.last_message || 'Sem mensagens'}
-                  </p>
-                  <div className="flex items-center justify-between mt-1">
-                    <span className="text-xs text-gray-400 dark:text-gray-500 flex items-center gap-0.5">
-                      <StatusIcon className="w-3 h-3" />
-                      {status.label}
-                    </span>
-                    <div className="flex items-center gap-1">
-                      {conv.unread_count > 0 && (
-                        <span className="flex items-center justify-center w-4 h-4 text-xs font-bold text-white bg-red-500 rounded-full">
-                          {conv.unread_count}
-                        </span>
-                      )}
-                      {!conv.assigned_to_me && conv.status !== 'closed' && (
-                        <button
-                          onClick={(e) => { e.stopPropagation(); onAssign(conv) }}
-                          className="px-1.5 py-0.5 text-xs font-medium text-white bg-primary-600 rounded hover:bg-primary-700 transition-colors"
-                        >
-                          Assumir
-                        </button>
-                      )}
-                    </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {conv.unread_count > 0 && (
+                      <span className="flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold text-white bg-red-500 rounded-full">
+                        {conv.unread_count}
+                      </span>
+                    )}
+                    {showAssumeChip && (
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); onAssign(conv) }}
+                        title="Assumir conversa"
+                        aria-label="Assumir conversa"
+                        className="px-2 py-0.5 text-xs font-medium text-primary-700 dark:text-primary-300 bg-primary-50 dark:bg-primary-900/30 border border-primary-200 dark:border-primary-800 rounded-md hover:bg-primary-100 dark:hover:bg-primary-900/50 transition-colors"
+                      >
+                        Assumir
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -217,8 +384,8 @@ function ChatWindow({ conversation, messages, loading, onSend, onAssign, onEnd, 
       await onSend(inputMessage)
       setInputMessage('')
     } catch (error) {
-      const detail = error?.response?.data?.detail || error?.message || 'Erro desconhecido'
-      toast.error(`Erro ao enviar: ${detail}`)
+      // Parent (handleSendMessage) already shows a granular toast — don't double-toast.
+      // Keep the input intact so the operator can retry without retyping.
       console.error('Erro ao enviar mensagem:', error)
     } finally {
       setSending(false)
@@ -232,53 +399,63 @@ function ChatWindow({ conversation, messages, loading, onSend, onAssign, onEnd, 
     }
   }
 
-  const status = statusConfig[conversation.status] || statusConfig.waiting
+  const lastTs = conversation.last_message_at || conversation.created_at
 
   return (
     <div className="flex flex-col h-full">
       {/* Chat header */}
-      <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
-        <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center shrink-0">
-            <User className="w-4 h-4 text-primary-600 dark:text-primary-400" />
+      <div data-testid="chat-header" className="flex items-center justify-between gap-3 px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex-nowrap overflow-hidden">
+        <div className="flex items-center gap-3 min-w-0 flex-1 flex-nowrap">
+          <div className="w-9 h-9 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center shrink-0">
+            <User className="w-5 h-5 text-primary-600 dark:text-primary-400" />
           </div>
-          <div>
-            <p className="text-sm font-medium text-gray-900 dark:text-white leading-none">
+          <div className="min-w-0 flex-1">
+            <p className="text-base font-semibold text-gray-900 dark:text-white truncate">
               {conversation.name || 'Cliente'}
             </p>
-            <p className="text-xs text-gray-400 dark:text-gray-500 flex items-center gap-1 mt-0.5">
-              <Phone className="w-2.5 h-2.5" />
-              {conversation.customer_number}
+            <p className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1 mt-0.5">
+              <Phone className="w-3 h-3 shrink-0" />
+              <span className="truncate min-w-0">{conversation.customer_number}</span>
             </p>
           </div>
-          <span className={`ml-1 inline-flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400`}>
-            <span className={`w-1.5 h-1.5 rounded-full ${status.dot}`} />
-            {status.label}
-          </span>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <StatusBadge status={conversation.status} />
+            {conversation.status === 'bot' && <TypingIndicator />}
+            {conversation.status === 'waiting' && lastTs && (
+              <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                {formatWaitTime(lastTs)}
+              </span>
+            )}
+          </div>
         </div>
 
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 shrink-0 flex-nowrap">
           {!isAssignedToMe && conversation.status !== 'closed' && (
             <button
+              type="button"
               onClick={onAssign}
-              className="px-2.5 py-1 text-xs font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 transition-colors"
+              className="min-h-[40px] inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 transition-colors"
             >
+              <UserCheck className="w-4 h-4" />
               Assumir
             </button>
           )}
           {isAssignedToMe && conversation.status !== 'closed' && (
             <>
               <button
+                type="button"
                 onClick={onTransferToBot}
-                className="px-2.5 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors flex items-center gap-1"
+                className="min-h-[40px] inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors"
               >
-                <Bot className="w-3 h-3" />
+                <Bot className="w-4 h-4" />
                 Para Bot
               </button>
               <button
+                type="button"
                 onClick={onEnd}
-                className="px-2.5 py-1 text-xs font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
+                className="min-h-[40px] inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
               >
+                <CheckCircle className="w-4 h-4" />
                 Encerrar
               </button>
             </>
@@ -333,6 +510,7 @@ function ChatWindow({ conversation, messages, loading, onSend, onAssign, onEnd, 
             <button
               onClick={handleSend}
               disabled={sending || !inputMessage.trim()}
+              aria-label="Enviar mensagem"
               className="px-3 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {sending
@@ -396,7 +574,6 @@ export default function ConversationsPanel() {
   }, [selectedConversation])
 
   const handleNewMessage = useCallback((wsEvent) => {
-    console.log('Nova mensagem via WebSocket:', wsEvent)
     loadConversations()
 
     const msgData = wsEvent.data || wsEvent
@@ -405,7 +582,14 @@ export default function ConversationsPanel() {
     const direction = msgData.direction
 
     const currentConversation = selectedConversationRef.current
-    if (currentConversation && phone === currentConversation.id) {
+    if (!currentConversation) return
+
+    // Compare against the canonical phone field only — never fall back to `id`,
+    // which is a UUID on /api/conversations and would never match a phone payload.
+    const currentPhone = normalizePhone(currentConversation.customer_number)
+    const incomingPhone = normalizePhone(phone)
+
+    if (currentPhone && incomingPhone && incomingPhone === currentPhone) {
       setMessages(prev => [...prev, {
         id: Date.now().toString(),
         content: message,
@@ -416,6 +600,9 @@ export default function ConversationsPanel() {
   }, [loadConversations])
 
   useSharedWebSocketEvent('new_message', handleNewMessage)
+
+  const [confirmAction, setConfirmAction] = useState(null)
+  const [confirmBusy, setConfirmBusy] = useState(false)
 
   const handleAssign = async (conv) => {
     const target = conv || selectedConversation
@@ -431,54 +618,103 @@ export default function ConversationsPanel() {
       setConversations(items)
       if (selectedConversation && selectedConversation.id === target.id) {
         const updated = items.find(c => c.id === target.id)
-        if (updated) setSelectedConversation({ ...updated, assigned_to_me: true, status: 'active' })
+        if (updated) {
+          setSelectedConversation({ ...updated, assigned_to_me: true, status: 'active' })
+        }
       }
     } catch (error) {
-      console.error('Erro ao assumir conversa:', error)
-      toast.error('Erro ao assumir conversa')
+      const statusCode = error?.response?.status
+      if (statusCode === 401) toast.error('Sessão expirada. Faça login novamente.')
+      else if (statusCode === 403) toast.error('Sem permissão para assumir esta conversa.')
+      else if (statusCode >= 500) toast.error('Erro no servidor ao assumir conversa.')
+      else toast.error('Erro ao assumir conversa')
     }
   }
 
   const handleSendMessage = async (message) => {
     if (!selectedConversation) return
-    const result = await replyConversation(selectedConversation.id, message)
-    if (result.success) {
-      setMessages(prev => [...prev, {
-        id: Date.now().toString(),
-        content: message,
-        sender: 'agent',
-        timestamp: new Date().toISOString()
-      }])
-    } else {
-      throw new Error(result.message || 'Erro ao enviar mensagem')
+    try {
+      const result = await replyConversation(selectedConversation.id, message)
+      if (result?.success) {
+        setMessages(prev => [...prev, {
+          id: Date.now().toString(),
+          content: message,
+          sender: 'agent',
+          timestamp: new Date().toISOString()
+        }])
+      } else {
+        throw new Error(result?.message || 'Erro ao enviar mensagem')
+      }
+    } catch (error) {
+      // Granular handling: 401 → session expired, 5xx → server error, others → backend detail
+      const statusCode = error?.response?.status
+      const detail = error?.response?.data?.detail
+      if (statusCode === 401) {
+        toast.error('Sessão expirada. Faça login novamente.')
+      } else if (statusCode === 403) {
+        toast.error('Sem permissão para responder.')
+      } else if (statusCode === 503) {
+        toast.error(detail || 'WhatsApp desconectado — verifique o WAHA.')
+      } else if (statusCode >= 500) {
+        toast.error(detail || 'Erro no servidor WAHA.')
+      } else if (statusCode >= 400) {
+        toast.error(detail || 'Não foi possível enviar a mensagem.')
+      } else {
+        toast.error(detail || error?.message || 'Erro ao enviar mensagem')
+      }
+      throw error
     }
   }
 
-  const handleEndConversation = async () => {
+  const askEndConversation = () => {
     if (!selectedConversation) return
-    if (!confirm('Deseja encerrar esta conversa e devolver ao bot?')) return
-    try {
-      await endConversation(selectedConversation.id)
-      toast.success('Conversa encerrada e devolvida ao bot')
-      loadConversations()
-      setSelectedConversation(prev => ({ ...prev, status: 'closed' }))
-    } catch (error) {
-      console.error('Erro ao encerrar conversa:', error)
-      toast.error('Erro ao encerrar conversa')
-    }
+    setConfirmAction({
+      kind: 'end',
+      title: 'Encerrar conversa',
+      description: 'Esta conversa será marcada como encerrada e devolvida ao bot. Deseja continuar?',
+      confirmLabel: 'Encerrar',
+      tone: 'danger',
+    })
   }
 
-  const handleTransferToBot = async () => {
+  const askTransferToBot = () => {
     if (!selectedConversation) return
-    if (!confirm('Transferir conversa de volta para o bot?')) return
+    if (selectedConversation.status === 'bot') {
+      toast('Conversa já está com o bot', { icon: '🤖' })
+      return
+    }
+    setConfirmAction({
+      kind: 'transfer',
+      title: 'Transferir para o bot',
+      description: 'O atendimento volta a ser conduzido pelo bot. Você pode reassumir a qualquer momento.',
+      confirmLabel: 'Transferir',
+      tone: 'primary',
+    })
+  }
+
+  const performConfirm = async () => {
+    if (!confirmAction || !selectedConversation) return
+    setConfirmBusy(true)
     try {
-      await transferToBot(selectedConversation.id)
-      toast.success('Conversa transferida para o bot')
-      loadConversations()
-      setSelectedConversation(prev => ({ ...prev, status: 'bot' }))
+      if (confirmAction.kind === 'end') {
+        await endConversation(selectedConversation.id)
+        toast.success('Conversa encerrada e devolvida ao bot')
+        loadConversations()
+        setSelectedConversation(prev => ({ ...prev, status: 'closed' }))
+      } else if (confirmAction.kind === 'transfer') {
+        await transferToBot(selectedConversation.id)
+        toast.success('Conversa transferida para o bot')
+        loadConversations()
+        setSelectedConversation(prev => ({ ...prev, status: 'bot' }))
+      }
+      setConfirmAction(null)
     } catch (error) {
-      console.error('Erro ao transferir para bot:', error)
-      toast.error('Erro ao transferir para bot')
+      const statusCode = error?.response?.status
+      if (statusCode === 401) toast.error('Sessão expirada. Faça login novamente.')
+      else if (statusCode >= 500) toast.error('Erro no servidor.')
+      else toast.error(confirmAction.kind === 'end' ? 'Erro ao encerrar conversa' : 'Erro ao transferir para bot')
+    } finally {
+      setConfirmBusy(false)
     }
   }
 
@@ -486,7 +722,7 @@ export default function ConversationsPanel() {
     <div className="h-[calc(100vh-10rem)] flex rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden">
 
       {/* Left: conversation list */}
-      <div className="w-64 border-r border-gray-200 dark:border-gray-700 flex flex-col shrink-0">
+      <div className="w-72 lg:w-80 border-r border-gray-200 dark:border-gray-700 flex flex-col shrink-0">
         <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 dark:border-gray-700">
           <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">Conversas</span>
           <button
@@ -517,8 +753,8 @@ export default function ConversationsPanel() {
             loading={loadingMessages}
             onSend={handleSendMessage}
             onAssign={() => handleAssign()}
-            onEnd={handleEndConversation}
-            onTransferToBot={handleTransferToBot}
+            onEnd={askEndConversation}
+            onTransferToBot={askTransferToBot}
             isAssignedToMe={selectedConversation.assigned_to_me}
           />
         ) : (
@@ -529,6 +765,16 @@ export default function ConversationsPanel() {
         )}
       </div>
 
+      <ConfirmDialog
+        open={!!confirmAction}
+        title={confirmAction?.title}
+        description={confirmAction?.description}
+        confirmLabel={confirmAction?.confirmLabel}
+        tone={confirmAction?.tone}
+        busy={confirmBusy}
+        onConfirm={performConfirm}
+        onCancel={() => { if (!confirmBusy) setConfirmAction(null) }}
+      />
     </div>
   )
 }
