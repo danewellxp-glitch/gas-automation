@@ -7,6 +7,7 @@ import OpenLoadModal from './components/OpenLoadModal'
 import CloseLoadModal from './components/CloseLoadModal'
 import MovementLog from './components/MovementLog'
 import PurchaseOrderForm from './components/PurchaseOrderForm'
+import VasilhameCard from './components/VasilhameCard'
 import EstoqueContagem from '../../components/EstoqueContagem'
 
 const VASILHAME_LABELS = { P13: 'Botijão 13kg', P20: 'Botijão 20kg', P45: 'Botijão 45kg', G20L: 'Galão Água 20L' }
@@ -159,26 +160,7 @@ export default function EstoqueDashboard() {
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {vasilhames.map(v => (
-              <div key={v.tipo} className="bg-white border border-gray-200 rounded-xl p-4">
-                <div className="mb-3">
-                  <div className="text-base font-bold text-gray-900">{v.tipo}</div>
-                  <div className="text-xs text-gray-400 mt-0.5">{VASILHAME_LABELS[v.tipo] || v.tipo}</div>
-                </div>
-                <div className="space-y-1.5 text-sm">
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-500">Cheios</span>
-                    <span className="font-bold text-emerald-600 text-base">{v.qtd_cheios}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-500">Em Campo</span>
-                    <span className="font-bold text-amber-600 text-base">{v.qtd_em_campo}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-500">Vazios</span>
-                    <span className="font-bold text-gray-600 text-base">{v.qtd_vazios}</span>
-                  </div>
-                </div>
-              </div>
+              <VasilhameCard key={v.tipo} item={v} label={VASILHAME_LABELS[v.tipo]} />
             ))}
           </div>
         </div>
