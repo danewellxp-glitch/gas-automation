@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database import AsyncSessionLocal
-from app.core.state_machine import ConversationState, ConversationContext
+from app.core.state_machine_v2 import ConversationState, ConversationContext
 from app.core.flow_engine import MessageResponse, ProcessedMessage
 from app.core.nlp_utils import (
     extract_product,

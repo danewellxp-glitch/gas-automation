@@ -21,7 +21,7 @@ from sqlmodel import select
 
 from app.auth import get_current_user
 from app.core.flow_engine import flow_engine
-from app.core.state_machine import ConversationState, StateTransition
+from app.core.state_machine_v2 import ConversationState, StateTransition
 from app.database import get_db, redis_manager
 from app.models.auth_models import AuditLog, User
 from app.models.customer import Customer

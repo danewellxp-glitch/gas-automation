@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from app.config import settings
 from app.database import redis_manager, AsyncSessionLocal
 from app.models.event_log import EventLog
-from app.core.state_machine import ConversationState, ConversationContext
+from app.core.state_machine_v2 import ConversationState, ConversationContext
 import re
 from app.core.nlp_utils import (
     normalize_text,
