@@ -1,13 +1,44 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import toast from 'react-hot-toast'
+import { AlertCircle, Inbox, Wifi, WifiOff, AlertTriangle } from 'lucide-react'
 import api from '../../api/client'
 import { ESTOQUE } from '../../api/endpoints'
 import { useAuth } from '../../hooks/useAuth'
+import { SkeletonOverlay, VasilhameCardSkeleton } from '../../components/ui/Skeleton'
 import VehicleLoadTable from './components/VehicleLoadTable'
 import OpenLoadModal from './components/OpenLoadModal'
 import CloseLoadModal from './components/CloseLoadModal'
 import MovementLog from './components/MovementLog'
 import PurchaseOrderForm from './components/PurchaseOrderForm'
 import EstoqueContagem from '../../components/EstoqueContagem'
+
+const SYNC_META = {
+  connected: { label: 'Sincronizado', Icon: Wifi, classes: 'bg-emerald-50 text-emerald-700 border-emerald-200', dot: 'bg-emerald-500', pulse: true },
+  reconnecting: { label: 'Reconectando', Icon: AlertTriangle, classes: 'bg-amber-50 text-amber-800 border-amber-200', dot: 'bg-amber-500', pulse: true },
+  offline: { label: 'Sem conexão', Icon: WifiOff, classes: 'bg-rose-50 text-rose-700 border-rose-200', dot: 'bg-rose-500', pulse: false },
+}
+
+function SyncBadge({ status }) {
+  const meta = SYNC_META[status] || SYNC_META.connected
+  const { Icon } = meta
+  return (
+    <span
+      role="status"
+      aria-live="polite"
+      aria-label={`Status de sincronização: ${meta.label}`}
+      className={`inline-flex items-center gap-2 px-2.5 py-1 rounded-full border text-xs font-medium ${meta.classes}`}
+    >
+      <span className="relative flex h-2 w-2">
+        {meta.pulse && (
+          <span className={`absolute inline-flex h-full w-full rounded-full opacity-60 animate-ping ${meta.dot} motion-reduce:hidden`} />
+        )}
+        <span className={`relative inline-flex rounded-full h-2 w-2 ${meta.dot}`} />
+      </span>
+      <Icon className="w-3.5 h-3.5" strokeWidth={2} aria-hidden="true" />
+      <span>{meta.label}</span>
+    </span>
+  )
+}
 
 const VASILHAME_LABELS = { P13: 'Botijão 13kg', P20: 'Botijão 20kg', P45: 'Botijão 45kg', G20L: 'Galão Água 20L' }
 
@@ -24,25 +55,43 @@ export default function EstoqueDashboard() {
   const [selectedLoad, setSelectedLoad] = useState(null)
   const [adjustmentForm, setAdjustmentForm] = useState({ tipo: '', campo: 'cheios', direction: 'entrada', quantidade: 1, notes: '' })
   const [adjusting, setAdjusting] = useState(false)
+  const [adjustmentError, setAdjustmentError] = useState('')
+  const [wsStatus, setWsStatus] = useState('reconnecting')
   const wsRef = useRef(null)
+  const reconnectTimerRef = useRef(null)
+  const offlineTimerRef = useRef(null)
 
   const loadData = useCallback(async () => {
     try {
       setLoading(true)
-      const [balRes, loadsRes, movRes, prodRes, vasRes] = await Promise.all([
+      const results = await Promise.allSettled([
         api.get(ESTOQUE.BALANCE),
         api.get(ESTOQUE.VEHICLE_LOADS_OPEN),
         api.get(ESTOQUE.MOVEMENTS, { params: { per_page: 50 } }),
         api.get(ESTOQUE.PRODUCTS),
-        api.get(ESTOQUE.VASILHAMES_POSICAO).catch(() => ({ data: [] })),
+        api.get(ESTOQUE.VASILHAMES_POSICAO),
       ])
-      setBalances(balRes.data || [])
-      setOpenLoads(loadsRes.data || [])
-      setMovements(movRes.data || [])
-      setProducts(prodRes.data || [])
-      setVasilhames(Array.isArray(vasRes.data) ? vasRes.data : [])
+      const [balRes, loadsRes, movRes, prodRes, vasRes] = results.map(r =>
+        r.status === 'fulfilled' ? r.value.data : null
+      )
+      setBalances(Array.isArray(balRes) ? balRes : [])
+      setOpenLoads(Array.isArray(loadsRes) ? loadsRes : [])
+      setMovements(Array.isArray(movRes) ? movRes : [])
+      setProducts(Array.isArray(prodRes) ? prodRes : [])
+      setVasilhames(Array.isArray(vasRes) ? vasRes : [])
+      const failed = results.filter(r => r.status === 'rejected')
+      if (failed.length > 0) {
+        const allFailed = failed.length === results.length
+        toast.error(
+          allFailed
+            ? 'Não foi possível carregar o estoque. Tentando reconectar...'
+            : 'Alguns dados não puderam ser atualizados. Tente novamente em instantes.',
+          { id: 'estoque-load-error' },
+        )
+      }
     } catch (err) {
       console.error('Erro ao carregar estoque:', err)
+      toast.error('Erro ao carregar estoque. Verifique sua conexão.', { id: 'estoque-load-error' })
     } finally {
       setLoading(false)
     }
@@ -64,26 +113,82 @@ export default function EstoqueDashboard() {
 
   useEffect(() => {
     const token = localStorage.getItem('token') || sessionStorage.getItem('token')
-    if (!token) return
-    const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://192.168.10.167:5688'
-    const wsUrl = API_BASE.replace('http', 'ws') + `/ws/dashboard?token=${token}`
-    const ws = new WebSocket(wsUrl)
-    wsRef.current = ws
-    ws.onmessage = (e) => {
-      try {
-        const msg = JSON.parse(e.data)
-        if (msg.type === 'vasilhame_update' && Array.isArray(msg.data)) {
-          setVasilhames(msg.data)
+    if (!token) return undefined
+
+    let cancelled = false
+    let wasDisconnected = false
+
+    const connect = () => {
+      if (cancelled) return
+      const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://192.168.10.167:5688'
+      const wsUrl = API_BASE.replace('http', 'ws') + `/ws/dashboard?token=${token}`
+      const ws = new WebSocket(wsUrl)
+      wsRef.current = ws
+
+      ws.onopen = () => {
+        setWsStatus('connected')
+        if (offlineTimerRef.current) {
+          clearTimeout(offlineTimerRef.current)
+          offlineTimerRef.current = null
         }
-      } catch {}
+        if (wasDisconnected) {
+          wasDisconnected = false
+          loadData()
+        }
+      }
+
+      ws.onmessage = (e) => {
+        try {
+          const msg = JSON.parse(e.data)
+          if (msg.type === 'vasilhame_update' && Array.isArray(msg.data)) {
+            setVasilhames(msg.data)
+          }
+        } catch {
+          /* swallow malformed frames */
+        }
+      }
+
+      const handleDisconnect = () => {
+        if (cancelled) return
+        wasDisconnected = true
+        setWsStatus(prev => (prev === 'offline' ? 'offline' : 'reconnecting'))
+        if (!offlineTimerRef.current) {
+          offlineTimerRef.current = setTimeout(() => {
+            if (!cancelled) setWsStatus('offline')
+          }, 15000)
+        }
+        if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current)
+        reconnectTimerRef.current = setTimeout(connect, 3000)
+      }
+
+      ws.onclose = handleDisconnect
+      ws.onerror = handleDisconnect
     }
-    return () => ws.close()
-  }, [])
+
+    connect()
+
+    return () => {
+      cancelled = true
+      if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current)
+      if (offlineTimerRef.current) clearTimeout(offlineTimerRef.current)
+      reconnectTimerRef.current = null
+      offlineTimerRef.current = null
+      if (wsRef.current) {
+        wsRef.current.onopen = null
+        wsRef.current.onmessage = null
+        wsRef.current.onclose = null
+        wsRef.current.onerror = null
+        wsRef.current.close()
+      }
+    }
+  }, [loadData])
 
   const handleVasilhameAdjustment = async (e) => {
     e.preventDefault()
+    setAdjustmentError('')
     const { tipo, campo, quantidade, direction, notes } = adjustmentForm
-    if (!tipo || !notes.trim()) { alert('Selecione o produto e informe o motivo'); return }
+    if (!tipo) { setAdjustmentError('Selecione o produto'); return }
+    if (!notes.trim()) { setAdjustmentError('Informe o motivo do ajuste'); return }
     setAdjusting(true)
     try {
       const current = vasilhames.find(v => v.tipo === tipo) || {}
@@ -97,19 +202,14 @@ export default function EstoqueDashboard() {
       setAdjustmentForm({ tipo: '', campo: 'cheios', direction: 'entrada', quantidade: 1, notes: '' })
       loadData()
     } catch (err) {
-      alert(err.response?.data?.detail || 'Erro ao registrar ajuste')
+      setAdjustmentError(err.response?.data?.detail || 'Erro ao registrar ajuste')
     } finally {
       setAdjusting(false)
     }
   }
 
-  if (loading && vasilhames.length === 0) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="w-8 h-8 animate-spin rounded-full border-2 border-gray-200 border-t-primary-500" />
-      </div>
-    )
-  }
+  const isInitialLoad = loading && vasilhames.length === 0
+  const isRefetching = loading && vasilhames.length > 0
 
   return (
     <div className="flex min-h-screen bg-gray-50">
@@ -144,43 +244,64 @@ export default function EstoqueDashboard() {
       <main className="flex-1 w-full overflow-y-auto p-4 md:p-6">
 
         {/* Header */}
-        <div className="mb-6">
-          <h1 className="text-xl font-semibold text-gray-900">Terminal de Estoque</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Depósito — Controle de botijões em tempo real</p>
+        <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h1 className="text-xl font-semibold text-gray-900">Terminal de Estoque</h1>
+            <p className="text-sm text-gray-500 mt-0.5">Depósito — Controle de botijões em tempo real</p>
+          </div>
+          <SyncBadge status={wsStatus} />
         </div>
 
         {/* Vasilhames */}
         <div className="mb-6">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-sm font-semibold text-gray-900">Posição de Vasilhames</h2>
-            <span className="text-xs text-emerald-600 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-full font-medium">
-              Sincronizado em tempo real
-            </span>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {vasilhames.map(v => (
-              <div key={v.tipo} className="bg-white border border-gray-200 rounded-xl p-4">
-                <div className="mb-3">
-                  <div className="text-base font-bold text-gray-900">{v.tipo}</div>
-                  <div className="text-xs text-gray-400 mt-0.5">{VASILHAME_LABELS[v.tipo] || v.tipo}</div>
-                </div>
-                <div className="space-y-1.5 text-sm">
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-500">Cheios</span>
-                    <span className="font-bold text-emerald-600 text-base">{v.qtd_cheios}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-500">Em Campo</span>
-                    <span className="font-bold text-amber-600 text-base">{v.qtd_em_campo}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-500">Vazios</span>
-                    <span className="font-bold text-gray-600 text-base">{v.qtd_vazios}</span>
-                  </div>
-                </div>
+          <SkeletonOverlay active={isRefetching} label="Atualizando posição...">
+            {isInitialLoad ? (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {[0, 1, 2, 3].map(i => <VasilhameCardSkeleton key={i} />)}
               </div>
-            ))}
-          </div>
+            ) : vasilhames.length === 0 ? (
+              <div
+                role="status"
+                className="flex flex-col items-center justify-center text-center py-10 px-4 rounded-xl border border-dashed border-slate-300 bg-slate-50"
+              >
+                <div className="w-14 h-14 rounded-full bg-white border border-slate-200 flex items-center justify-center mb-3">
+                  <Inbox className="w-7 h-7 text-slate-400" strokeWidth={2} aria-hidden="true" />
+                </div>
+                <h3 className="text-base font-semibold text-slate-900">Sem dados de vasilhames</h3>
+                <p className="text-sm text-slate-600 mt-1 max-w-sm">
+                  Nenhuma posição de botijão foi reportada. Atualize ou registre uma compra para começar.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {vasilhames.map(v => (
+                  <div key={v.tipo} className="bg-white border border-gray-200 rounded-xl p-4">
+                    <div className="mb-3">
+                      <div className="text-base font-bold text-gray-900">{v.tipo}</div>
+                      <div className="text-xs text-gray-400 mt-0.5">{VASILHAME_LABELS[v.tipo] || v.tipo}</div>
+                    </div>
+                    <div className="space-y-1.5 text-sm">
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-500">Cheios</span>
+                        <span className="font-bold text-emerald-600 text-base">{v.qtd_cheios}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-500">Em Campo</span>
+                        <span className="font-bold text-amber-600 text-base">{v.qtd_em_campo}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-500">Vazios</span>
+                        <span className="font-bold text-gray-600 text-base">{v.qtd_vazios}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </SkeletonOverlay>
         </div>
 
         {/* Action Buttons */}
@@ -193,21 +314,29 @@ export default function EstoqueDashboard() {
         </div>
 
         {/* Cargas abertas */}
-        {openLoads.length > 0 && (
-          <div className="bg-white border border-amber-200 rounded-xl p-5 mb-6">
-            <h2 className="text-sm font-semibold text-gray-900 mb-4">Cargas Abertas Agora</h2>
+        <div
+          className={`bg-white border rounded-xl p-5 mb-6 ${
+            openLoads.length > 0 ? 'border-amber-200' : 'border-slate-200'
+          }`}
+        >
+          <h2 className="text-sm font-semibold text-gray-900 mb-4">Cargas Abertas Agora</h2>
+          <SkeletonOverlay active={isRefetching} label="Atualizando cargas...">
             <VehicleLoadTable
               loads={openLoads}
               products={products}
+              drivers={drivers}
               onClose={(load) => { setSelectedLoad(load); setModal('close_load') }}
+              onOpenLoad={() => setModal('open_load')}
             />
-          </div>
-        )}
+          </SkeletonOverlay>
+        </div>
 
         {/* Movimentações */}
         <div className="bg-white border border-gray-200 rounded-xl p-5">
           <h2 className="text-sm font-semibold text-gray-900 mb-4">Movimentações do Dia</h2>
-          <MovementLog movements={movements} products={products} />
+          <SkeletonOverlay active={isRefetching} label="Atualizando movimentações...">
+            <MovementLog movements={movements} products={products} />
+          </SkeletonOverlay>
         </div>
 
         {/* Modais */}
@@ -250,6 +379,12 @@ export default function EstoqueDashboard() {
             <div className="bg-white rounded-xl border border-gray-200 w-full max-w-md p-6 shadow-xl">
               <h2 className="text-base font-semibold text-gray-900 mb-4">Ajuste Manual de Estoque</h2>
               <form onSubmit={handleVasilhameAdjustment} className="space-y-4">
+                {adjustmentError && (
+                  <div role="alert" className="flex items-start gap-2 bg-rose-50 text-rose-700 border border-rose-200 px-3 py-2 rounded-lg text-sm">
+                    <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" strokeWidth={1.75} aria-hidden="true" />
+                    <span>{adjustmentError}</span>
+                  </div>
+                )}
                 <div>
                   <label className="text-xs font-medium text-gray-500 block mb-1.5">Produto</label>
                   <select
@@ -315,7 +450,7 @@ export default function EstoqueDashboard() {
                   />
                 </div>
                 <div className="flex gap-3">
-                  <button type="button" onClick={() => setModal(null)}
+                  <button type="button" onClick={() => { setModal(null); setAdjustmentError('') }}
                     className="flex-1 py-2.5 rounded-lg text-sm font-medium border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors">
                     Cancelar
                   </button>
