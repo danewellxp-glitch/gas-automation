@@ -32,7 +32,7 @@ export function SkeletonOverlay({ active, label = 'Atualizando...', children }) 
 
 export function VasilhameCardSkeleton() {
   return (
-    <div className="bg-white border border-slate-200 rounded-xl p-4">
+    <div className="bg-white border border-gray-200 rounded-xl p-4">
       <Skeleton className="h-5 w-12 mb-2" />
       <Skeleton className="h-3 w-24 mb-4" />
       <div className="space-y-2">

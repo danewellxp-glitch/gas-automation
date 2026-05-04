@@ -216,6 +216,7 @@ function App() {
               iconTheme: { primary: '#22c55e', secondary: '#fff' },
             },
             error: {
+              duration: 4000,
               iconTheme: { primary: '#ef4444', secondary: '#fff' },
             },
           }}
