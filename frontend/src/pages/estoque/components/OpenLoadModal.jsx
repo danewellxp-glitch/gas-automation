@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { AlertCircle } from 'lucide-react'
 import api from '../../../api/client'
 import { ESTOQUE } from '../../../api/endpoints'
 
@@ -45,8 +46,9 @@ export default function OpenLoadModal({ drivers, products, onClose, onCreated })
         <h2 className="text-2xl font-bold mb-5">Abrir Carga do Dia</h2>
 
         {error && (
-          <div className="bg-red-900/50 border border-red-700 text-red-300 text-sm px-3 py-2 rounded mb-4">
-            {error}
+          <div role="alert" className="flex items-start gap-2 bg-rose-50 text-rose-700 border border-rose-200 px-3 py-2 rounded-lg text-sm mb-4">
+            <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" strokeWidth={1.75} aria-hidden="true" />
+            <span>{error}</span>
           </div>
         )}
 
