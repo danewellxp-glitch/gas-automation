@@ -620,7 +620,7 @@ export default function FinanceiroDashboard() {
                     <button
                       onClick={() => setPixOpen(v => !v)}
                       className={[
-                        'w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors text-left',
+                        'w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-all duration-200 ease-standard text-left',
                         hasActiveChild ? 'text-white font-medium' : 'text-white/60 hover:bg-white/10 hover:text-white',
                       ].join(' ')}
                     >
@@ -636,7 +636,7 @@ export default function FinanceiroDashboard() {
                               key={child.key}
                               onClick={() => setActiveTab(child.key)}
                               className={[
-                                'w-full flex items-center px-3 py-2 rounded-lg text-sm transition-colors text-left',
+                                'w-full flex items-center px-3 py-2 rounded-lg text-sm transition-all duration-200 ease-standard text-left',
                                 isActive ? 'bg-white/15 text-white font-medium' : 'text-white/60 hover:bg-white/10 hover:text-white',
                               ].join(' ')}
                             >
@@ -656,7 +656,7 @@ export default function FinanceiroDashboard() {
                   key={item.key}
                   onClick={() => setActiveTab(item.key)}
                   className={[
-                    'w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors text-left',
+                    'w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-all duration-200 ease-standard text-left',
                     isActive ? 'bg-white/15 text-white font-medium' : 'text-white/60 hover:bg-white/10 hover:text-white',
                   ].join(' ')}
                 >
@@ -731,8 +731,9 @@ export default function FinanceiroDashboard() {
 
 
         {/* ══════════════════════════════════════════════════
-            VISÃO GERAL
+            CONTEÚDO DAS ABAS (fade on change)
         ══════════════════════════════════════════════════ */}
+        <div key={activeTab} className="animate-fade-in">
         {activeTab === 'overview' && (
           <div className="space-y-6">
 
@@ -1146,6 +1147,7 @@ export default function FinanceiroDashboard() {
         {/* PIX ASAAS */}
         {activeTab === 'pix_asaas' && <PIXAsaasPanel />}
 
+        </div>
       </div>
 
       {/* ── Modal ─────────────────────────────────────────── */}
