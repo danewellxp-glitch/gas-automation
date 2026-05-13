@@ -34,8 +34,12 @@ export default function BillsWidget({ payables = [], receivables = [], onPay, on
 
   if (!items.length) {
     return (
-      <div className="py-12 text-center">
-        <p className="text-sm text-gray-500">Nenhuma pendência urgente</p>
+      <div className="py-12 text-center animate-fade-in">
+        <svg className="mx-auto mb-3 text-emerald-300" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <path d="M9 12l2 2 4-4" strokeLinecap="round" strokeLinejoin="round" />
+          <circle cx="12" cy="12" r="10" />
+        </svg>
+        <p className="text-sm text-gray-600">Nenhuma pendência urgente</p>
         <p className="text-xs text-gray-400 mt-1">Todos os pagamentos estão em dia</p>
       </div>
     )
@@ -48,11 +52,16 @@ export default function BillsWidget({ payables = [], receivables = [], onPay, on
         return (
           <div
             key={item.id || i}
-            className="flex items-center gap-3 py-3 border-b border-gray-100 last:border-0 group"
+            style={{ animationDelay: `${Math.min(i, 8) * 50}ms` }}
+            className="flex items-center gap-3 py-3 border-b border-gray-100 last:border-0 group animate-fade-in-up"
           >
             {/* Status dot */}
             <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
-              item.days < 0 ? 'bg-red-500' : item.days === 0 ? 'bg-amber-400' : 'bg-gray-300'
+              item.days < 0
+                ? 'bg-red-500 animate-pulse-slow'
+                : item.days === 0
+                ? 'bg-amber-400'
+                : 'bg-gray-300'
             }`} />
 
             <div className="flex-1 min-w-0">
@@ -74,7 +83,7 @@ export default function BillsWidget({ payables = [], receivables = [], onPay, on
               {isPagar && onPay && (
                 <button
                   onClick={() => onPay(item.id)}
-                  className="hidden group-hover:inline-flex text-xs px-2.5 py-1 rounded-md border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
+                  className="inline-flex sm:invisible sm:group-hover:visible text-xs px-2.5 py-1 rounded-md border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
                 >
                   Pagar
                 </button>
@@ -82,7 +91,7 @@ export default function BillsWidget({ payables = [], receivables = [], onPay, on
               {!isPagar && onReceive && (
                 <button
                   onClick={() => onReceive(item.id)}
-                  className="hidden group-hover:inline-flex text-xs px-2.5 py-1 rounded-md border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
+                  className="inline-flex sm:invisible sm:group-hover:visible text-xs px-2.5 py-1 rounded-md border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
                 >
                   Baixar
                 </button>
