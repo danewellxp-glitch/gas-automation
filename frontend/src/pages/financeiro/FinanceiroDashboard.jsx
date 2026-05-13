@@ -128,6 +128,7 @@ function ContasPanel({ accounts, onRefresh }) {
   const [modal, setModal] = useState(null) // null | 'new' | account-obj
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState(EMPTY_CONTA)
+  const [extratoFor, setExtratoFor] = useState(null) // conta selecionada para extrato
   const token = localStorage.getItem('access_token')
 
   const openNew  = () => { setForm(EMPTY_CONTA); setModal('new') }
@@ -241,7 +242,7 @@ function ContasPanel({ accounts, onRefresh }) {
                     className="flex-1 rounded-lg border border-gray-200 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors">
                     ✏️ Editar
                   </button>
-                  <button onClick={() => { onRefresh(); alert('Extrato: em breve') }}
+                  <button onClick={() => setExtratoFor(acc)}
                     className="flex-1 rounded-lg border border-blue-200 bg-blue-50 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100 transition-colors">
                     📋 Extrato
                   </button>
@@ -311,6 +312,136 @@ function ContasPanel({ accounts, onRefresh }) {
           </div>
         </div>
       )}
+
+      {extratoFor && (
+        <ExtratoModal account={extratoFor} onClose={() => setExtratoFor(null)} />
+      )}
+    </div>
+  )
+}
+
+function ExtratoModal({ account, onClose }) {
+  const today = new Date()
+  const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1)
+  const toISO = (d) => d.toISOString().slice(0, 10)
+
+  const [from, setFrom]       = useState(toISO(firstOfMonth))
+  const [to, setTo]           = useState(toISO(today))
+  const [data, setData]       = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError]     = useState(null)
+
+  const fmtC = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0)
+  const fmtD = (s) => s ? new Date(s).toLocaleDateString('pt-BR') : '—'
+
+  const load = async () => {
+    setLoading(true); setError(null)
+    try {
+      const res = await api.get(FINANCEIRO.ACCOUNT_EXTRATO(account.id), { params: { from, to, per_page: 200 } })
+      setData(res.data)
+    } catch (e) {
+      setError(e?.response?.data?.detail || 'Erro ao carregar extrato')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { load() }, []) // eslint-disable-line
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={onClose}>
+      <div className="w-full max-w-3xl rounded-2xl bg-white shadow-xl" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <div>
+            <h3 className="text-base font-semibold text-gray-900">Extrato — {account.name}</h3>
+            <p className="text-xs text-gray-400">{account.type?.replace(/_/g, ' ')}</p>
+          </div>
+          <button onClick={onClose} className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100">
+            <span className="text-lg leading-none">×</span>
+          </button>
+        </div>
+
+        <div className="px-6 py-3 border-b border-gray-100 flex flex-wrap items-end gap-3">
+          <div>
+            <label className="block text-[10px] font-medium text-gray-500 mb-1 uppercase tracking-wider">De</label>
+            <input type="date" value={from} onChange={e => setFrom(e.target.value)}
+              className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm focus:border-gray-400 focus:outline-none" />
+          </div>
+          <div>
+            <label className="block text-[10px] font-medium text-gray-500 mb-1 uppercase tracking-wider">Até</label>
+            <input type="date" value={to} onChange={e => setTo(e.target.value)}
+              className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm focus:border-gray-400 focus:outline-none" />
+          </div>
+          <button onClick={load} disabled={loading}
+            className="px-4 py-1.5 rounded-lg bg-gray-900 text-sm font-medium text-white hover:bg-gray-700 disabled:opacity-50">
+            {loading ? 'Carregando…' : 'Aplicar'}
+          </button>
+        </div>
+
+        <div className="max-h-[60vh] overflow-y-auto px-6 py-4">
+          {error && (
+            <div className="rounded-lg bg-red-50 border border-red-200 text-red-700 px-3 py-2 text-sm mb-3">{error}</div>
+          )}
+          {data && !loading && (
+            <>
+              <div className="grid grid-cols-4 gap-3 mb-4">
+                <div className="rounded-lg border border-gray-200 px-3 py-2">
+                  <p className="text-[10px] text-gray-400 uppercase tracking-wider">Saldo inicial</p>
+                  <p className="text-sm font-semibold text-gray-900">{fmtC(data.saldo_inicial)}</p>
+                </div>
+                <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2">
+                  <p className="text-[10px] text-emerald-600 uppercase tracking-wider">Entradas</p>
+                  <p className="text-sm font-semibold text-emerald-700">{fmtC(data.totais?.entradas)}</p>
+                </div>
+                <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2">
+                  <p className="text-[10px] text-red-600 uppercase tracking-wider">Saídas</p>
+                  <p className="text-sm font-semibold text-red-700">{fmtC(data.totais?.saidas)}</p>
+                </div>
+                <div className="rounded-lg border border-gray-900 bg-gray-900 px-3 py-2">
+                  <p className="text-[10px] text-gray-300 uppercase tracking-wider">Saldo final</p>
+                  <p className="text-sm font-semibold text-white">{fmtC(data.saldo_final)}</p>
+                </div>
+              </div>
+
+              {data.movimentos?.length === 0 ? (
+                <p className="text-center text-sm text-gray-400 py-12">Nenhum movimento no período</p>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-[11px] text-gray-400 uppercase tracking-wider border-b border-gray-100">
+                      <th className="text-left py-2 font-medium">Data</th>
+                      <th className="text-left py-2 font-medium">Descrição</th>
+                      <th className="text-left py-2 font-medium">Categoria</th>
+                      <th className="text-right py-2 font-medium">Valor</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.movimentos.map(m => (
+                      <tr key={m.id} className="border-b border-gray-50 hover:bg-gray-50">
+                        <td className="py-2 text-gray-600">{fmtD(m.reference_date)}</td>
+                        <td className="py-2 text-gray-900">{m.description}</td>
+                        <td className="py-2 text-gray-500 text-xs">{m.category?.replace(/_/g, ' ')}</td>
+                        <td className={`py-2 text-right font-semibold ${m.direction === 'entrada' ? 'text-emerald-700' : 'text-red-700'}`}>
+                          {m.direction === 'entrada' ? '+' : '−'} {fmtC(m.amount)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+
+              {data.total > data.movimentos.length && (
+                <p className="text-xs text-gray-400 mt-3 text-center">
+                  Exibindo {data.movimentos.length} de {data.total} movimentos. Refine o período para ver tudo.
+                </p>
+              )}
+            </>
+          )}
+          {loading && (
+            <p className="text-center text-sm text-gray-400 py-12">Carregando extrato…</p>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
@@ -593,32 +724,39 @@ export default function FinanceiroDashboard() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <MetricCard
                 title="Saldo Total"
-                value={loading ? '—' : fmtK(kpis?.total_balance)}
+                numericValue={parseFloat(kpis?.total_balance) || 0}
+                formatter={fmtK}
                 changeLabel={`${accounts.length} conta(s) ativa(s)`}
                 icon={IconWallet}
                 loading={loading}
               />
               <MetricCard
                 title="Receita do Mês"
-                value={loading ? '—' : fmtK(kpis?.revenue_month)}
-                change={null}
+                numericValue={parseFloat(kpis?.revenue_month) || 0}
+                formatter={fmtK}
                 changeLabel={`Hoje: ${fmtK(kpis?.revenue_today || 0)}`}
                 icon={IconTrendingUp}
                 loading={loading}
+                delayClass="[animation-delay:60ms]"
               />
               <MetricCard
                 title="Despesas do Mês"
-                value={loading ? '—' : fmtK(kpis?.expense_month)}
+                numericValue={parseFloat(kpis?.expense_month) || 0}
+                formatter={fmtK}
+                sparklineColor="#ef4444"
                 changeLabel={`Hoje: ${fmtK(kpis?.expense_today || 0)}`}
                 icon={IconTrendingDown}
                 loading={loading}
+                delayClass="[animation-delay:120ms]"
               />
               <MetricCard
                 title="Lucro Líquido"
-                value={loading ? '—' : fmtK(profit)}
+                numericValue={profit}
+                formatter={fmtK}
                 changeLabel={`Margem ${marginPct}%`}
                 icon={IconActivity}
                 loading={loading}
+                delayClass="[animation-delay:180ms]"
               />
             </div>
 
