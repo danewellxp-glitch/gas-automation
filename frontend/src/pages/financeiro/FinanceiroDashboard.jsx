@@ -486,6 +486,7 @@ export default function FinanceiroDashboard() {
   const [transactions, setTx]     = useState([])
   const [txTotal, setTxTotal]     = useState(0)
   const [txPage, setTxPage]       = useState(1)
+  const [newTxFromWs, setNewTxFromWs] = useState(null)
   const [receivables, setRec]     = useState([])
   const [payables, setPay]        = useState([])
   const [accounts, setAcc]        = useState([])
@@ -553,6 +554,17 @@ export default function FinanceiroDashboard() {
       try {
         const msg = JSON.parse(e.data)
         if (msg.type === 'vasilhame_update') loadAll()
+        if (msg.type === 'transaction_created' || msg.type === 'payment_received') {
+          const tx = msg.transaction || msg.payload || msg.data
+          if (tx?.id) {
+            setNewTxFromWs(tx)
+            setTx((prev) => {
+              if (prev.some((p) => p.id === tx.id)) return prev
+              return [tx, ...prev].slice(0, 50)
+            })
+            setTxTotal((t) => t + 1)
+          }
+        }
       } catch {}
     }
     return () => ws.close()
@@ -847,7 +859,7 @@ export default function FinanceiroDashboard() {
                   }
                 />
                 <div className="px-6 pb-6">
-                  <RecentTransactions transactions={transactions} />
+                  <RecentTransactions transactions={transactions} newTxFromWs={newTxFromWs} />
                 </div>
               </Card>
 

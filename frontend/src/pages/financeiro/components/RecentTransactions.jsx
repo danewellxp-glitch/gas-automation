@@ -1,3 +1,5 @@
+import { useEffect, useRef, useState } from 'react'
+
 const CATEGORY_LABEL = {
   venda_gas:           'Venda de Gás',
   deposito_vasilhame:  'Dep. Vasilhame',
@@ -31,7 +33,18 @@ function Avatar({ text }) {
   )
 }
 
-export default function RecentTransactions({ transactions = [] }) {
+export default function RecentTransactions({ transactions = [], newTxFromWs = null }) {
+  const [highlightedId, setHighlightedId] = useState(null)
+  const seenIds = useRef(new Set())
+
+  useEffect(() => {
+    if (!newTxFromWs?.id || seenIds.current.has(newTxFromWs.id)) return
+    seenIds.current.add(newTxFromWs.id)
+    setHighlightedId(newTxFromWs.id)
+    const t = setTimeout(() => setHighlightedId(null), 1800)
+    return () => clearTimeout(t)
+  }, [newTxFromWs])
+
   if (!transactions.length) {
     return (
       <div className="py-12 text-center text-sm text-gray-400">
@@ -46,11 +59,15 @@ export default function RecentTransactions({ transactions = [] }) {
         const isEntrada = tx.direction === 'entrada' || tx.type === 'receita'
         const catLabel = CATEGORY_LABEL[tx.category] || tx.category || '—'
         const initials = catLabel.slice(0, 2).toUpperCase()
+        const isHighlighted = tx.id === highlightedId
 
         return (
           <div
             key={tx.id || i}
-            className="flex items-center gap-3 py-3 border-b border-gray-100 last:border-0"
+            style={{ animationDelay: `${Math.min(i, 8) * 50}ms` }}
+            className={`flex items-center gap-3 py-3 border-b border-gray-100 last:border-0 animate-fade-in-up ${
+              isHighlighted ? 'animate-highlight-fade' : ''
+            }`}
           >
             <Avatar text={initials} />
 
