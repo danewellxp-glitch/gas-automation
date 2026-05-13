@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useAuth } from '../../hooks/useAuth'
 import api from '../../api/client'
 import { FINANCEIRO } from '../../api/endpoints'
-import { toast } from 'react-hot-toast'
+import { useToast } from '../../components/ui/Toast'
 
 import MetricCard from './components/MetricCard'
 import CashFlowChart from './components/CashFlowChart'
@@ -125,6 +125,7 @@ const TIPO_ICONS = {
 const EMPTY_CONTA = { name: '', type: 'conta_corrente', initial_balance: '', description: '', is_active: true }
 
 function ContasPanel({ accounts, onRefresh }) {
+  const toast = useToast()
   const [modal, setModal] = useState(null) // null | 'new' | account-obj
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState(EMPTY_CONTA)
@@ -140,7 +141,10 @@ function ContasPanel({ accounts, onRefresh }) {
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
   const save = async () => {
-    if (!form.name.trim()) return toast?.error?.('Nome obrigatório')
+    if (!form.name.trim()) {
+      toast.error('Nome obrigatório')
+      return
+    }
     setSaving(true)
     try {
       const body = { ...form, initial_balance: parseFloat(form.initial_balance) || 0 }
@@ -155,7 +159,7 @@ function ContasPanel({ accounts, onRefresh }) {
       onRefresh()
       setModal(null)
     } catch {
-      alert('Erro ao salvar conta')
+      toast.error('Erro ao salvar conta')
     } finally {
       setSaving(false)
     }

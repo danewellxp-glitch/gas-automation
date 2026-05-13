@@ -1,5 +1,6 @@
 import api from '../../../api/client'
 import { FINANCEIRO } from '../../../api/endpoints'
+import { useConfirm } from '../../../components/ui/ConfirmDialog'
 
 const CATEGORY_LABELS = {
   venda_gas: 'Venda de Gás',
@@ -19,8 +20,15 @@ const CATEGORY_LABELS = {
 }
 
 export default function TransactionTable({ transactions, total, page, onPageChange, fmt, onRefresh }) {
+  const confirm = useConfirm()
   const handleDelete = async (id) => {
-    if (!confirm('Excluir este lançamento?')) return
+    const ok = await confirm({
+      title: 'Excluir lançamento',
+      message: 'Esta ação não pode ser desfeita.',
+      confirmLabel: 'Excluir',
+      danger: true,
+    })
+    if (!ok) return
     await api.delete(FINANCEIRO.TRANSACTION(id))
     onRefresh()
   }

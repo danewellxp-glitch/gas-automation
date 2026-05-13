@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import api from '../../api/client'
+import { useToast } from '../../components/ui/Toast'
+import { useConfirm } from '../../components/ui/ConfirmDialog'
 
 function fmt(val) {
   const n = parseFloat(val) || 0
@@ -130,6 +132,8 @@ function PagarModal({ entry, onClose, onSuccess }) {
 }
 
 export default function FiadoPanel() {
+  const toast = useToast()
+  const confirm = useConfirm()
   const [aging, setAging]           = useState(null)
   const [entries, setEntries]       = useState([])
   const [total, setTotal]           = useState(0)
@@ -162,15 +166,21 @@ export default function FiadoPanel() {
   const handleCobrarWA = async (entry) => {
     try {
       await api.post(`/api/financeiro/fiado/entries/${entry.id}/cobrar-whatsapp`)
-      alert('Cobrança enviada com sucesso!')
+      toast.success('Cobrança enviada')
       loadData(page)
     } catch {
-      alert('Erro ao enviar cobrança')
+      toast.error('Erro ao enviar cobrança')
     }
   }
 
   const handleLote = async () => {
-    if (!window.confirm('Enviar cobrança WhatsApp para TODOS os clientes com fiado vencido?')) return
+    const ok = await confirm({
+      title: 'Cobrança em lote',
+      message: 'Enviar cobrança WhatsApp para TODOS os clientes com fiado vencido?',
+      confirmLabel: 'Enviar',
+      danger: true,
+    })
+    if (!ok) return
     setLoteLoading(true)
     setLoteMsg('')
     try {

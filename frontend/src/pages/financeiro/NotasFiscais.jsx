@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import api from '../../api/client'
 import { FINANCEIRO } from '../../api/endpoints'
+import { useToast } from '../../components/ui/Toast'
+import { useConfirm } from '../../components/ui/ConfirmDialog'
 
 function fmt(val) {
   const n = parseFloat(val) || 0
@@ -42,6 +44,7 @@ function SummaryCard({ title, value, color }) {
 }
 
 function EmitirModal({ onClose, onSuccess }) {
+  const toast = useToast()
   const [pedidoId, setPedidoId] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -52,9 +55,9 @@ function EmitirModal({ onClose, onSuccess }) {
       await api.post(FINANCEIRO.NFE_EMITIR, { pedido_id: pedidoId.trim() })
       onSuccess()
       onClose()
-      alert('NF-e emitida! Verifique o status na lista.')
+      toast.success('NF-e emitida — verifique o status na lista')
     } catch (e) {
-      alert(e?.response?.data?.detail || 'Erro ao emitir NF-e')
+      toast.error(e?.response?.data?.detail || 'Erro ao emitir NF-e')
     } finally {
       setLoading(false)
     }
@@ -89,23 +92,31 @@ function EmitirModal({ onClose, onSuccess }) {
 }
 
 function DetalheModal({ nf, onClose, onRefresh }) {
+  const toast = useToast()
+  const confirm = useConfirm()
   const [cancelMotivo, setCancelMotivo] = useState('')
   const [showCancel, setShowCancel] = useState(false)
   const [loading, setLoading] = useState(false)
 
   const cancelar = async () => {
     if (cancelMotivo.trim().length < 15) {
-      alert('Motivo deve ter ao menos 15 caracteres')
+      toast.warning('Motivo deve ter ao menos 15 caracteres')
       return
     }
-    if (!confirm('Confirma o cancelamento desta NF-e?')) return
+    const ok = await confirm({
+      title: 'Cancelar NF-e',
+      message: 'Esta ação é irreversível. Confirma o cancelamento desta NF-e?',
+      confirmLabel: 'Cancelar NF-e',
+      danger: true,
+    })
+    if (!ok) return
     setLoading(true)
     try {
       await api.post(FINANCEIRO.NFE_CANCELAR(nf.id), { motivo: cancelMotivo })
       onRefresh()
       onClose()
     } catch (e) {
-      alert(e?.response?.data?.detail || 'Erro ao cancelar')
+      toast.error(e?.response?.data?.detail || 'Erro ao cancelar')
     } finally {
       setLoading(false)
     }
@@ -114,9 +125,9 @@ function DetalheModal({ nf, onClose, onRefresh }) {
   const reenviarWA = async () => {
     try {
       await api.post(FINANCEIRO.NFE_REENVIAR_WA(nf.id))
-      alert('DANFE reenviado via WhatsApp!')
+      toast.success('DANFE reenviado')
     } catch (e) {
-      alert(e?.response?.data?.detail || 'Erro ao reenviar')
+      toast.error(e?.response?.data?.detail || 'Erro ao reenviar')
     }
   }
 
