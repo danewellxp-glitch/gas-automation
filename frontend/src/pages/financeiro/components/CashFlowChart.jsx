@@ -53,6 +53,13 @@ export default function CashFlowChart({ data }) {
     responsive: true,
     maintainAspectRatio: false,
     interaction: { mode: 'index', intersect: false },
+    animation: {
+      duration: 800,
+      easing: 'easeOutCubic',
+    },
+    transitions: {
+      active: { animation: { duration: 200 } },
+    },
     plugins: {
       legend: {
         labels: {
@@ -98,7 +105,7 @@ export default function CashFlowChart({ data }) {
   }
 
   return (
-    <div style={{ height: '300px' }}>
+    <div key={data.length} className="animate-fade-in" style={{ height: '300px' }}>
       <Bar data={chartData} options={options} />
     </div>
   )

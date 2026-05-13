@@ -46,6 +46,15 @@ export default function DREChart({ data }) {
     responsive: true,
     maintainAspectRatio: false,
     cutout: '68%',
+    animation: {
+      duration: 800,
+      easing: 'easeOutCubic',
+      animateRotate: true,
+      animateScale: true,
+    },
+    transitions: {
+      active: { animation: { duration: 200 } },
+    },
     plugins: {
       legend: {
         position: 'bottom',
@@ -76,7 +85,7 @@ export default function DREChart({ data }) {
   }
 
   return (
-    <div className="relative" style={{ height: '220px' }}>
+    <div key={data.period || data.categories.length} className="relative animate-fade-in" style={{ height: '220px' }}>
       <Doughnut data={chartData} options={options} />
       <div
         className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none"
