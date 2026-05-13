@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import api from '../../api/client';
 import { FINANCEIRO } from '../../api/endpoints';
 import BaseModal from '../../components/ui/BaseModal';
+import { useToast } from '../../components/ui/Toast';
 
 const fmt = (n) =>
   Number(n || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -21,6 +22,7 @@ const BADGE_LABEL = {
 };
 
 export default function PixConciliacao() {
+  const toast = useToast();
   const today = new Date().toISOString().slice(0, 10);
   const [selectedDate, setSelectedDate] = useState(today);
   const [data, setData] = useState(null);
@@ -33,6 +35,7 @@ export default function PixConciliacao() {
   const [resolveModal, setResolveModal] = useState(null); // { item }
   const [resolveObs, setResolveObs] = useState('');
   const [resolving, setResolving] = useState(false);
+  const [removingId, setRemovingId] = useState(null);
 
   const load = useCallback(async (date) => {
     setLoading(true);
@@ -80,16 +83,21 @@ export default function PixConciliacao() {
 
   const handleResolver = async () => {
     if (!resolveModal) return;
+    const id = resolveModal.item.id;
     setResolving(true);
     try {
-      await api.post(FINANCEIRO.CONCILIACAO_PIX_RESOLVER(resolveModal.item.id), {
+      await api.post(FINANCEIRO.CONCILIACAO_PIX_RESOLVER(id), {
         observacao: resolveObs,
       });
       setResolveModal(null);
       setResolveObs('');
-      await load(selectedDate);
+      setRemovingId(id);
+      setTimeout(() => {
+        setRemovingId(null);
+        load(selectedDate);
+      }, 400);
     } catch (e) {
-      setError(e?.response?.data?.detail || 'Erro ao resolver item');
+      toast.error(e?.response?.data?.detail || 'Erro ao resolver item');
     } finally {
       setResolving(false);
     }
@@ -165,6 +173,20 @@ export default function PixConciliacao() {
         </div>
       )}
 
+      {/* Banner de tudo conciliado */}
+      {run && run.total_asaas > 0 && run.total_conciliado === run.total_asaas && run.total_divergencia === 0 && (
+        <div className="flex items-center gap-3 px-4 py-3 rounded-lg border border-emerald-200 bg-emerald-50 animate-fade-in-up">
+          <svg className="text-emerald-600 flex-shrink-0" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M22 11.08V12a10 10 0 11-5.93-9.14" strokeLinecap="round" strokeLinejoin="round" />
+            <polyline points="22 4 12 14.01 9 11.01" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          <div>
+            <p className="text-sm font-medium text-emerald-800">Tudo conciliado</p>
+            <p className="text-xs text-emerald-700">{run.total_conciliado} pagamentos batem com extrato Asaas</p>
+          </div>
+        </div>
+      )}
+
       {/* Cards de sumário */}
       {run && (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
@@ -221,7 +243,10 @@ export default function PixConciliacao() {
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {items.map((item) => (
-                  <tr key={item.id} className={item.resolvido ? 'opacity-60' : ''}>
+                  <tr
+                    key={item.id}
+                    className={`transition-all duration-300 ${item.resolvido ? 'opacity-60' : ''} ${removingId === item.id ? 'opacity-0 -translate-x-2' : ''}`}
+                  >
                     <td className="px-4 py-3">
                       <span
                         className={`rounded-full px-2 py-0.5 text-xs font-medium ${BADGE[item.resultado] || 'bg-gray-100 text-gray-700'}`}
