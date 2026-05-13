@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import api from '../../../api/client'
 import { FINANCEIRO } from '../../../api/endpoints'
+import BaseModal from '../../../components/ui/BaseModal'
 
 const CATEGORIES = {
   receita: [
@@ -79,17 +80,16 @@ export default function TransactionModal({ accounts, onClose, onCreated }) {
   const labelClass = "text-xs font-medium text-gray-600 block mb-1.5"
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl border border-gray-200 w-full max-w-md shadow-xl">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-          <h2 className="text-base font-semibold text-gray-900">Novo Lançamento</h2>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors text-lg leading-none"
-          >
-            &times;
-          </button>
-        </div>
+    <BaseModal onClose={onClose} maxWidth="max-w-md">
+      <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+        <h2 className="text-base font-semibold text-gray-900">Novo Lançamento</h2>
+        <button
+          onClick={onClose}
+          className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors text-lg leading-none"
+        >
+          &times;
+        </button>
+      </div>
 
         <form onSubmit={handleSubmit} className="p-5 space-y-4">
           {error && (
@@ -240,7 +240,6 @@ export default function TransactionModal({ accounts, onClose, onCreated }) {
             </button>
           </div>
         </form>
-      </div>
-    </div>
+    </BaseModal>
   )
 }

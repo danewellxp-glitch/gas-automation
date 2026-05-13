@@ -3,6 +3,7 @@ import api from '../../api/client'
 import { FINANCEIRO } from '../../api/endpoints'
 import { useToast } from '../../components/ui/Toast'
 import { useConfirm } from '../../components/ui/ConfirmDialog'
+import BaseModal from '../../components/ui/BaseModal'
 
 function fmt(val) {
   const n = parseFloat(val) || 0
@@ -64,8 +65,8 @@ function EmitirModal({ onClose, onSuccess }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-sm mx-4 p-6">
+    <BaseModal onClose={onClose} maxWidth="max-w-sm">
+      <div className="p-6">
         <h2 className="text-base font-semibold text-gray-900 mb-4">Emitir NF-e</h2>
         <div className="space-y-3">
           <div>
@@ -87,7 +88,7 @@ function EmitirModal({ onClose, onSuccess }) {
           </button>
         </div>
       </div>
-    </div>
+    </BaseModal>
   )
 }
 
@@ -132,8 +133,8 @@ function DetalheModal({ nf, onClose, onRefresh }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-lg mx-4 p-6 max-h-[90vh] overflow-y-auto">
+    <BaseModal onClose={onClose} maxWidth="max-w-lg">
+      <div className="p-6 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-base font-semibold text-gray-900">
             NF-e {nf.numero ? `Nº ${nf.numero}` : '(sem número)'}
@@ -216,7 +217,7 @@ function DetalheModal({ nf, onClose, onRefresh }) {
           Fechar
         </button>
       </div>
-    </div>
+    </BaseModal>
   )
 }
 

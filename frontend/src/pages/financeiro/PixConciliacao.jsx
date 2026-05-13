@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import api from '../../api/client';
 import { FINANCEIRO } from '../../api/endpoints';
+import BaseModal from '../../components/ui/BaseModal';
 
 const fmt = (n) =>
   Number(n || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -267,8 +268,8 @@ export default function PixConciliacao() {
 
       {/* Modal de resolução */}
       {resolveModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+        <BaseModal onClose={() => setResolveModal(null)} maxWidth="max-w-md">
+          <div className="p-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-1">Marcar como Resolvido</h3>
             <p className="text-sm text-gray-500 mb-4">
               Item: <span className="font-medium">{BADGE_LABEL[resolveModal.item.resultado]}</span>
@@ -300,7 +301,7 @@ export default function PixConciliacao() {
               </button>
             </div>
           </div>
-        </div>
+        </BaseModal>
       )}
     </div>
   );

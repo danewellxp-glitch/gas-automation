@@ -5,6 +5,7 @@ import { useConfirm } from '../../components/ui/ConfirmDialog'
 import { useCountUp } from '../../hooks/useCountUp'
 import { useReducedMotion } from '../../hooks/useReducedMotion'
 import SkeletonRow from '../../components/ui/SkeletonRow'
+import BaseModal from '../../components/ui/BaseModal'
 
 function fmt(val) {
   const n = parseFloat(val) || 0
@@ -81,8 +82,8 @@ function PagarModal({ entry, onClose, onSuccess }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
+    <BaseModal onClose={onClose} maxWidth="max-w-md">
+      <div className="p-6">
         <h2 className="text-base font-semibold text-gray-900 mb-4">Registrar Pagamento</h2>
         <p className="text-sm text-gray-500 mb-4">
           Saldo pendente: <span className="font-semibold text-red-600">{fmt(pendente)}</span>
@@ -135,7 +136,7 @@ function PagarModal({ entry, onClose, onSuccess }) {
           </div>
         </form>
       </div>
-    </div>
+    </BaseModal>
   )
 }
 
