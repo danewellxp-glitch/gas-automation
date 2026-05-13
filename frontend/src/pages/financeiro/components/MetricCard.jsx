@@ -1,4 +1,9 @@
-// Shadcn-style stat card — flat, no gradients, no emojis
+import { useEffect, useState } from 'react'
+import { useCountUp } from '../../../hooks/useCountUp'
+import { usePrevious } from '../../../hooks/usePrevious'
+import { useReducedMotion } from '../../../hooks/useReducedMotion'
+import Sparkline from '../../../components/ui/Sparkline'
+
 function TrendUp() {
   return (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -16,11 +21,44 @@ function TrendDown() {
   )
 }
 
-export default function MetricCard({ title, value, change, changeLabel, icon: Icon, loading = false }) {
+const defaultFormatter = (n) =>
+  Number(n).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+
+export default function MetricCard({
+  title,
+  numericValue = null,
+  value,
+  formatter = defaultFormatter,
+  change,
+  changeLabel,
+  icon: Icon,
+  loading = false,
+  sparkline,
+  sparklineColor = '#059669',
+  delayClass = '',
+}) {
+  const reduced = useReducedMotion()
+  const animated = useCountUp(numericValue ?? 0, {
+    duration: reduced ? 0 : 1000,
+  })
+  const prev = usePrevious(numericValue)
+  const [flash, setFlash] = useState(null)
+
+  useEffect(() => {
+    if (numericValue == null || prev == null || prev === numericValue) return
+    setFlash(numericValue > prev ? 'up' : 'down')
+    const t = setTimeout(() => setFlash(null), 1200)
+    return () => clearTimeout(t)
+  }, [numericValue, prev])
+
+  const displayValue = numericValue != null ? formatter(animated) : value
+
   const isPositive = change == null ? null : parseFloat(change) >= 0
 
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-6">
+    <div
+      className={`rounded-xl border border-gray-200 bg-white p-6 transition-all duration-200 hover:-translate-y-0.5 hover:border-gray-300 animate-fade-in-up ${delayClass}`}
+    >
       <div className="flex items-center justify-between mb-3">
         <span className="text-sm font-medium text-gray-500">{title}</span>
         {Icon && (
@@ -37,7 +75,20 @@ export default function MetricCard({ title, value, change, changeLabel, icon: Ic
         </>
       ) : (
         <>
-          <div className="text-2xl font-bold text-gray-900 tracking-tight">{value}</div>
+          <div
+            className={`text-2xl font-bold tracking-tight tabular-nums transition-colors duration-500 ${
+              flash === 'up' ? 'text-emerald-600' : flash === 'down' ? 'text-red-500' : 'text-gray-900'
+            }`}
+          >
+            {displayValue}
+          </div>
+
+          {sparkline?.length > 0 && (
+            <div className="mt-3 -mx-1">
+              <Sparkline data={sparkline} color={sparklineColor} height={26} />
+            </div>
+          )}
+
           {change != null && (
             <div className={`flex items-center gap-1 mt-2 text-xs font-medium ${isPositive ? 'text-emerald-600' : 'text-red-500'}`}>
               {isPositive ? <TrendUp /> : <TrendDown />}
