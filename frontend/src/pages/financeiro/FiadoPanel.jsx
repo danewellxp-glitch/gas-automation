@@ -2,6 +2,9 @@ import { useState, useEffect, useCallback } from 'react'
 import api from '../../api/client'
 import { useToast } from '../../components/ui/Toast'
 import { useConfirm } from '../../components/ui/ConfirmDialog'
+import { useCountUp } from '../../hooks/useCountUp'
+import { useReducedMotion } from '../../hooks/useReducedMotion'
+import SkeletonRow from '../../components/ui/SkeletonRow'
 
 function fmt(val) {
   const n = parseFloat(val) || 0
@@ -30,7 +33,9 @@ function Badge({ status }) {
   )
 }
 
-function AgingCard({ label, color, valor, clientes, count }) {
+function AgingCard({ label, color, valor, clientes, count, delay = 0 }) {
+  const reduced = useReducedMotion()
+  const animatedValor = useCountUp(parseFloat(valor) || 0, { duration: reduced ? 0 : 900 })
   const colorMap = {
     green:  { bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-700', val: 'text-emerald-800' },
     yellow: { bg: 'bg-amber-50',   border: 'border-amber-200',   text: 'text-amber-700',   val: 'text-amber-800' },
@@ -39,9 +44,12 @@ function AgingCard({ label, color, valor, clientes, count }) {
   }
   const c = colorMap[color] || colorMap.green
   return (
-    <div className={`rounded-xl border ${c.border} ${c.bg} p-5`}>
+    <div
+      style={{ animationDelay: `${delay}ms` }}
+      className={`rounded-xl border ${c.border} ${c.bg} p-5 animate-fade-in-up transition-transform duration-200 hover:-translate-y-0.5`}
+    >
       <p className={`text-xs font-semibold uppercase tracking-wide ${c.text} mb-3`}>{label}</p>
-      <p className={`text-2xl font-bold ${c.val}`}>{fmt(valor)}</p>
+      <p className={`text-2xl font-bold tabular-nums ${c.val}`}>{fmt(animatedValor)}</p>
       <p className={`text-xs ${c.text} mt-1`}>{clientes} cliente(s) · {count} registro(s)</p>
     </div>
   )
@@ -211,6 +219,7 @@ export default function FiadoPanel() {
           valor={aging?.['0_7_dias']?.valor || 0}
           clientes={aging?.['0_7_dias']?.clientes || 0}
           count={aging?.['0_7_dias']?.count || 0}
+          delay={0}
         />
         <AgingCard
           label="8 a 15 dias"
@@ -218,6 +227,7 @@ export default function FiadoPanel() {
           valor={aging?.['8_15_dias']?.valor || 0}
           clientes={aging?.['8_15_dias']?.clientes || 0}
           count={aging?.['8_15_dias']?.count || 0}
+          delay={80}
         />
         <AgingCard
           label="16 a 30 dias"
@@ -225,6 +235,7 @@ export default function FiadoPanel() {
           valor={aging?.['16_30_dias']?.valor || 0}
           clientes={aging?.['16_30_dias']?.clientes || 0}
           count={aging?.['16_30_dias']?.count || 0}
+          delay={160}
         />
         <AgingCard
           label="Acima de 30 dias"
@@ -232,6 +243,7 @@ export default function FiadoPanel() {
           valor={aging?.['acima_30_dias']?.valor || 0}
           clientes={aging?.['acima_30_dias']?.clientes || 0}
           count={aging?.['acima_30_dias']?.count || 0}
+          delay={240}
         />
       </div>
 
@@ -255,7 +267,23 @@ export default function FiadoPanel() {
         </div>
 
         {loading ? (
-          <div className="px-6 pb-8 text-center text-sm text-gray-400">Carregando...</div>
+          <div className="px-6 pb-6 overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-200">
+                  <th className="py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">Cliente</th>
+                  <th className="py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wide">Valor Pendente</th>
+                  <th className="py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wide">Vencimento</th>
+                  <th className="py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wide">Dias Atraso</th>
+                  <th className="py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wide">Status</th>
+                  <th className="py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wide">Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} cols={6} />)}
+              </tbody>
+            </table>
+          </div>
         ) : entries.length === 0 ? (
           <div className="px-6 pb-8 text-center text-sm text-gray-400">Nenhum registro de fiado encontrado</div>
         ) : (
