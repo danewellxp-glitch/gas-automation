@@ -22,7 +22,7 @@ const STATUS_MAP = {
 function StatusBadge({ status }) {
   const { label, cls } = STATUS_MAP[status] || { label: status, cls: 'bg-gray-100 text-gray-500' }
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${cls}`}>
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium transition-colors duration-500 ${cls}`}>
       {label}
     </span>
   )
@@ -257,8 +257,8 @@ export default function NotasFiscais() {
     <div className="space-y-6">
       {/* Alerta de rejeições */}
       {rejeitadas.length > 0 && (
-        <div className="flex items-start gap-3 px-4 py-3 rounded-lg border border-red-200 bg-red-50 text-sm">
-          <span className="text-red-500 font-bold text-base">✕</span>
+        <div className="flex items-start gap-3 px-4 py-3 rounded-lg border border-red-200 bg-red-50 text-sm animate-fade-in-up">
+          <span className="text-red-500 font-bold text-base animate-pulse-slow">✕</span>
           <div>
             <p className="font-medium text-red-700">{rejeitadas.length} NF-e(s) rejeitada(s)</p>
             <p className="text-red-500 text-xs mt-0.5">{rejeitadas[0]?.motivo_rejeicao || 'Verifique o motivo na NF-e'}</p>
