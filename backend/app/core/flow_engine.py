@@ -167,15 +167,36 @@ class FlowEngineWrapper:
         return results
     
     async def get_context(self, phone: str):
-        """Obtém contexto (compatibilidade V1)."""
-        # V2 usa ContextManager internamente
-        # Retornar None para compatibilidade
-        return None
-    
+        """Obtém contexto (compatibilidade V1). Retorna objeto com atributo .state."""
+        try:
+            engine = await self._get_v2_engine()
+            from app.core.state_machine_v2 import ConversationState
+            conv = await engine.context_manager.get_conversation_context(phone)
+            state = conv.current_state if conv else ConversationState.GREETING_INITIAL
+        except Exception:
+            from app.core.state_machine_v2 import ConversationState
+            state = ConversationState.GREETING_INITIAL
+
+        class CompatContext:
+            waha_chat_id = None
+        ctx = CompatContext()
+        ctx.state = state
+        return ctx
+
     async def save_context(self, context):
         """Salva contexto (compatibilidade V1)."""
-        # V2 gerencia contextos automaticamente
-        pass
+        if context is None or not hasattr(context, 'state'):
+            return
+        try:
+            engine = await self._get_v2_engine()
+            phone = getattr(context, 'phone', None)
+            if phone and hasattr(context, 'state'):
+                conv = await engine.context_manager.get_conversation_context(phone)
+                if conv:
+                    conv.current_state = context.state
+                    await engine.context_manager.save_conversation_context(phone, conv)
+        except Exception:
+            pass
 
 
 # Singleton global (compatibilidade com código existente)

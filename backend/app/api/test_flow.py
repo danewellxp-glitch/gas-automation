@@ -115,7 +115,7 @@ async def list_flow_states():
     """
     Lista todos os estados disponíveis no fluxo.
     """
-    from app.core.state_machine import ConversationState, StateTransition
+    from app.core.state_machine_v2 import ConversationState, StateTransition
 
     states = {}
     for state in ConversationState:

@@ -23,7 +23,7 @@ sys.path.insert(0, ".")
 async def diagnose(phone: str):
     """Executa diagnóstico completo."""
     from app.database import redis_manager
-    from app.core.state_machine import ConversationState, ConversationContext
+    from app.core.state_machine_v2 import ConversationState, ConversationContext
     from app.config import settings
 
     print("\n" + "=" * 60)
@@ -59,7 +59,7 @@ async def diagnose(phone: str):
     # 3. Testar escrita/leitura
     print(f"\n[3] Testando ciclo escrita/leitura...")
     test_context = ConversationContext(phone=phone)
-    test_context.state = ConversationState.AWAITING_PRODUCT
+    test_context.current_state = ConversationState.ORDERING_PRODUCT
     test_context.message_count = 999  # Valor de teste
 
     try:
@@ -69,7 +69,7 @@ async def diagnose(phone: str):
             test_context.to_dict(),
             ttl=settings.redis_conversation_ttl
         )
-        print(f"    ✓ Escrita: state={test_context.state.value}")
+        print(f"    ✓ Escrita: state={test_context.current_state.value}")
 
         # Ler de volta
         read_data = await redis_manager.get_conversation_state(phone)
@@ -77,12 +77,12 @@ async def diagnose(phone: str):
             read_state = read_data.get("state")
             read_count = read_data.get("message_count")
 
-            if read_state == "awaiting_product" and read_count == 999:
+            if read_state == "ordering_product" and read_count == 999:
                 print(f"    ✓ Leitura: state={read_state}, message_count={read_count}")
                 print("    ✓ CICLO ESCRITA/LEITURA OK!")
             else:
                 print(f"    ✗ INCONSISTÊNCIA!")
-                print(f"      Esperado: state=awaiting_product, message_count=999")
+                print(f"      Esperado: state=ordering_product, message_count=999")
                 print(f"      Obtido: state={read_state}, message_count={read_count}")
         else:
             print("    ✗ FALHA: Contexto não encontrado após escrita!")
@@ -109,7 +109,7 @@ async def diagnose(phone: str):
         print(f"    - Estado inicial: {ctx1.state.value}")
 
         # Mudar estado
-        ctx1.state = ConversationState.AWAITING_QUANTITY
+        ctx1.state = ConversationState.ORDERING_QUANTITY
         ctx1.selected_product = "P13"
 
         # Salvar
@@ -120,11 +120,11 @@ async def diagnose(phone: str):
         ctx2 = await flow_engine.get_context(phone)
         print(f"    - Estado recarregado: {ctx2.state.value}")
 
-        if ctx2.state == ConversationState.AWAITING_QUANTITY:
+        if ctx2.state == ConversationState.ORDERING_QUANTITY:
             print("    ✓ TRANSIÇÃO DE ESTADO OK!")
         else:
             print("    ✗ FALHA: Estado não foi mantido!")
-            print(f"      Esperado: awaiting_quantity")
+            print(f"      Esperado: ordering_quantity")
             print(f"      Obtido: {ctx2.state.value}")
 
     except Exception as e:
